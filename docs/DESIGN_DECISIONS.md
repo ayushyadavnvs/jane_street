@@ -26,6 +26,7 @@ mark the old one **Changed** instead of deleting it.
 | USB (via D20) | Opcode 111 now does something, so `NOP` = `0xE000` became `UTX` | `NOP` re-encoded as a no-op `FLAG` | D6, BUG-008 |
 | 1-Wire, Modbus RTU | Nothing: both are programs on the existing instructions | — | D25, D26 |
 | Modbus RTU (its test) | Restart could glitch a high pin low, a false start bit | Restart releases pins but keeps their values | D24, BUG-013 |
+| Two protocols at once (I2C + 1-Wire) | Shared FLAG0/FLAG1: each engine took the other's requests | 8 flags, engine-relative via `FLAG_BASE`; host `FLAG_SET`/`FLAG_CLR` | D11, D27, BUG-017 |
 
 ---
 
@@ -146,12 +147,25 @@ mark the old one **Changed** instead of deleting it.
   simplest and also helps SPI bursts.
 - **Cost:** about 32,800 µm², most of v2's growth.
 
-## D11. Shared flags
+## D11. Flags — **Changed (running two protocols at once)**
 
-- **Chosen:** 4 flags shared by both engines and writable by the host. Engines can set,
-  clear, wait on and branch on them; `FLAG n, IRQ` interrupts the host.
+- **Chosen originally:** 4 flags shared by both engines and writable by the host. Engines can
+  set, clear, wait on and branch on them; `FLAG n, IRQ` interrupts the host.
 - **Why:** The cheapest way for engines to coordinate, and the way the host asks the
   I2C program for START/STOP (D19) and the USB program to send (D20).
+- **Changed:** protocols that use flags could not run on both engines at once (D27, BUG-017).
+- **Chosen now:** 8 flags. Each engine sees 4 of them starting at its `FLAG_BASE` (engine
+  register +8): "FLAG n" in a program is physical flag `(FLAG_BASE + n) mod 8`. Defaults: engine
+  0 has flags 0–3, engine 1 has flags 4–7. Overlapping bases make flags shared again when the
+  engines must signal each other (the planned USB responder). The host changes single flags
+  through `FLAG_SET` (0x08) and `FLAG_CLR` (0x09), so it never overwrites the other engine's flags.
+- **Alternatives considered:**
+  1. Let `JMP` test all 4 flags and give each program different flag numbers. Rejected: needs a
+     wider condition field, and every program would have to be edited for every pairing.
+  2. Fully private flags per engine. Rejected: engines could no longer coordinate.
+  3. Relative flags with a base, like `PIN_BASE` for pins. Chosen: programs do not change,
+     and sharing is still a configuration choice.
+- **Cost:** about 2,700 µm² (+2 %).
 
 ## D12. Host interface: SPI peripheral
 
@@ -203,7 +217,7 @@ mark the old one **Changed** instead of deleting it.
 - **Earlier assumption:** 50 MHz, a round number with margin under 66 MHz.
 - **Why changed:** USB low speed is 1.5 Mbit/s: exactly 32 clocks per bit at 48 MHz, 33.3 at
   50 MHz (1 % error). UART and I2C rates divide well from 48 MHz too.
-- **Margin:** worst path ~4.8 ns at the slow corner (logic plus flip-flop overhead) vs 20.8 ns
+- **Margin:** worst path ~4.9 ns at the slow corner (logic plus flip-flop overhead) vs 20.8 ns
   per cycle, roughly 4×.
 
 ## D19. Protocol host conventions
@@ -254,6 +268,9 @@ mark the old one **Changed** instead of deleting it.
 - **Waveforms are opt-in** (`vvp sim.vvp +vcd`): 1-Wire and Modbus need ~70 ms of simulated time
   and the dump would be ~165 MB.
 - **Static tasks share variables:** give every caller-side variable its own name (BUG-016).
+- **Two host processes** (for protocols running at once) share the host port through a fair
+  ticket lock (BUG-018), and the tests change flags through `flag_set` / `flag_clear` /
+  `flag_get` helpers that know each engine's flag window.
 - **Planned:** third-party protocol decoders (sigrok), a Python golden model with random
   programs, formal properties (SymbiYosys), mutation score (MCY).
 
@@ -329,10 +346,10 @@ mark the old one **Changed** instead of deleting it.
   inverted USB field.)
 - **Not checked by the receiver:** the 1.5-character maximum gap inside a frame.
 
-## D27. Shared flags limit which protocols can run together
+## D27. Shared flags limit which protocols can run together — **Resolved by D11**
 
 - **Observation:** `JMP` can only test FLAG0 and FLAG1, and flags are shared by both engines.
   I2C, USB TX, 1-Wire and Modbus all use FLAG0 or FLAG1, so two of them cannot run on the two
   engines at the same time. UART and SPI use no flags and can run next to any of them.
-- **Not changed yet.** Options: give each engine its own pair of flags (numbered relative to the
-  engine), or let `JMP` test all four flags.
+- **Resolved:** engine-relative flags (D11, BUG-017). The new test runs a 1-Wire Search ROM on
+  engine 0 and I2C on engine 1 at the same time.

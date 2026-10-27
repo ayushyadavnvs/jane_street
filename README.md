@@ -22,7 +22,7 @@ the clock input pad is specified up to about 66 MHz, and the demo board's RP2040
 
 | | Value |
 |---|---|
-| Logic limit (slow corner, ABC estimate) | ~4.7 ns per cycle, roughly 200 MHz before wire delay |
+| Logic limit (slow corner, ABC estimate) | ~4.9 ns per cycle, roughly 200 MHz before wire delay |
 | Tiny Tapeout limit | ~66 MHz |
 | Planned clock | 48 MHz: USB low speed is exactly 32 clocks per bit, and timing has ~4× margin |
 
@@ -31,5 +31,5 @@ turns the clock into the bit rate a protocol needs.
 
 | Results | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
 |---|---|---|
-| Version 1 | 140,653 µm² (15%) | 3.75 ns |
-| Version 2 | 189,403 µm² (21%) | 3.79 ns |
+| Version 1 | 143,373 µm² (16%) | 3.97 ns |
+| Version 2 | 192,048 µm² (21%) | 3.93 ns |

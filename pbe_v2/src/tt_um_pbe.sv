@@ -15,7 +15,11 @@
 //   0x01 STATUS   R  [0] E0 RX empty, [1] E0 RX full, [2] E0 TX empty, [3] E0 TX full, [7:4] same for E1
 //   0x02 IRQ      R  [0] E0, [1] E1 pending;  W  write 1 to clear
 //   0x03 PIN_OWN  RW bit i = 1 gives pin i to E1, 0 to E0
-//   0x04 FLAGS    RW shared flags [3:0]
+//   0x04 FLAGS    RW 8 flags. Engine e's FLAG n (n = 0..3 in instructions) is flag (FLAG_BASE[e] + n) mod 8,
+//                    so by default engine 0 has flags 0-3 and engine 1 has flags 4-7; overlapping
+//                    bases let the engines signal each other
+//   0x08 FLAG_SET W  write 1s to set flags
+//   0x09 FLAG_CLR W  write 1s to clear flags (use these two so the other engine's flags are untouched)
 //   0x05 PINS     R  synchronized pin levels
 //   0x06 PM_ADDR  RW program memory byte pointer [6:0]: word = [6:1], [0] = 0 high byte, 1 low byte
 //   0x07 PM_DATA  W  write the byte at PM_ADDR, then PM_ADDR += 1 (program memory is write only)
@@ -23,6 +27,7 @@
 //      +0 CLKDIV_L, +1 CLKDIV_H   tick every (CLKDIV + 1) clocks
 //      +2 PIN_BASE[2:0]  +3 JMP_PIN[2:0]  +4 SHIFT [0] OUT msb first, [1] IN msb first
 //      +5 START_PC[5:0]
+//      +8 FLAG_BASE[2:0]  first physical flag this engine sees (reset: 0 for E0, 4 for E1)
 //      +7 BITDIV     USB clocks per bit - 1 (31 for 1.5 Mbit/s at 48 MHz)
 //      +6 FIFO data: W pushes the TX FIFO, R pops the RX FIFO (FIFOs are 16 bytes)
 module tt_um_pbe (
@@ -70,7 +75,8 @@ module tt_um_pbe (
   // Per-engine values are packed into flat buses: engine e uses slice [e*W +: W].
   logic [1:0]  run, irq_pend;
   logic [7:0]  pin_own;
-  logic [3:0]  flags;
+  logic [7:0]  flags;
+  logic [5:0]  flag_base;  // 3 bits per engine
   logic [31:0] clkdiv;
   logic [5:0]  pin_base, jmp_pin;
   logic [3:0]  shiftcfg;
@@ -86,7 +92,12 @@ module tt_um_pbe (
   logic [31:0] instr;
   logic [15:0] e_out, e_oe, tx_data, rx_din, rx_dout;
   logic [1:0]  tx_empty, tx_full, tx_pop, rx_empty, rx_full, rx_push, e_irq;
-  logic [7:0]  f_set, f_clr;
+  logic [7:0]  f_set, f_clr;  // engine-relative, 4 bits per engine
+  logic [15:0] p_set, p_clr;  // the same, mapped to physical flags, 8 bits per engine
+  logic [7:0]  e_flags;       // each engine's view of its 4 flags
+
+  wire [7:0] host_set = (wr_en && wr_addr == 7'h08) ? wr_data : 8'h00;
+  wire [7:0] host_clr = (wr_en && wr_addr == 7'h09) ? wr_data : 8'h00;
 
   wire       wr_e0 = wr_en && wr_addr[6:4] == 3'd1;
   wire       wr_e1 = wr_en && wr_addr[6:4] == 3'd2;
@@ -98,6 +109,7 @@ module tt_um_pbe (
       irq_pend <= '0;
       pin_own  <= '0;
       flags    <= '0;
+      flag_base <= 6'b100_000;  // E1 starts at flag 4, E0 at flag 0
       clkdiv   <= '0;
       pin_base <= '0;
       jmp_pin  <= '0;
@@ -107,7 +119,7 @@ module tt_um_pbe (
       pm_ptr   <= '0;
     end else begin
       // engine events first, so a host write in the same cycle wins
-      flags    <= (flags | f_set[3:0] | f_set[7:4]) & ~(f_clr[3:0] | f_clr[7:4]);
+      flags    <= (flags | p_set[7:0] | p_set[15:8] | host_set) & ~(p_clr[7:0] | p_clr[15:8] | host_clr);
       irq_pend <= irq_pend | e_irq;
 
       if (wr_en) begin
@@ -115,7 +127,7 @@ module tt_um_pbe (
           7'h00: run <= wr_data[1:0];
           7'h02: irq_pend <= (irq_pend | e_irq) & ~wr_data[1:0];
           7'h03: pin_own <= wr_data;
-          7'h04: flags <= wr_data[3:0];
+          7'h04: flags <= wr_data;
           7'h06: pm_ptr <= wr_data[6:0];
           7'h07: pm_ptr <= pm_ptr + 1'b1;
           default: ;
@@ -129,6 +141,7 @@ module tt_um_pbe (
           4'h3: jmp_pin[2:0]  <= wr_data[2:0];
           4'h4: shiftcfg[1:0] <= wr_data[1:0];
           4'h5: start_pc[5:0]  <= wr_data[5:0];
+          4'h8: flag_base[2:0] <= wr_data[2:0];
           4'h7: bitdiv[7:0]    <= wr_data;
           default: ;
         endcase
@@ -141,6 +154,7 @@ module tt_um_pbe (
           4'h3: jmp_pin[5:3]  <= wr_data[2:0];
           4'h4: shiftcfg[3:2] <= wr_data[1:0];
           4'h5: start_pc[11:6] <= wr_data[5:0];
+          4'h8: flag_base[5:3] <= wr_data[2:0];
           4'h7: bitdiv[15:8]   <= wr_data;
           default: ;
         endcase
@@ -162,6 +176,7 @@ module tt_um_pbe (
       4'h3:    eng_rd = {5'b0, rd_e1 ? jmp_pin[5:3] : jmp_pin[2:0]};
       4'h4:    eng_rd = {6'b0, rd_e1 ? shiftcfg[3:2] : shiftcfg[1:0]};
       4'h5:    eng_rd = {2'b0, rd_e1 ? start_pc[11:6] : start_pc[5:0]};
+      4'h8:    eng_rd = {5'b0, rd_e1 ? flag_base[5:3] : flag_base[2:0]};
       4'h6:    eng_rd = rd_e1 ? rx_dout[15:8] : rx_dout[7:0];
       4'h7:    eng_rd = rd_e1 ? bitdiv[15:8] : bitdiv[7:0];
       default: eng_rd = 8'h00;
@@ -175,7 +190,7 @@ module tt_um_pbe (
                           tx_full[0], tx_empty[0], rx_full[0], rx_empty[0]};
       7'h02:   rd_data = {6'b0, irq_pend};
       7'h03:   rd_data = pin_own;
-      7'h04:   rd_data = {4'b0, flags};
+      7'h04:   rd_data = flags;
       7'h05:   rd_data = pins_s2;
       7'h06:   rd_data = {1'b0, pm_ptr};
       default: rd_data = rd_eng ? eng_rd : 8'h00;
@@ -219,6 +234,15 @@ module tt_um_pbe (
         .full (rx_full[e])
     );
 
+    // Engine-relative flags: FLAG n is physical flag (base + n) mod 8.
+    wire [2:0]  fbase = flag_base[e*3+:3];
+    wire [15:0] fl2   = {flags, flags};
+    wire [15:0] set2  = {12'b0, f_set[e*4+:4]} << fbase;
+    wire [15:0] clr2  = {12'b0, f_clr[e*4+:4]} << fbase;
+    assign e_flags[e*4+:4] = fl2[fbase+:4];
+    assign p_set[e*8+:8]   = set2[7:0] | set2[15:8];
+    assign p_clr[e*8+:8]   = clr2[7:0] | clr2[15:8];
+
     pbe_engine u_eng (
         .clk, .rst_n,
         .run          (run[e]),
@@ -241,7 +265,7 @@ module tt_um_pbe (
         .rx_data      (rx_din[e*8+:8]),
         .rx_full      (rx_full[e]),
         .rx_push      (rx_push[e]),
-        .flags        (flags),
+        .flags        (e_flags[e*4+:4]),
         .flag_set     (f_set[e*4+:4]),
         .flag_clr     (f_clr[e*4+:4]),
         .irq          (e_irq[e])

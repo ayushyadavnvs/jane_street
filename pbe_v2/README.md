@@ -79,6 +79,14 @@ the engine runs with `CLKDIV = 0` and only has to keep the 1-bit holding registe
 The receiver samples each bit in its middle, re-centres on every D+ edge, strips SYNC and
 stuffed bits, and checks CRCs with the standard residuals (CRC5 `01100`, CRC16 `0x800D`).
 
+## Flags
+
+Programs use `FLAG0`–`FLAG3`, which are relative to the engine: engine e's FLAG n is physical
+flag `(FLAG_BASE + n) mod 8`. By default engine 0 has flags 0–3 and engine 1 has flags 4–7, so
+two protocols that use flags can run on the two engines at once. The host sets and clears
+single flags with `FLAG_SET` (0x08) and `FLAG_CLR` (0x09), and reads all 8 at `FLAGS` (0x04).
+In the host protocols below, "set FLAG1" means the running engine's FLAG1.
+
 ## I2C host protocol (`programs/i2c_ctrl.pbe`)
 
 Each I2C byte is two TX FIFO bytes, `[data] [ack]`, and returns two RX FIFO bytes,
@@ -125,8 +133,6 @@ Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
 - **Receive:** two RX bytes per character, `[data] [status]`, status bit 7 = parity bit
   received. After 3.5 characters of silence the engine sets FLAG2 and raises IRQ.
 - The host computes the CRC and checks parity.
-- Flags: FLAG0/FLAG1 are also used by the I2C, 1-Wire and USB programs, so only one of those can
-  run at a time (see D27 in `docs/DESIGN_DECISIONS.md`).
 
 ## Status
 
@@ -148,12 +154,13 @@ Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
        the test fail, so both features are really exercised.
   5. 1-Wire with two DS18B20-style device models (as in v1).
   6. Modbus RTU master at 19200 8E1 against an RS-485 device model (as in v1).
+  7. 1-Wire Search ROM and I2C on the two engines at the same time (as in v1).
   - Unit test: a restart in the same cycle as an instruction cancels its side effects.
 - Area, Yosys with the IHP sg13g2 typical library: about 7,480 cells, 2,028 flip-flops,
-  189,403 µm² of cell area, about 21% of the 6×4 tiles (916,229 µm²). Compared with version 1
+  192,048 µm² of cell area, about 21% of the 6×4 tiles (916,229 µm²). Compared with version 1
   (141,141 µm²), the USB logic adds about 15,600 µm² (one line unit is 5,733 µm²) and the
   16-byte FIFOs add about 32,800 µm².
-- Timing, ABC with the slow library: 3.79 ns of logic on the worst path, about 4.7 ns with
+- Timing, ABC with the slow library: 3.93 ns of logic on the worst path, about 4.8 ns with
   flip-flop overhead, against 20.8 ns at 48 MHz. Wire delay and clock skew are not included.
 
 ## What a complete USB device still needs

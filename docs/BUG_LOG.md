@@ -25,6 +25,8 @@ after it.
 | BUG-014 | Testbench | Modbus device model took a zero-width glitch for a start bit | Modbus test bring-up | Fixed |
 | BUG-015 | Program (Modbus) | Receiver polled for the next start bit inside the parity bit | Modbus test bring-up | Fixed |
 | BUG-016 | Testbench | A counter shared with a static task was overwritten | Modbus test bring-up | Fixed |
+| BUG-017 | RTL (top) | Shared flags: two flag-using protocols on the two engines consumed each other's flags | Design review (D27) | Fixed |
+| BUG-018 | Testbench | Host-port lock was unfair; one host process starved the other | Two-protocol test bring-up | Fixed |
 
 ---
 
@@ -448,4 +450,75 @@ after it.
   if ((^mb_d) != mb_x[7]) mb_perr++;
   ```
 - **Lesson:** with static tasks, give every caller-side variable its own name.
+
+## BUG-017 — Shared flags: two protocols consumed each other's flags
+
+- **Where:** `src/tt_um_pbe.sv`, both versions (the flags register and its connection to the engines).
+- **Found by:** design review; recorded as limitation D27 when 1-Wire and Modbus were added.
+- **Cause:** there were 4 flags, shared by both engines, and `JMP` can only test FLAG0 and FLAG1.
+  I2C, 1-Wire, Modbus and USB TX all use FLAG0/FLAG1 as host requests, so on two engines they
+  read each other's requests. The host also rewrote the whole flags register to set one flag,
+  which could wipe a flag the other engine had just changed.
+- **Before:**
+  ```systemverilog
+  logic [3:0] flags;  // shared by both engines
+  flags <= (flags | f_set[3:0] | f_set[7:4]) & ~(f_clr[3:0] | f_clr[7:4]);
+  7'h04: flags <= wr_data[3:0];   // the host's only way to change a flag
+  .flags (flags),                 // both engines see the same 4 flags
+  ```
+- **After:** 8 flags. Each engine sees a window of 4 starting at its `FLAG_BASE` (engine
+  register +8; reset 0 for engine 0, 4 for engine 1), so "FLAG n" in a program is physical flag
+  `(FLAG_BASE + n) mod 8`. Overlapping bases still let the engines signal each other. The host
+  gets `FLAG_SET` (0x08) and `FLAG_CLR` (0x09) to change single bits. Programs are unchanged.
+  ```systemverilog
+  wire [2:0]  fbase = flag_base[e*3+:3];
+  wire [15:0] fl2   = {flags, flags};
+  wire [15:0] set2  = {12'b0, f_set[e*4+:4]} << fbase;
+  assign e_flags[e*4+:4] = fl2[fbase+:4];          // the engine's 4 flags
+  assign p_set[e*8+:8]   = set2[7:0] | set2[15:8];   // back to physical flags
+  ...
+  flags <= (flags | p_set[7:0] | p_set[15:8] | host_set) & ~(p_clr[7:0] | p_clr[15:8] | host_clr);
+  ```
+- **Test:** new test "1-Wire Search ROM (engine 0) and I2C (engine 1) at the same time": two
+  host processes run a full Search ROM and repeated I2C write/read rounds concurrently.
+  - Before (old hardware; helpers rewritten to read-modify-write the old 4 shared flags):
+    `FAIL: concurrent I2C round 1 read 40, wrote 41`, the same for round 3, then a timeout.
+    A trace shows the host setting FLAG0 for a 1-Wire reset and the **I2C engine** taking it as a
+    START request and clearing it.
+  - After: passes in v1 and v2: Search ROM found both devices while I2C completed 62 rounds;
+    406 1-Wire edges happened during I2C traffic.
+- **Cost:** about 2,700 µm² (+2 %); worst logic path ~3.95 ns.
+- **Status:** Fixed in v1 and v2.
+
+## BUG-018 — Host-port lock let one process starve the other
+
+- **Where:** `test/tb_pbe.sv`, the `cs` task (host SPI chip select), both versions.
+- **Symptom:** the two-protocol test timed out on the new hardware. A progress probe showed I2C
+  running 223 rounds while the 1-Wire host process never got another transaction through.
+- **Cause:** the lock was a busy flag. The I2C process released it at the end of a transaction
+  and took it again in the same simulation instant, before the waiting 1-Wire process woke up.
+  (The first "before" run of BUG-017 used this lock too, so it was rerun with the fixed lock to
+  make sure the old-hardware failure was the flag clash and not the lock.)
+- **Before:**
+  ```systemverilog
+  bit host_busy = 0;
+  if (!level) begin
+    while (host_busy) @(posedge clk);
+    host_busy = 1;
+  end
+  ...
+  if (level) host_busy = 0;
+  ```
+- **After:** a ticket lock, which serves waiters in arrival order.
+  ```systemverilog
+  int host_next = 0, host_serving = 0;
+  int ticket;
+  if (!level) begin
+    ticket = host_next++;
+    while (host_serving != ticket) @(posedge clk);
+  end
+  ...
+  if (level) host_serving++;
+  ```
+- **Lesson:** a shared resource in a testbench needs a fair lock, just as in software.
 

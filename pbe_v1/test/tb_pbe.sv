@@ -48,10 +48,20 @@ module tb_pbe;
     end
   endtask
 
+  // One host port: a transaction holds it from CS_n low to CS_n high, so two host processes
+  // can share it (BUG-001). A ticket lock serves them in arrival order; a plain busy flag let
+  // the process that just released the port take it again at once and starve the other.
+  int host_next = 0, host_serving = 0;
   task automatic cs(input bit level);
+    int ticket;
+    if (!level) begin
+      ticket = host_next++;
+      while (host_serving != ticket) @(posedge clk);
+    end
     repeat (HOST_HALF) @(posedge clk);
     ui_in[1] = level;
     repeat (HOST_HALF) @(posedge clk);
+    if (level) host_serving++;
   endtask
 
   task automatic reg_write(input logic [6:0] addr, input logic [7:0] data);
@@ -99,6 +109,26 @@ module tb_pbe;
     end while (st[e*4+0] && tries < 400);  // RX empty
     check(!st[e*4+0], $sformatf("engine %0d RX FIFO stayed empty", e));
     reg_read(e ? 7'h26 : 7'h16, data);
+  endtask
+
+
+  // ---------------- engine-relative flags ----------------
+  // Engine e's FLAG n is physical flag (FLAG_BASE[e] + n) mod 8; by default engine 0 has
+  // flags 0-3 and engine 1 has flags 4-7. FLAG_SET (0x08) and FLAG_CLR (0x09) change single
+  // bits, so the host never overwrites a flag the other engine just changed.
+  function automatic int fphys(input int e, input int n);
+    return (e * 4 + n) % 8;
+  endfunction
+  task automatic flag_set(input int e, input int n);
+    reg_write(7'h08, 8'h01 << fphys(e, n));
+  endtask
+  task automatic flag_clear(input int e, input int n);
+    reg_write(7'h09, 8'h01 << fphys(e, n));
+  endtask
+  task automatic flag_get(input int e, input int n, output bit v);
+    logic [7:0] f;
+    reg_read(7'h04, f);
+    v = f[fphys(e, n)];
   endtask
 
   // ---------------- independent UART monitor on pin 0 ----------------
@@ -242,7 +272,8 @@ module tb_pbe;
   end
 
   // FLAG1 must clear only once the STOP is on the bus (BUG-011)
-  always @(negedge dut.flags[1]) if (i2c_en)
+  wire i2c_stop_flag = dut.flags[fphys(1, 1)];  // engine 1's FLAG1
+  always @(negedge i2c_stop_flag) if (i2c_en)
     check(bus[SDA] && bus[SCL], "I2C: FLAG1 (STOP) cleared before the STOP finished");
 
   // host-side helpers for the i2c_ctrl program on engine 1
@@ -253,10 +284,13 @@ module tb_pbe;
   // FLAG0 = START: happens when the next byte is queued.
   // FLAG1 = STOP: happens right away; wait until the engine clears the flag.
   task automatic i2c_cond(input logic [3:0] flag);
-    logic [7:0] f;
+    bit b;
     wait_tx_empty(1);
-    reg_write(7'h04, flag);
-    if (flag[1]) do reg_read(7'h04, f); while (f != 0);
+    if (flag[0]) flag_set(1, 0);
+    if (flag[1]) begin
+      flag_set(1, 1);
+      do flag_get(1, 1, b); while (b);
+    end
   endtask
   task automatic i2c_xfer(input logic [7:0] data, input logic [7:0] ack_out,
                           output logic [7:0] seen, output logic [7:0] ack_in);
@@ -307,23 +341,25 @@ module tb_pbe;
 
   // Host side of the onewire_ctrl program on engine 1 (static tasks: see BUG-006).
   logic [7:0] ow_tx, ow_r, ow_f, ow_crc, ow_byte;
+  int ow_e = 1;  // engine running the 1-Wire program
+  bit ow_fb;
   logic [7:0] ow_buf[$];
   bit ow_present, ow_b;
   int ow_i, ow_j;
   task ow_reset;
-    wait_tx_empty(1);
-    reg_write(7'h04, 8'h01);  // FLAG0: reset/presence
-    do reg_read(7'h04, ow_f); while (ow_f[0]);
-    fifo_recv(1, ow_r);
+    wait_tx_empty(ow_e);
+    flag_set(ow_e, 0);        // FLAG0: reset/presence
+    do flag_get(ow_e, 0, ow_fb); while (ow_fb);
+    fifo_recv(ow_e, ow_r);
     ow_present = (ow_r == 8'h00);
   endtask
   task ow_xbyte;  // send ow_tx as 8 slots; the byte seen comes back in ow_r
-    fifo_send(1, ow_tx);
-    fifo_recv(1, ow_r);
+    fifo_send(ow_e, ow_tx);
+    fifo_recv(ow_e, ow_r);
   endtask
   task ow_xbit;   // single-slot mode: send bit 0 of ow_tx, the bit seen comes back in ow_b
-    fifo_send(1, ow_tx);
-    fifo_recv(1, ow_r);
+    fifo_send(ow_e, ow_tx);
+    fifo_recv(ow_e, ow_r);
     ow_b = ow_r[7];
   endtask
   task ow_read_bytes;  // read ow_i bytes into ow_buf
@@ -357,8 +393,8 @@ module tb_pbe;
       if (ow_present) begin
         ow_tx = 8'hF0;
         ow_xbyte;
-        wait_tx_empty(1);
-        reg_write(7'h04, 8'h02);  // FLAG1: single-slot mode
+        wait_tx_empty(ow_e);
+        flag_set(ow_e, 1);        // FLAG1: single-slot mode
         s_last_zero = 0;
         s_ok = 1;
         for (s_i = 1; s_i <= 64; s_i++) begin
@@ -379,8 +415,8 @@ module tb_pbe;
             end
           end
         end
-        wait_tx_empty(1);
-        reg_write(7'h04, 8'h00);  // back to byte mode
+        wait_tx_empty(ow_e);
+        flag_clear(ow_e, 1);      // back to byte mode
         s_last_disc = s_last_zero;
         if (s_last_disc == 0) s_done = 1;
       end
@@ -458,7 +494,7 @@ module tb_pbe;
   logic [7:0] mb_rx[$], mb_par[$], mb_buf[$];
   logic [7:0] mb_f, mb_st, mb_d, mb_x, mb_b;
   logic [15:0] mb_crc;
-  bit mb_fdone;
+  bit mb_fdone, mb_fb;
   int mb_i, mb_j, mb_perr;  // mb_i/mb_j belong to the tasks; static tasks share variables
   task mb_crc16;  // Modbus CRC over mb_buf -> mb_crc ({high byte, low byte}; low byte is sent first)
     mb_crc = 16'hFFFF;
@@ -477,16 +513,15 @@ module tb_pbe;
       fifo_send(0, {7'b0, ^mb_b});  // even parity bit
     end
     wait_tx_empty(0);
-    reg_write(7'h04, 8'h02);         // FLAG1: request complete
-    do reg_read(7'h04, mb_f); while (mb_f[1]);
+    flag_set(0, 1);                  // FLAG1: request complete
+    do flag_get(0, 1, mb_fb); while (mb_fb);
   endtask
   task mb_receive;  // collect one response frame into mb_rx / mb_par
     mb_rx.delete();
     mb_par.delete();
     mb_fdone = 0;
     while (!mb_fdone) begin
-      reg_read(7'h04, mb_f);
-      mb_fdone = mb_f[2];  // read the flag first, so every byte before it gets drained
+      flag_get(0, 2, mb_fdone);  // read the flag first, so every byte before it gets drained
       reg_read(7'h01, mb_st);
       while (!mb_st[0]) begin
         fifo_recv(0, mb_d);
@@ -498,6 +533,14 @@ module tb_pbe;
     end
   endtask
   assign dev_pull = {1'b0, ow_pull_any, 6'b0};
+
+  // state for the two-protocol test
+  logic [63:0] conc_rom;
+  logic [7:0] conc_v, conc_seen, conc_ack;
+  bit conc_ow_done = 0, conc_i2c_busy = 0;
+  int conc_rounds = 0, conc_overlap = 0;
+  always @(negedge bus[OW]) if (conc_i2c_busy && !conc_ow_done) conc_overlap++;
+
 
   // ---------------- tests ----------------
   initial begin
@@ -526,7 +569,7 @@ module tb_pbe;
     reg_write(7'h00, 8'b0001_0001);      // restart + run E0
     repeat (300) @(posedge clk);
     check(uio_oe == 8'h00, $sformatf("NOP drove pins: uio_oe = %08b", uio_oe));
-    check(dut.flags == 4'h0 && !uo_out[1], "NOP changed flags or raised IRQ");
+    check(dut.flags == '0 && !uo_out[1], "NOP changed flags or raised IRQ");
     reg_write(7'h00, 8'b0000_0000);
 
     // ===== Test 1: UART loopback =====
@@ -718,8 +761,8 @@ module tb_pbe;
     ow_tx = 8'h55; ow_xbyte;
     for (ow_j = 0; ow_j < 8; ow_j++) begin
       ow_tx = ROM_B[8*ow_j+:8];
-      fifo_send(1, ow_tx);
-      fifo_recv(1, ow_r);
+      fifo_send(ow_e, ow_tx);
+      fifo_recv(ow_e, ow_r);
     end
     ow_tx = 8'hBE; ow_xbyte;
     ow_i = 9; ow_read_bytes;
@@ -766,7 +809,7 @@ module tb_pbe;
       mb_send;
       mb_receive;
       check(uo_out[1], "Modbus: no IRQ at the end of the response");
-      reg_write(7'h04, 8'h00);
+      flag_clear(0, 2);
       reg_write(7'h02, 8'h03);
       check(mb_req_got.size() == 8, $sformatf("Modbus: device got %0d request bytes", mb_req_got.size()));
       for (mb_i = 0; mb_i < 8 && mb_i < mb_req_got.size(); mb_i++)
@@ -792,6 +835,80 @@ module tb_pbe;
              mb_max_gap, 1.5 * 11 * MB_BIT);
     $display("  a parity error in the response was reported to the host");
     mb_en = 0;
+
+    // ===== Test 6: two flag-using protocols at once (BUG-017) =====
+    $display("Test 6: 1-Wire Search ROM (engine 0, pin 6) and I2C (engine 1, pins 4-5) at the same time");
+    reg_write(7'h00, 8'b1100_0000);
+    mb_en = 0;
+    reg_write(7'h04, 8'h00);
+    reg_write(7'h02, 8'h03);
+    load_program("conc_image.hex");      // i2c_ctrl at word 0, onewire_ctrl at word 34
+    reg_write(7'h03, 8'b0011_0000);      // pins 4, 5 to E1; pin 6 to E0
+    reg_write(7'h10, 8'($rtoi(1000.0 / CLK_NS + 0.5) - 1));  // E0: 1-Wire, tick = 1 us
+    reg_write(7'h11, 0);
+    reg_write(7'h12, OW);
+    reg_write(7'h14, 2'b00);
+    reg_write(7'h15, 34);
+    reg_write(7'h20, 17);                // E1: I2C fast mode
+    reg_write(7'h21, 0);
+    reg_write(7'h22, 4);
+    reg_write(7'h24, 2'b11);
+    reg_write(7'h25, 0);
+    ow_e = 0;
+    ow_en_a = 1;
+    ow_en_b = 1;
+    ow_mon = 1;
+    ow_bad = 0;
+    i2c_en = 1;
+    i_starts = 0;
+    i_stops = 0;
+    reg_write(7'h00, 8'b0011_0011);      // restart + run both
+    fork
+      begin  // host process A: 1-Wire on engine 0
+        ow_reset;
+        check(ow_present, "concurrent 1-Wire: no presence");
+        s_done = 0;
+        s_last_disc = 0;
+        ow_search_next;
+        conc_rom = s_rom;
+        ow_search_next;
+        check(s_done && ((conc_rom == ROM_A && s_rom == ROM_B) || (conc_rom == ROM_B && s_rom == ROM_A)),
+              $sformatf("concurrent 1-Wire search found %016x, %016x", conc_rom, s_rom));
+        conc_ow_done = 1;
+      end
+      begin  // host process B: I2C on engine 1, until 1-Wire is done (at least 3 rounds)
+        conc_i2c_busy = 1;
+        conc_rounds = 0;
+        while (!conc_ow_done || conc_rounds < 3) begin
+          conc_v = 8'h40 + conc_rounds;
+          i2c_cond(1);
+          i2c_xfer(8'hA0, 8'h80, conc_seen, conc_ack); check(conc_ack == 0, "concurrent I2C: address not ACKed");
+          i2c_xfer(8'h20, 8'h80, conc_seen, conc_ack);
+          i2c_xfer(conc_v, 8'h80, conc_seen, conc_ack);
+          i2c_cond(2);
+          i2c_cond(1);
+          i2c_xfer(8'hA0, 8'h80, conc_seen, conc_ack);
+          i2c_xfer(8'h20, 8'h80, conc_seen, conc_ack);
+          i2c_cond(1);
+          i2c_xfer(8'hA1, 8'h80, conc_seen, conc_ack);
+          i2c_xfer(8'hFF, 8'h80, conc_seen, conc_ack);
+          check(conc_seen === conc_v, $sformatf("concurrent I2C round %0d read %02x, wrote %02x", conc_rounds, conc_seen, conc_v));
+          i2c_cond(2);
+          conc_rounds++;
+        end
+        conc_i2c_busy = 0;
+      end
+    join
+    ow_mon = 0;
+    check(ow_bad == 0, "concurrent 1-Wire: timing violations");
+    check(i_starts == 3 * conc_rounds && i_stops == 2 * conc_rounds,
+          $sformatf("concurrent I2C: %0d STARTs, %0d STOPs for %0d rounds", i_starts, i_stops, conc_rounds));
+    check(conc_overlap > 100, $sformatf("only %0d 1-Wire edges happened during I2C traffic", conc_overlap));
+    $display("  Search ROM found both devices while I2C ran %0d write/read rounds; %0d 1-Wire edges overlapped I2C traffic",
+             conc_rounds, conc_overlap);
+    ow_en_a = 0;
+    ow_en_b = 0;
+    i2c_en = 0;
 
     if (errors == 0) begin
       $display("PASS");

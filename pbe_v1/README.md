@@ -56,6 +56,14 @@ idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per e
 | 110 | `FLAG n, SET/CLR/IRQ` | Shared flags between engines, or interrupt the host. Action 3 does nothing: the assembler's `NOP` (`0xD800`) |
 | 111 | reserved | NOP, kept for add-ons (CRC, NRZI / bit stuffing / Manchester) |
 
+## Flags
+
+Programs use `FLAG0`–`FLAG3`, which are relative to the engine: engine e's FLAG n is physical
+flag `(FLAG_BASE + n) mod 8`. By default engine 0 has flags 0–3 and engine 1 has flags 4–7, so
+two protocols that use flags can run on the two engines at once. The host sets and clears
+single flags with `FLAG_SET` (0x08) and `FLAG_CLR` (0x09), and reads all 8 at `FLAGS` (0x04).
+In the host protocols below, "set FLAG1" means the running engine's FLAG1.
+
 ## I2C host protocol (`programs/i2c_ctrl.pbe`)
 
 Each I2C byte is two TX FIFO bytes, `[data] [ack]`, and returns two RX FIFO bytes,
@@ -94,8 +102,6 @@ Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
 - **Receive:** two RX bytes per character, `[data] [status]`, status bit 7 = parity bit
   received. After 3.5 characters of silence the engine sets FLAG2 and raises IRQ.
 - The host computes the CRC and checks parity.
-- Flags: FLAG0/FLAG1 are also used by the I2C, 1-Wire and USB programs, so only one of those can
-  run at a time (see D27 in `docs/DESIGN_DECISIONS.md`).
 
 ## Status
 
@@ -114,13 +120,15 @@ Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
   5. Modbus RTU master at 19200 8E1 against an RS-485 device model: two request/response
      exchanges, CRC, parity (an injected parity error is reported), driver enable on during
      every character and off before the answer, no glitches on the TX line.
+  6. Two flag-using protocols at once: a 1-Wire Search ROM on engine 0 while engine 1 runs I2C
+     write/read rounds, from two host processes sharing the host port.
   - Unit test: a restart in the same cycle as an instruction cancels its side effects.
   - Shortening the 1-Wire write-0 pulse, or never turning the RS-485 driver off, makes the
     tests fail.
 - Area, Yosys with the IHP sg13g2 typical library: about 5,240 cells, 1,493 flip-flops,
-  140,653 µm² of cell area. 6×4 tiles are 1289.28 × 710.64 µm = 916,229 µm², so cells fill about 15%.
-- Timing, ABC with the slow library (1.08 V, 125 °C): 3.75 ns of logic on the worst path
+  143,373 µm² of cell area. 6×4 tiles are 1289.28 × 710.64 µm = 916,229 µm², so cells fill about 15%.
+- Timing, ABC with the slow library (1.08 V, 125 °C): 3.97 ns of logic on the worst path
   (engine PC → program memory read → decode → pin select → next state). With flip-flop
-  clock-to-Q and setup, about 4.7 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
+  clock-to-Q and setup, about 4.9 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
   delay and clock skew, so the real place-and-route timing report is still needed.
 - Not done yet: the input glitch filter, Tiny Tapeout `info.yaml` and docs.
