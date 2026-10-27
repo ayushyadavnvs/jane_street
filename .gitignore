@@ -4,3 +4,4 @@ synth/synth.ys
 synth/*.log
 synth/*_netlist.v
 test/dbg.*
+__pycache__/

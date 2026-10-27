@@ -37,7 +37,8 @@ module pbe_usb_line (
     output logic [7:0]  crc16_lo,     // CRC16 field bytes, ready to send LSB first
     output logic [7:0]  crc16_hi,
     output logic        crc5_ok,
-    output logic        crc16_ok
+    output logic        crc16_ok,
+    output logic        stuff_err     // a 1 arrived where a stuffed 0 must be, since the last SYNC
 );
   localparam logic [2:0] T_IDLE = 3'd0, T_BITS = 3'd1, T_SE0A = 3'd2, T_SE0B = 3'd3, T_J = 3'd4;
   localparam logic [1:0] R_IDLE = 2'd0, R_SYNC = 2'd1, R_DATA = 2'd2, R_WAITJ = 2'd3;
@@ -146,12 +147,13 @@ module pbe_usb_line (
   // ---- RX ----
   logic [1:0] rst_q;
   logic [7:0] rcnt;
-  logic       dp_d, prev_k, rv, rb, re;
+  logic       dp_d, prev_k, rv, rb, re, serr;
   logic [2:0] rones;
 
   wire rx_enable = (tst == T_IDLE) && !hv && !eop_pend;
   wire se0 = !dp_in && !dm_in;
 
+  assign stuff_err = serr;
   assign rx_avail = rv || re;
   assign rx_eop   = !rv && re;
   assign rx_bit   = rb;
@@ -166,10 +168,12 @@ module pbe_usb_line (
       rb     <= 1'b0;
       re     <= 1'b0;
       rones  <= '0;
+      serr   <= 1'b0;
     end else if (clear) begin
       rst_q <= R_IDLE;
       rv    <= 1'b0;
       re    <= 1'b0;
+      serr  <= 1'b0;
     end else begin
       dp_d <= dp_in;
       if (rx_take) begin
@@ -186,6 +190,7 @@ module pbe_usb_line (
               rst_q  <= R_SYNC;
               rcnt   <= {1'b0, bitdiv[7:1]};
               prev_k <= 1'b0;
+              serr   <= 1'b0;
             end
           R_WAITJ:
             if (!dp_in && dm_in) rst_q <= R_IDLE;
@@ -205,7 +210,8 @@ module pbe_usb_line (
                     rones <= 3'd1;
                   end
                 end else if (rones == 3'd6) begin
-                  rones <= '0;  // stuffed bit, drop it
+                  rones <= '0;  // stuffed bit: drop it, but it must decode as a 0
+                  if (dp_in == prev_k) serr <= 1'b1;
                 end else begin
                   rv    <= 1'b1;
                   rb    <= (dp_in == prev_k);

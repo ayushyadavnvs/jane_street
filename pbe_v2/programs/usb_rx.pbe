@@ -1,7 +1,8 @@
 ; Low-speed USB packet receiver.
 ; Config: D+ = pin base, D- = pin base + 1, BITDIV = clocks per bit - 1, CLKDIV = 0, IN LSB first.
 ; For every packet the RX FIFO gets the PID, the remaining bytes (including the CRC field),
-; then a status byte: bit 0 = CRC5 ok (tokens), bit 1 = CRC16 ok (DATA packets).
+; then a status byte: bit 0 = CRC5 ok (tokens), bit 1 = CRC16 ok (DATA packets),
+; bit 2 = bit-stuffing error (reject the packet).
 pkt:    SET  X, 7
 pid:    URX  pkt             ; end of packet before a full PID: drop it
         JMP  X--, pid

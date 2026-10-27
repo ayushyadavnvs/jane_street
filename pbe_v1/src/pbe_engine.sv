@@ -12,7 +12,7 @@
 //                                             4 TX_EMPTY, 5 TX_READY, 6 FLAG0, 7 FLAG1
 //  100  SET         [8] 0 = X, 1 = OSR; [7:0] value
 //  101  PULL/PUSH   [8] 0 = PULL (TX FIFO -> OSR), 1 = PUSH (ISR -> RX FIFO, then clear ISR)
-//  110  FLAG        [8:7] 0 SET, 1 CLR, 2 IRQ; [1:0] flag
+//  110  FLAG        [8:7] 0 SET, 1 CLR, 2 IRQ, 3 none (the assembler's NOP); [1:0] flag
 //  111  reserved    executes as NOP
 //
 // WAIT, PULL and PUSH block until they can complete. While blocked the engine checks
@@ -110,7 +110,8 @@ module pbe_engine (
     endcase
   end
 
-  wire exec = issue && ready;
+  // A restart in the same cycle cancels the instruction, so it has no side effects.
+  wire exec = issue && ready && !restart;
 
   logic jmp_take;
   always_comb begin

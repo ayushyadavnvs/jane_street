@@ -56,7 +56,7 @@ idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per e
 | 011 | `JMP [cond,] label` | ALWAYS, X--, PIN_HI, PIN_LO, TX_EMPTY, TX_READY, FLAG0, FLAG1 (6-bit address) |
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL` / `PUSH` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full) |
-| 110 | `FLAG n, SET/CLR/IRQ` | Shared flags between engines, or interrupt the host |
+| 110 | `FLAG n, SET/CLR/IRQ` | Shared flags between engines, or interrupt the host. Action 3 does nothing: the assembler's `NOP` (`0xD800`) |
 | 111 | USB sub-ops (below) | Low-speed USB line unit |
 
 ### USB sub-ops (opcode 111, D+ = pin base, D- = pin base + 1)
@@ -71,7 +71,7 @@ the engine runs with `CLKDIV = 0` and only has to keep the 1-bit holding registe
 | `UEOP` | End the packet (SE0, SE0, J, then release) after the queued bits |
 | `CRC` | Restart CRC5 and CRC16 |
 | `OSRCRC LO/HI` | Load the OSR with a CRC16 field byte, ready to send |
-| `STAT` | ISR ← {CRC16 ok, CRC5 ok} |
+| `STAT` | ISR ← {stuffing error, CRC16 ok, CRC5 ok} |
 | `UIDLE` | Block until the packet, EOP included, is on the wire |
 | `JCRCBAD label` | Jump if the CRC16 check failed |
 
@@ -90,35 +90,42 @@ Each I2C byte is two TX FIFO bytes, `[data] [ack]`, and returns two RX FIFO byte
 
 Set `FLAG0` for a START or repeated START (it happens when the next byte is queued) and `FLAG1`
 for a STOP (it happens right away; the engine clears the flag when done). Only set either while
-the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tick / 7.
+the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tick / 7, low for
+4 ticks and high for 3. At 48 MHz: `CLKDIV` = 17 for fast mode (381 kHz), 68 for standard mode
+(99 kHz).
 
 ## USB host protocol
 
 - `programs/usb_tx.pbe`: queue `[PID] [data...]` in the TX FIFO, then set FLAG0 to send, plus
   FLAG1 to append the CRC16 (DATA packets). A handshake is just `[PID]` with FLAG0.
 - `programs/usb_rx.pbe`: every packet arrives in the RX FIFO as `[PID] [bytes...] [status]`,
-  status bit 0 = CRC5 ok (tokens), bit 1 = CRC16 ok (DATA).
+  status bit 0 = CRC5 ok (tokens), bit 1 = CRC16 ok (DATA), bit 2 = bit-stuffing error
+  (reject the packet).
 
 ## Status
 
-- Simulation (`make test`, 48 MHz clock), all through the chip's pins:
+- Simulation (`make test`, 48 MHz clock, exits non-zero on any failure), all through the chip's pins:
+  0. `NOP` has no side effects (in v2 it used to send a USB bit).
   1. UART TX → UART RX loopback, 6 bytes, plus an independent UART monitor.
   2. SPI mode 0 full duplex, 3 bytes.
-  3. I2C on engine 1 while engine 0 sends UART, with 20 clock stretches.
+  3. I2C on engine 1 while engine 0 sends UART, with 20 clock stretches, at fast-mode speed
+     with every SCL low and high phase checked against the I2C spec.
   4. USB low speed, checked by testbench models written independently of the RTL:
      - Engine 0 sends a DATA0 GET_DESCRIPTOR packet (CRC16 `DD 94`, matching real USB traces),
        an ACK handshake, and a DATA1 packet that needs 6 stuffed bits. A decoder checks every
        byte, every stuffed bit and the EOP length.
      - Engine 1 receives a SETUP token at +1.5% bit rate, the same token with a bad CRC5 at
        −1.5%, a DATA0 packet full of stuffed bits at −1.5%, and that packet with a flipped bit.
-       Good CRCs pass and bad ones are flagged.
+       Good CRCs pass and bad ones are flagged. A packet with a bit-stuffing violation is
+       flagged in status bit 2.
      - Turning off the receiver's edge re-centring, or the transmitter's bit stuffing, makes
        the test fail, so both features are really exercised.
-- Area, Yosys with the IHP sg13g2 typical library: 7,477 cells, 2,027 flip-flops,
-  189,525 µm² of cell area, about 21% of the 6×4 tiles (916,229 µm²). Compared with version 1
+  - Unit test: a restart in the same cycle as an instruction cancels its side effects.
+- Area, Yosys with the IHP sg13g2 typical library: about 7,480 cells, 2,028 flip-flops,
+  189,389 µm² of cell area, about 21% of the 6×4 tiles (916,229 µm²). Compared with version 1
   (141,141 µm²), the USB logic adds about 15,600 µm² (one line unit is 5,733 µm²) and the
   16-byte FIFOs add about 32,800 µm².
-- Timing, ABC with the slow library: 3.72 ns of logic on the worst path, about 4.6 ns with
+- Timing, ABC with the slow library: 3.96 ns of logic on the worst path, about 4.8 ns with
   flip-flop overhead, against 20.8 ns at 48 MHz. Wire delay and clock skew are not included.
 
 ## What a complete USB device still needs

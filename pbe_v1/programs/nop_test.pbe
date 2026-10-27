@@ -1,0 +1,4 @@
+; NOP must have no side effects: no pins, flags, FIFOs or interrupts.
+loop:   NOP
+        NOP [3]
+        JMP  loop

@@ -52,7 +52,7 @@ idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per e
 | 011 | `JMP [cond,] label` | ALWAYS, X--, PIN_HI, PIN_LO, TX_EMPTY, TX_READY, FLAG0, FLAG1 (6-bit address) |
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL` / `PUSH` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full) |
-| 110 | `FLAG n, SET/CLR/IRQ` | Shared flags between engines, or interrupt the host |
+| 110 | `FLAG n, SET/CLR/IRQ` | Shared flags between engines, or interrupt the host. Action 3 does nothing: the assembler's `NOP` (`0xD800`) |
 | 111 | reserved | NOP, kept for add-ons (CRC, NRZI / bit stuffing / Manchester) |
 
 ## I2C host protocol (`programs/i2c_ctrl.pbe`)
@@ -67,20 +67,26 @@ Each I2C byte is two TX FIFO bytes, `[data] [ack]`, and returns two RX FIFO byte
 
 Set `FLAG0` for a START or repeated START (it happens when the next byte is queued) and `FLAG1`
 for a STOP (it happens right away; the engine clears the flag when done). Only set either while
-the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tick / 7.
+the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tick / 7, low for
+4 ticks and high for 3. At 48 MHz: `CLKDIV` = 17 for fast mode (381 kHz), 68 for standard mode
+(99 kHz).
 
 ## Status
 
-- Simulation (`make test`), all through the chip's pins:
+- Simulation (`make test`, exits non-zero on any failure), all through the chip's pins:
+  0. `NOP` has no side effects.
   1. UART TX → UART RX loopback, 6 bytes, plus an independent UART monitor.
   2. SPI mode 0 full duplex, 3 bytes.
   3. I2C on engine 1 (pins 4–5) while engine 0 sends UART: write 2 registers, read them back
      with a repeated START, and a NACK from a missing address. The peripheral model stretches
      the clock 20 times; removing `WAIT scl, HIGH` from the program makes the test fail.
-- Area, Yosys with the IHP sg13g2 typical library: 5,239 cells, 1,493 flip-flops,
-  141,141 µm² of cell area. 6×4 tiles are 1289.28 × 710.64 µm = 916,229 µm², so cells fill about 15%.
-- Timing, ABC with the slow library (1.08 V, 125 °C): 3.61 ns of logic on the worst path
+     Runs at fast-mode speed and checks every SCL low (≥ 1.3 µs) and high (≥ 0.6 µs) phase,
+     and that the STOP flag clears only after the STOP.
+  - Unit test: a restart in the same cycle as an instruction cancels its side effects.
+- Area, Yosys with the IHP sg13g2 typical library: about 5,240 cells, 1,493 flip-flops,
+  140,947 µm² of cell area. 6×4 tiles are 1289.28 × 710.64 µm = 916,229 µm², so cells fill about 15%.
+- Timing, ABC with the slow library (1.08 V, 125 °C): 3.78 ns of logic on the worst path
   (engine PC → program memory read → decode → pin select → next state). With flip-flop
-  clock-to-Q and setup, about 4.5 ns, against 20 ns at a 50 MHz clock. This leaves out wire
+  clock-to-Q and setup, about 4.7 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
   delay and clock skew, so the real place-and-route timing report is still needed.
 - Not done yet: the input glitch filter, Tiny Tapeout `info.yaml` and docs.

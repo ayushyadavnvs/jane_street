@@ -29,7 +29,7 @@ import sys
 
 MEM_WORDS = 64
 
-OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 7}
+OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 6}
 USB_OPS = {"UTX": 0, "URX": 1, "UEOP": 2, "CRC": 3, "OSRCRC": 4, "STAT": 5, "UIDLE": 6, "JCRCBAD": 7}
 PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5}
 WAIT_CND = {"LOW": 0, "HIGH": 1, "RISE": 2, "FALL": 3}
@@ -157,9 +157,9 @@ def assemble(text, base, name="<src>"):
         elif mnem == "FLAG":
             need(2)
             arg = (pick(FLAG_ACT, args[1], n, "flag action") << 7) | num(args[0], n, 0, 3)
-        else:  # NOP
+        else:  # NOP: FLAG with action 3, which does nothing (opcode 111 is USB in v2)
             need(0)
-            arg = 0
+            arg = 3 << 7
         words.append(word(op, arg, dly))
     return words, labels
 

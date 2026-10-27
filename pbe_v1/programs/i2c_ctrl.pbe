@@ -1,6 +1,7 @@
 ; I2C controller: START, repeated START, STOP, ACK/NACK, clock stretching.
 ; Config: OUT and IN MSB first; sda = pin base + 0, scl = pin base + 1 (both need pull-ups).
-; Tick = 1/7 of the SCL period.
+; Tick = 1/7 of the SCL period: SCL is low 4 ticks, high 3 (I2C needs low longer than high).
+; Fast mode (400 kHz) at 48 MHz: CLKDIV = 17. Standard mode (100 kHz): CLKDIV = 68.
 ;
 ; Host protocol
 ;   Each I2C byte is 2 TX bytes: [data] [ack]
@@ -21,16 +22,16 @@ byte:   PULL
 bit:    PIN  sda, OUTOD      ; change SDA only while SCL is low
         PIN  scl, REL
         WAIT scl, HIGH       ; clock stretching: wait while the peripheral holds SCL low
-        IN   sda [1]         ; sample in the middle of SCL high
-        PIN  scl, DRV0
+        IN   sda             ; sample while SCL is high
+        PIN  scl, DRV0 [1]   ; low phase gets the extra tick
         JMP  X--, bit
         PUSH                 ; the byte seen on the bus
         PULL                 ; ACK slot
         PIN  sda, OUTOD
         PIN  scl, REL
         WAIT scl, HIGH
-        IN   sda [1]
-        PIN  scl, DRV0
+        IN   sda
+        PIN  scl, DRV0 [1]
         PUSH                 ; 0 = ACK, 1 = NACK
         JMP  idle
 start:  FLAG 0, CLR
@@ -40,9 +41,9 @@ start:  FLAG 0, CLR
         PIN  sda, DRV0 [1]   ; START: SDA falls while SCL is high
         PIN  scl, DRV0
         JMP  byte
-stop:   FLAG 1, CLR
-        PIN  sda, DRV0
+stop:   PIN  sda, DRV0
         PIN  scl, REL
         WAIT scl, HIGH [1]
         PIN  sda, REL [3]    ; STOP: SDA rises while SCL is high
+        FLAG 1, CLR          ; only now tell the host the STOP is done
         JMP  idle

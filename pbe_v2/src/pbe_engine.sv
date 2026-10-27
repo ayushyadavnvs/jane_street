@@ -12,14 +12,14 @@
 //                                             4 TX_EMPTY, 5 TX_READY, 6 FLAG0, 7 FLAG1
 //  100  SET         [8] 0 = X, 1 = OSR; [7:0] value
 //  101  PULL/PUSH   [8] 0 = PULL (TX FIFO -> OSR), 1 = PUSH (ISR -> RX FIFO, then clear ISR)
-//  110  FLAG        [8:7] 0 SET, 1 CLR, 2 IRQ; [1:0] flag
+//  110  FLAG        [8:7] 0 SET, 1 CLR, 2 IRQ, 3 none (the assembler's NOP); [1:0] flag
 //  111  USB         [8:6] sub-op, [5:0] param (low-speed USB line unit, D+ = pin base, D- = pin base + 1)
 //                   0 UTX     send the next OSR bit (param[0] = 1: leave it out of the CRC); blocks while busy
 //                   1 URX a   take the next received bit into the ISR, or jump to a at end of packet; blocks
 //                   2 UEOP    end the packet after the queued bits
 //                   3 CRC     restart CRC5 and CRC16
 //                   4 OSRCRC  OSR <= CRC16 field byte (param[0]: 0 low, 1 high)
-//                   5 STAT    ISR <= {6'b0, CRC16 ok, CRC5 ok}
+//                   5 STAT    ISR <= {5'b0, stuffing error, CRC16 ok, CRC5 ok}
 //                   6 UIDLE   block until the packet, including EOP, has been sent
 //                   7 JCRCBAD a  jump to a if the CRC16 check failed
 //
@@ -101,7 +101,7 @@ module pbe_engine (
   wire [2:0] usb_op = arg[8:6];
   wire [2:0] dp_idx = pin_base;
   wire [2:0] dm_idx = pin_base + 3'd1;
-  logic       u_dp, u_dm, u_drive, u_full, u_busy, u_avail, u_eop, u_bit, u_crc5_ok, u_crc16_ok;
+  logic       u_dp, u_dm, u_drive, u_full, u_busy, u_avail, u_eop, u_bit, u_crc5_ok, u_crc16_ok, u_serr;
   logic [7:0] u_crc_lo, u_crc_hi;
   wire        is_usb = (op == OP_USB);
 
@@ -128,7 +128,8 @@ module pbe_engine (
       .crc16_lo(u_crc_lo),
       .crc16_hi(u_crc_hi),
       .crc5_ok (u_crc5_ok),
-      .crc16_ok(u_crc16_ok)
+      .crc16_ok(u_crc16_ok),
+      .stuff_err(u_serr)
   );
 
   wire [7:0] pair_mask = (8'b1 << dp_idx) | (8'b1 << dm_idx);
@@ -173,7 +174,8 @@ module pbe_engine (
     endcase
   end
 
-  assign exec = issue && ready;
+  // A restart in the same cycle cancels the instruction, so it has no side effects.
+  assign exec = issue && ready && !restart;
 
   logic jmp_take;
   always_comb begin
@@ -275,7 +277,7 @@ module pbe_engine (
                   else isr <= in_msb_first ? {isr[6:0], u_bit} : {u_bit, isr[7:1]};
                 end
                 U_OSRCRC: osr <= arg[0] ? u_crc_hi : u_crc_lo;
-                U_STAT:   isr <= {6'b0, u_crc16_ok, u_crc5_ok};
+                U_STAT:   isr <= {5'b0, u_serr, u_crc16_ok, u_crc5_ok};
                 U_JCRC:   if (!u_crc16_ok) pc <= arg[5:0];
                 default: ;
               endcase

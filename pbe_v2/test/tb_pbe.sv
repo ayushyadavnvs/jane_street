@@ -222,6 +222,7 @@ module tb_pbe;
       ext_drive[SCL] = 1;
       ext_val[SCL] = 0;
       i_stretches++;
+      scl_stretched = 1;
       repeat (I2C_STRETCH) @(posedge clk);
       ext_drive[SCL] = 0;
     end
@@ -230,6 +231,28 @@ module tb_pbe;
   always @(negedge bus[SCL]) if (i2c_en && i_st == I_RDATA && i_bit == 0 && i_acking) begin
     i_acking = 0;
   end
+
+  // SCL timing against I2C fast mode: low >= 1.3 us, high >= 0.6 us, period >= 2.5 us (BUG-010)
+  // The period check skips the cycle right after a stretch: the controller times that high
+  // phase from when it sees SCL rise, which the spec allows (only low/high minimums apply).
+  realtime scl_fell = 0, scl_rose = 0, scl_min_low = 1e9, scl_min_high = 1e9, scl_min_period = 1e9;
+  bit scl_stretched = 0, scl_after_stretch = 0;
+  always @(posedge bus[SCL]) if (i2c_en) begin
+    if (scl_fell > 0 && $realtime - scl_fell < scl_min_low) scl_min_low = $realtime - scl_fell;
+    if (scl_rose > 0 && !scl_after_stretch && $realtime - scl_rose < scl_min_period)
+      scl_min_period = $realtime - scl_rose;
+    scl_after_stretch = scl_stretched;
+    scl_stretched = 0;
+    scl_rose = $realtime;
+  end
+  always @(negedge bus[SCL]) if (i2c_en) begin
+    if (scl_rose > 0 && $realtime - scl_rose < scl_min_high) scl_min_high = $realtime - scl_rose;
+    scl_fell = $realtime;
+  end
+
+  // FLAG1 must clear only once the STOP is on the bus (BUG-011)
+  always @(negedge dut.flags[1]) if (i2c_en)
+    check(bus[SDA] && bus[SCL], "I2C: FLAG1 (STOP) cleared before the STOP finished");
 
   // host-side helpers for the i2c_ctrl program on engine 1
   task automatic wait_tx_empty(input int e);
@@ -323,7 +346,7 @@ module tb_pbe;
 
   // Send u_pkt to the chip on D+ = pin 2, D- = pin 3, bit rate off by h_pct percent.
   real h_pct, h_bit;
-  bit  h_k;
+  bit  h_k, h_bad_stuff = 0;  // h_bad_stuff: send a 1 where the first stuffed 0 belongs
   int  h_ones, h_i, h_b;
   logic [7:0] h_cur;
   task usb_host_send;
@@ -340,7 +363,8 @@ module tb_pbe;
         #(h_bit);
         h_ones = h_cur[h_b] ? h_ones + 1 : 0;
         if (h_ones == 6) begin  // stuffed 0
-          h_k = !h_k;
+          if (!h_bad_stuff) h_k = !h_k;
+          h_bad_stuff = 0;
           ext_val[2] = h_k;
           ext_val[3] = !h_k;
           #(h_bit);
@@ -410,6 +434,19 @@ module tb_pbe;
     reg_write(7'h10, 8'hA5);
     reg_read(7'h10, got);
     check(got == 8'hA5, $sformatf("CLKDIV_L readback %02x", got));
+
+    // ===== Test 0: NOP has no side effects (BUG-008) =====
+    $display("Test 0: NOP has no side effects");
+    load_program("nop_image.hex");
+    reg_write(7'h10, 0);
+    reg_write(7'h11, 0);
+    reg_write(7'h12, 2);                 // pins 2, 3: a USB pair in v2
+    reg_write(7'h15, 0);
+    reg_write(7'h00, 8'b0001_0001);      // restart + run E0
+    repeat (300) @(posedge clk);
+    check(uio_oe == 8'h00, $sformatf("NOP drove pins: uio_oe = %08b", uio_oe));
+    check(dut.flags == 4'h0 && !uo_out[1], "NOP changed flags or raised IRQ");
+    reg_write(7'h00, 8'b0000_0000);
 
     // ===== Test 1: UART loopback =====
     $display("Test 1: UART TX (engine 0) looped back into UART RX (engine 1)");
@@ -488,7 +525,7 @@ module tb_pbe;
     reg_write(7'h12, 0);
     reg_write(7'h14, 2'b00);
     reg_write(7'h15, 0);
-    reg_write(7'h20, 4);                 // E1 tick = 5 clocks, SCL = 35 clocks (1.4 MHz at 50 MHz)
+    reg_write(7'h20, 17);                // E1 tick = 18 clocks, SCL = 7 ticks: I2C fast mode (<= 400 kHz)
     reg_write(7'h21, 0);
     reg_write(7'h22, 4);                 // E1 pins start at 4
     reg_write(7'h24, 2'b11);             // MSB first
@@ -533,12 +570,16 @@ module tb_pbe;
     check(bus[SDA] && bus[SCL], "I2C: bus not idle (both high) at the end");
     check(i_starts == 4 && i_stops == 3, $sformatf("I2C: saw %0d STARTs, %0d STOPs", i_starts, i_stops));
     check(i_stretches >= 20, $sformatf("I2C: only %0d clock stretches", i_stretches));
+    check(scl_min_low >= 1300, $sformatf("I2C: SCL low %0.0f ns, fast mode needs 1300", scl_min_low));
+    check(scl_min_high >= 600, $sformatf("I2C: SCL high %0.0f ns, fast mode needs 600", scl_min_high));
+    check(scl_min_period >= 2500, $sformatf("I2C: SCL period %0.0f ns, over 400 kHz", scl_min_period));
 
     wait (uart_seen.size() == sent.size() || $time > 15ms);
     foreach (sent[i])
       check(uart_seen[i] === sent[i], $sformatf("UART during I2C: byte %0d %02x", i, uart_seen[i]));
     $display("  I2C write, read with repeated START, and NACK passed with %0d clock stretches;", i_stretches);
     $display("  UART sent %0d bytes at the same time", uart_seen.size());
+    $display("  SCL min low %0.0f ns, min high %0.0f ns, min period %0.0f ns", scl_min_low, scl_min_high, scl_min_period);
 
     // ===== Test 4: low-speed USB =====
     $display("Test 4: low-speed USB TX (engine 0, pins 0/1) and RX (engine 1, pins 2/3)");
@@ -573,24 +614,27 @@ module tb_pbe;
     t_crc = 1; t_what = "DATA1 with long runs of 1s"; usb_tx_check;
 
     u_pkt = '{8'h2D, 8'h00, 8'h10};
-    h_pct = 1.5;  r_mask = 8'h01; r_exp = 8'h01; t_what = "SETUP token";                 usb_rx_check;
+    h_pct = 1.5;  r_mask = 8'h05; r_exp = 8'h01; t_what = "SETUP token";                 usb_rx_check;
     u_pkt = '{8'h2D, 8'h00, 8'h11};
-    h_pct = -1.5; r_mask = 8'h01; r_exp = 8'h00; t_what = "SETUP token with a bad CRC5"; usb_rx_check;
+    h_pct = -1.5; r_mask = 8'h05; r_exp = 8'h00; t_what = "SETUP token with a bad CRC5"; usb_rx_check;
     u_pkt = '{8'hC3, 8'hFF, 8'hFF, 8'hFF, 8'hFF, 8'h80, 8'h06, 8'h00, 8'h01};
     usb_crc16;
     u_pkt.push_back(u_crc[7:0]);
     u_pkt.push_back(u_crc[15:8]);
-    h_pct = -1.5; r_mask = 8'h02; r_exp = 8'h02; t_what = "DATA0 with stuffed bits";     usb_rx_check;
+    h_pct = -1.5; r_mask = 8'h06; r_exp = 8'h02; t_what = "DATA0 with stuffed bits";     usb_rx_check;
+    h_bad_stuff = 1;                     // same packet, but a 1 where a stuffed 0 must be (BUG-009)
+    h_pct = 0.0;  r_mask = 8'h04; r_exp = 8'h04; t_what = "DATA0 with a bit-stuffing error"; usb_rx_check;
     u_pkt[3] = 8'hFE;
     h_pct = 1.5;  r_mask = 8'h02; r_exp = 8'h00; t_what = "DATA0 with a flipped bit";    usb_rx_check;
-    if (errors == 0) $display("PASS");
-    else $display("FAILED with %0d error(s)", errors);
-    $finish;
+    // $fatal gives a non-zero exit code, so make and CI see the failure (BUG-007)
+    if (errors == 0) begin
+      $display("PASS");
+      $finish;
+    end else $fatal(1, "FAILED with %0d error(s)", errors);
   end
 
   initial begin
     #40ms;
-    $display("FAILED: timeout");
-    $finish;
+    $fatal(1, "FAILED: timeout");
   end
 endmodule
