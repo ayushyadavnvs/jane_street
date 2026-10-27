@@ -13,8 +13,9 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 4 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 64-word hex image |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller, I2C controller |
-| `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller, I2C controller, 1-Wire controller, Modbus RTU master |
+| `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
+| `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
 ## Run
@@ -71,6 +72,31 @@ the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tic
 4 ticks and high for 3. At 48 MHz: `CLKDIV` = 17 for fast mode (381 kHz), 68 for standard mode
 (99 kHz).
 
+## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)
+
+Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pull-up.
+
+- **Reset/presence:** with the TX FIFO empty, set FLAG0. The engine returns `0x00` if a device
+  answered, `0x80` if not, then clears FLAG0.
+- **Bytes:** each TX byte becomes 8 slots; the byte seen on DQ comes back. Send `0xFF` to read.
+- **Single slots** (Search ROM): set FLAG1 with the TX FIFO empty. Each TX byte is then one slot
+  (bit 0), and the bit seen comes back in bit 7.
+- Slots are 65 µs: 6 µs low for a 1 or a read, 60 µs low for a 0, sample at 13 µs.
+
+## Modbus RTU host protocol (`programs/modbus_rtu.pbe`)
+
+RS-485 half duplex, up to 19200 baud. Tick = 1/8 bit, LSB first, `JMP_PIN` = 1.
+Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
+
+- **Send:** two TX bytes per character, `[data] [parity]`, where bit 0 of the parity byte is the
+  parity bit (or 1 for 8N2). When the request is queued and the TX FIFO is empty, set FLAG1;
+  the engine turns the driver off after the last stop bit and clears FLAG1.
+- **Receive:** two RX bytes per character, `[data] [status]`, status bit 7 = parity bit
+  received. After 3.5 characters of silence the engine sets FLAG2 and raises IRQ.
+- The host computes the CRC and checks parity.
+- Flags: FLAG0/FLAG1 are also used by the I2C, 1-Wire and USB programs, so only one of those can
+  run at a time (see D27 in `docs/DESIGN_DECISIONS.md`).
+
 ## Status
 
 - Simulation (`make test`, exits non-zero on any failure), all through the chip's pins:
@@ -82,10 +108,18 @@ the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tic
      the clock 20 times; removing `WAIT scl, HIGH` from the program makes the test fail.
      Runs at fast-mode speed and checks every SCL low (≥ 1.3 µs) and high (≥ 0.6 µs) phase,
      and that the STOP flag clears only after the STOP.
+  4. 1-Wire with two DS18B20-style device models: presence and absence, READ ROM, Search ROM
+     finding both devices, MATCH ROM + READ SCRATCHPAD, CRC8 checks, and the timing of every
+     low pulse (404 pulses, 5 resets).
+  5. Modbus RTU master at 19200 8E1 against an RS-485 device model: two request/response
+     exchanges, CRC, parity (an injected parity error is reported), driver enable on during
+     every character and off before the answer, no glitches on the TX line.
   - Unit test: a restart in the same cycle as an instruction cancels its side effects.
+  - Shortening the 1-Wire write-0 pulse, or never turning the RS-485 driver off, makes the
+    tests fail.
 - Area, Yosys with the IHP sg13g2 typical library: about 5,240 cells, 1,493 flip-flops,
-  140,947 µm² of cell area. 6×4 tiles are 1289.28 × 710.64 µm = 916,229 µm², so cells fill about 15%.
-- Timing, ABC with the slow library (1.08 V, 125 °C): 3.78 ns of logic on the worst path
+  140,653 µm² of cell area. 6×4 tiles are 1289.28 × 710.64 µm = 916,229 µm², so cells fill about 15%.
+- Timing, ABC with the slow library (1.08 V, 125 °C): 3.75 ns of logic on the worst path
   (engine PC → program memory read → decode → pin select → next state). With flip-flop
   clock-to-Q and setup, about 4.7 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
   delay and clock skew, so the real place-and-route timing report is still needed.

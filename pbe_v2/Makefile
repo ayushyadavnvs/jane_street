@@ -20,7 +20,13 @@ test/usb_image.hex: programs/usb_tx.pbe programs/usb_rx.pbe tools/pbe_asm.py
 test/nop_image.hex: programs/nop_test.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/nop_test.pbe@0
 
-test: test/nop_image.hex test/uart_image.hex test/spi_image.hex test/mixed_image.hex test/usb_image.hex
+test/ow_image.hex: programs/onewire_ctrl.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0
+
+test/modbus_image.hex: programs/modbus_rtu.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/modbus_rtu.pbe@0
+
+test: test/ow_image.hex test/modbus_image.hex test/nop_image.hex test/uart_image.hex test/spi_image.hex test/mixed_image.hex test/usb_image.hex
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
 

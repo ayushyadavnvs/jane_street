@@ -5,6 +5,6 @@
     protocol forces a change, mark the old decision **Changed** and say which protocol caused it.
   - `docs/BUG_LOG.md`: every bug (design, test, tool), with the code before, the code after,
     and the test that fails before the fix and passes after.
-- `pbe_v1/` (UART, SPI, I2C) and `pbe_v2/` (adds USB) are separate copies. A fix that applies
+- `pbe_v1/` (UART, SPI, I2C, 1-Wire, Modbus RTU) and `pbe_v2/` (adds USB) are separate copies. A fix that applies
   to both goes into both.
 - Run `make test` in both version folders before pushing; it must exit non-zero on any failure.

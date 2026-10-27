@@ -21,6 +21,10 @@ after it.
 | BUG-010 | Program (I2C) | SCL low time shorter than high time; violates I2C minimum low time | Speed analysis | Fixed |
 | BUG-011 | Program (I2C) | STOP flag cleared before STOP finishes | AI review #5 | Fixed |
 | BUG-012 | RTL (engine) | Restart does not cancel the current instruction's side effects | AI review #3 | Fixed |
+| BUG-013 | RTL (engine) | Restart cleared pin output values: a line held high could glitch low | Modbus test (glitch monitor) | Fixed |
+| BUG-014 | Testbench | Modbus device model took a zero-width glitch for a start bit | Modbus test bring-up | Fixed |
+| BUG-015 | Program (Modbus) | Receiver polled for the next start bit inside the parity bit | Modbus test bring-up | Fixed |
+| BUG-016 | Testbench | A counter shared with a static task was overwritten | Modbus test bring-up | Fixed |
 
 ---
 
@@ -336,3 +340,112 @@ after it.
 - **Cost:** the worst logic path grew slightly (v1 3.61 → 3.78 ns, v2 3.72 → 3.96 ns),
   still far under 20.8 ns.
 - **Status:** Fixed in v1 and v2.
+
+## BUG-013 — Restart could glitch a high pin low
+
+- **Where:** `src/pbe_engine.sv`, restart branch, both versions.
+- **Found by:** bringing up the Modbus test. The device model saw a "start bit" at the moment
+  engine 0 was restarted, and a new glitch monitor on the TX line confirmed it.
+- **Cause:** restart cleared both the output value and the output enable of every pin. A pin
+  that was driving high had its value change to 0 in the same cycle as its driver turned off.
+  In simulation that is a zero-width low pulse (v1 shows it; in v2 the event order happens to
+  hide it). In silicon, skew between the value and enable paths could drive the line low for a
+  fraction of a nanosecond: a false start bit for UART/Modbus, a false slot for 1-Wire.
+- **Before:**
+  ```systemverilog
+  end else if (restart) begin
+    ...
+    pins_out <= '0;
+    pins_oe  <= '0;
+  ```
+- **After:** restart only releases pins; the line floats to its pull-up with no low pulse.
+  ```systemverilog
+  end else if (restart) begin
+    ...
+    pins_oe  <= '0;  // release every pin; keep pins_out so a line held high cannot glitch low
+  ```
+  Programs set a pin's value before toggling it, so a stale value after restart is harmless.
+- **Test:** the Modbus test counts every low pulse on the TX line shorter than half a bit.
+  - Before (v1): `FAIL: Modbus: 1 glitches on the TX line`.
+  - After: 0 glitches in v1 and v2.
+- **Status:** Fixed in v1 and v2.
+
+## BUG-014 — Modbus device model took a glitch for a start bit
+
+- **Where:** `test/tb_pbe.sv`, Modbus device model.
+- **Symptom:** the first request arrived garbled (`05 0D 02 …` instead of `01 03 00 …`), 9 bytes
+  instead of 8; the second request was fine.
+- **Cause:** the model started a character on any falling edge, including BUG-013's zero-width
+  glitch, and stayed misaligned for the whole frame. Real UART receivers check that the line is
+  still low part-way into the start bit (our own UART RX program does).
+- **Before:**
+  ```systemverilog
+  wait (mb_en && !bus[0]);  // start bit of a request
+  ...
+  #(MB_BIT * 1.5);          // first data bit
+  ```
+- **After:**
+  ```systemverilog
+  wait (mb_en && !bus[0]);  // start bit of a request
+  #(MB_BIT / 4);
+  if (!bus[0]) begin        // still low: a real start bit, not a glitch
+  ...
+  #(mb_first ? MB_BIT * 1.25 : MB_BIT * 1.5);
+  ```
+- **Lesson:** the glitch was real (BUG-013), so making the model robust was not enough on its
+  own; a separate monitor now makes the glitch itself a failure.
+
+## BUG-015 — Modbus receiver polled for a start bit inside the parity bit
+
+- **Where:** `programs/modbus_rtu.pbe`, both versions.
+- **Symptom:** response bytes 0 and 1 were right, then every byte was shifted by one bit
+  (`04` arrived as `08`).
+- **Cause:** after sampling the parity bit the program started polling for the next start bit
+  3 ticks later, still inside the parity bit. When the parity bit is 0 (byte `03`), that looks
+  like a start bit. Byte `01` survived only because its parity bit is 1.
+- **Before:**
+  ```
+          IN   rx              ; parity bit, at 9.5 bits
+          PUSH
+          SET  X, silence      ; polling starts at ~9.9 bits: still the parity bit
+  gap:    JMP  PIN_LO, rxc
+  ```
+- **After:** polling starts in the middle of the stop bit; the silence count drops by 2 to keep
+  the 3.5-character timeout.
+  ```
+          IN   rx              ; parity bit, at 9.5 bits
+          PUSH
+          SET  X, silence [4]  ; start polling in the stop bit, not the parity bit
+  gap:    JMP  PIN_LO, rxc
+  ```
+- **Test:** the Modbus test's response checks (every byte and the CRC).
+  - Before: `FAIL: Modbus response byte 2: 08` … `response CRC failed`.
+  - After: all 9 bytes and the CRC correct, in both rounds.
+- **Status:** Fixed in v1 and v2.
+
+## BUG-016 — A counter shared with a static task was overwritten
+
+- **Where:** `test/tb_pbe.sv`, Modbus test.
+- **Symptom:** the host reported 8 parity errors per round, although every status byte was
+  correct when printed.
+- **First guess, disproved:** that Icarus parsed `^mb_d != mb_x[7]` as `^(mb_d != mb_x[7])`.
+  A standalone test showed Icarus parses it correctly.
+- **Cause:** the parity-error counter was `mb_j`, which is also the bit-loop variable of the
+  static `mb_crc16` task. Calling `mb_crc16` after the counting loop left `mb_j = 8`. Static tasks
+  share variables (they were made static to avoid Icarus crashes, BUG-006).
+- **Before:**
+  ```systemverilog
+  mb_j = 0;
+  for (...) if (^mb_d != mb_x[7]) mb_j++;
+  mb_buf = mb_rx;
+  mb_crc16;                       // uses mb_j internally
+  check(mb_j == (round ? 1 : 0), ...);
+  ```
+- **After:** a counter of its own.
+  ```systemverilog
+  int mb_i, mb_j, mb_perr;  // mb_i/mb_j belong to the tasks; static tasks share variables
+  ...
+  if ((^mb_d) != mb_x[7]) mb_perr++;
+  ```
+- **Lesson:** with static tasks, give every caller-side variable its own name.
+

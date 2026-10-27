@@ -9,7 +9,7 @@ mark the old one **Changed** instead of deleting it.
 
 | Version | Folder | Protocols |
 |---|---|---|
-| v1 | `pbe_v1/` | UART, SPI, I2C |
+| v1 | `pbe_v1/` | UART, SPI, I2C, 1-Wire, Modbus RTU |
 | v2 | `pbe_v2/` | v1 plus low-speed USB |
 
 ## Changes forced by new protocols
@@ -24,6 +24,8 @@ mark the old one **Changed** instead of deleting it.
 | USB | A packet must leave the chip without gaps; 4-byte FIFOs cannot hold one | FIFOs 4 → 16 bytes (v2) | D10 |
 | USB | 50 MHz gives 33.3 clocks per USB bit | Target clock 48 MHz | D18 |
 | USB (via D20) | Opcode 111 now does something, so `NOP` = `0xE000` became `UTX` | `NOP` re-encoded as a no-op `FLAG` | D6, BUG-008 |
+| 1-Wire, Modbus RTU | Nothing: both are programs on the existing instructions | — | D25, D26 |
+| Modbus RTU (its test) | Restart could glitch a high pin low, a false start bit | Restart releases pins but keeps their values | D24, BUG-013 |
 
 ---
 
@@ -249,6 +251,9 @@ mark the old one **Changed** instead of deleting it.
 - **Lessons:** A test that passed with the feature removed was strengthened (BUG-004). Icarus
   bugs with automatic tasks and queues led to static tasks for the USB helpers (BUG-006).
   A failing test must give a non-zero exit code (BUG-007).
+- **Waveforms are opt-in** (`vvp sim.vvp +vcd`): 1-Wire and Modbus need ~70 ms of simulated time
+  and the dump would be ~165 MB.
+- **Static tasks share variables:** give every caller-side variable its own name (BUG-016).
 - **Planned:** third-party protocol decoders (sigrok), a Python golden model with random
   programs, formal properties (SymbiYosys), mutation score (MCY).
 
@@ -279,3 +284,55 @@ mark the old one **Changed** instead of deleting it.
   restart to take effect at once, and the completed instruction would still act on a state
   that is being thrown away.
 - **Cost:** one AND gate on the `exec` path; the worst path grew by about 0.2 ns. (BUG-012)
+- **Changed (Modbus RTU test):** restart used to clear pin output values as well as enables.
+  A pin driving high could then glitch low (BUG-013). Restart now only releases pins and keeps
+  their values, so released lines float to their pull-ups cleanly. Programs set a value before
+  toggling a pin, so the stale value is harmless.
+
+## D25. 1-Wire controller (program only)
+
+- **Chosen:** `programs/onewire_ctrl.pbe`, 30 words, tick = 1 µs. A write-1 slot and a read slot
+  are identical on the wire (6 µs low, then released), so one slot routine does both, like the
+  I2C 9-bit exchange: `OUTOD` keeps DQ low for a 0 and releases it for a 1, and `IN` samples at
+  13 µs. To read, the host sends `0xFF`.
+- **Reset/presence:** requested with FLAG0; a `JMP X--` loop with a 16-tick delay makes the
+  480 µs pulse. The flag is cleared only when the reset is finished (lesson of BUG-011).
+- **Search ROM:** needs a decision after every 2 bits read. The engine cannot branch on data, so
+  FLAG1 switches the program to single slots and the host runs the search algorithm (Maxim
+  AN187). 1-Wire has no maximum gap between slots, so host round trips are fine.
+- **Alternatives:** a hardware 1-Wire master (rejected: the point is a reprogrammable engine);
+  separate read and write routines (rejected: twice the code for identical wire activity).
+- **Left to the host:** CRC8, and the strong pull-up some parasite-powered devices need
+  (`PIN dq, DRV1`). Overdrive speed needs a second program with a finer tick.
+
+## D26. Modbus RTU master (program only)
+
+- **Chosen:** `programs/modbus_rtu.pbe`, 33 words, RS-485 half duplex on one engine: TX, RX and a
+  driver-enable pin. Tick = 1/8 bit.
+- **Parity:** the engine cannot compute parity, so each character is two TX bytes,
+  `[data] [parity]`; the parity byte's bit 0 is sent after the data. The same program does
+  8E1, 8O1 or 8N2 (send 1 as a second stop bit). Received parity comes back in a status byte.
+  - **Alternative:** a parity flip-flop in the shifter (about 10 cells, pin actions 6–7 are
+    free). Deferred: not needed yet.
+- **End of frame (3.5 characters of silence):** `WAIT` has no timeout, so after each character
+  the program polls for the next start bit in a 2-tick loop counted by X. At the end it sets
+  FLAG2 and raises IRQ.
+  - **Limit:** X is 8 bits, which covers the character-based timing Modbus uses up to
+    19200 baud. Above that Modbus specifies fixed 1.75 ms gaps, which need more than 255 polls.
+  - **Alternative:** a WAIT-with-timeout counter in hardware. Deferred; also useful for I2C
+    stuck-bus recovery and CAN.
+  - The 2-tick poll catches a start bit up to 1/4 bit late; sampling is aimed so the error is
+    about ±1/8 bit.
+- **End of request:** FLAG1, set by the host once everything is queued (TX FIFO empty). The
+  engine turns the driver off after the last stop bit, then clears FLAG1.
+- **CRC:** computed by the host. (v2's USB CRC unit computes the same CRC-16; Modbus is the
+  inverted USB field.)
+- **Not checked by the receiver:** the 1.5-character maximum gap inside a frame.
+
+## D27. Shared flags limit which protocols can run together
+
+- **Observation:** `JMP` can only test FLAG0 and FLAG1, and flags are shared by both engines.
+  I2C, USB TX, 1-Wire and Modbus all use FLAG0 or FLAG1, so two of them cannot run on the two
+  engines at the same time. UART and SPI use no flags and can run next to any of them.
+- **Not changed yet.** Options: give each engine its own pair of flags (numbered relative to the
+  engine), or let `JMP` test all four flags.

@@ -5,7 +5,7 @@ up to 6×4 tiles, due 18 January 2027).
 
 | Folder | What |
 |---|---|
-| `pbe_v1/` | Programmable Bit Engine: two engines, UART, SPI and I2C programs, all tested |
+| `pbe_v1/` | Programmable Bit Engine: two engines; UART, SPI, I2C, 1-Wire and Modbus RTU programs, all tested |
 | `pbe_v2/` | Version 1 plus a low-speed USB line unit and 16-byte FIFOs, USB packets tested both ways |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
@@ -22,7 +22,7 @@ the clock input pad is specified up to about 66 MHz, and the demo board's RP2040
 
 | | Value |
 |---|---|
-| Logic limit (slow corner, ABC estimate) | ~4.8 ns per cycle, roughly 200 MHz before wire delay |
+| Logic limit (slow corner, ABC estimate) | ~4.7 ns per cycle, roughly 200 MHz before wire delay |
 | Tiny Tapeout limit | ~66 MHz |
 | Planned clock | 48 MHz: USB low speed is exactly 32 clocks per bit, and timing has ~4× margin |
 
@@ -31,5 +31,5 @@ turns the clock into the bit rate a protocol needs.
 
 | Results | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
 |---|---|---|
-| Version 1 | 140,947 µm² (15%) | 3.78 ns |
-| Version 2 | 189,389 µm² (21%) | 3.96 ns |
+| Version 1 | 140,653 µm² (15%) | 3.75 ns |
+| Version 2 | 189,403 µm² (21%) | 3.79 ns |

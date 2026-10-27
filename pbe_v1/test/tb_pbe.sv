@@ -21,7 +21,8 @@ module tb_pbe;
 
   wire  [7:0] chip_lvl = ~uio_oe | uio_out;  // released pins float high
   wire  [7:0] ext_lvl  = ~ext_drive | ext_val;
-  wire  [7:0] bus      = chip_lvl & ext_lvl & (loop01 ? {6'h3f, chip_lvl[0], 1'b1} : 8'hff);
+  wire  [7:0] dev_pull;                       // 1-Wire device models pulling low
+  wire  [7:0] bus      = chip_lvl & ext_lvl & ~dev_pull & (loop01 ? {6'h3f, chip_lvl[0], 1'b1} : 8'hff);
 
   tt_um_pbe dut (
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
@@ -265,11 +266,246 @@ module tb_pbe;
     fifo_recv(1, ack_in);
   endtask
 
+
+  // ---------------- 1-Wire: two DS18B20-style devices on pin 6 ----------------
+  localparam int OW = 6;
+  localparam logic [63:0] ROM_A = 64'h2C000800003C5A28;  // family 28, valid CRC8
+  localparam logic [63:0] ROM_B = 64'h1B000800003C5B28;
+  localparam logic [71:0] OW_SP = 72'h1C100CFF7F464B0550;  // DS18B20 power-up scratchpad, CRC 1C
+  bit ow_en_a = 0, ow_en_b = 0, ow_mon = 0;
+  wire ow_pull_a, ow_pull_b;
+  ow_device #(.ROM(ROM_A), .SP(OW_SP)) u_ow_a (.dq(bus[OW]), .enable(ow_en_a), .pull(ow_pull_a));
+  ow_device #(.ROM(ROM_B), .SP(OW_SP)) u_ow_b (.dq(bus[OW]), .enable(ow_en_b), .pull(ow_pull_b));
+  wire ow_pull_any = ow_pull_a | ow_pull_b;
+
+  // Slot timing: every low pulse the controller makes on its own must be a write-1/read pulse
+  // (1-15 us), a write-0 pulse (60-120 us) or a reset (>= 480 us); recovery >= 1 us.
+  realtime ow_fell = 0, ow_rose = 0;
+  bit ow_touched = 0;
+  int ow_short = 0, ow_long = 0, ow_resets = 0, ow_bad = 0;
+  always @(posedge ow_pull_any) ow_touched = 1;
+  always @(negedge bus[OW]) if (ow_mon) begin
+    if (ow_rose > 0 && $realtime - ow_rose < 1000) begin
+      ow_bad++;
+      check(0, $sformatf("1-Wire: recovery %0.0f ns, needs 1 us", $realtime - ow_rose));
+    end
+    ow_fell = $realtime;
+  end
+  always @(posedge bus[OW]) if (ow_mon) begin
+    if (!ow_touched) begin
+      if ($realtime - ow_fell >= 1000 && $realtime - ow_fell <= 15000) ow_short++;
+      else if ($realtime - ow_fell >= 60000 && $realtime - ow_fell <= 120000) ow_long++;
+      else if ($realtime - ow_fell >= 480000) ow_resets++;
+      else begin
+        ow_bad++;
+        check(0, $sformatf("1-Wire: controller low pulse of %0.0f ns", $realtime - ow_fell));
+      end
+    end
+    ow_touched = 0;
+    ow_rose = $realtime;
+  end
+
+  // Host side of the onewire_ctrl program on engine 1 (static tasks: see BUG-006).
+  logic [7:0] ow_tx, ow_r, ow_f, ow_crc, ow_byte;
+  logic [7:0] ow_buf[$];
+  bit ow_present, ow_b;
+  int ow_i, ow_j;
+  task ow_reset;
+    wait_tx_empty(1);
+    reg_write(7'h04, 8'h01);  // FLAG0: reset/presence
+    do reg_read(7'h04, ow_f); while (ow_f[0]);
+    fifo_recv(1, ow_r);
+    ow_present = (ow_r == 8'h00);
+  endtask
+  task ow_xbyte;  // send ow_tx as 8 slots; the byte seen comes back in ow_r
+    fifo_send(1, ow_tx);
+    fifo_recv(1, ow_r);
+  endtask
+  task ow_xbit;   // single-slot mode: send bit 0 of ow_tx, the bit seen comes back in ow_b
+    fifo_send(1, ow_tx);
+    fifo_recv(1, ow_r);
+    ow_b = ow_r[7];
+  endtask
+  task ow_read_bytes;  // read ow_i bytes into ow_buf
+    ow_buf.delete();
+    for (ow_j = ow_i; ow_j > 0; ow_j--) begin
+      ow_tx = 8'hFF;
+      ow_xbyte;
+      ow_buf.push_back(ow_r);
+    end
+  endtask
+  task ow_crc8;   // Dallas CRC8 over ow_buf; 0 when the block ends in its correct CRC
+    ow_crc = 0;
+    for (ow_i = 0; ow_i < ow_buf.size(); ow_i++) begin
+      ow_byte = ow_buf[ow_i];
+      for (ow_j = 0; ow_j < 8; ow_j++) begin
+        if ((ow_crc ^ ow_byte) & 8'h01) ow_crc = (ow_crc >> 1) ^ 8'h8C;
+        else ow_crc = ow_crc >> 1;
+        ow_byte = ow_byte >> 1;
+      end
+    end
+  endtask
+
+  // Search ROM, the algorithm from Maxim application note 187, run by the host bit by bit.
+  logic [63:0] s_rom;
+  int s_last_disc = 0, s_last_zero, s_i;
+  bit s_done = 0, s_ok, s_id, s_cmp, s_dir;
+  task ow_search_next;  // s_ok = a device was found, its ROM in s_rom
+    s_ok = 0;
+    if (!s_done) begin
+      ow_reset;
+      if (ow_present) begin
+        ow_tx = 8'hF0;
+        ow_xbyte;
+        wait_tx_empty(1);
+        reg_write(7'h04, 8'h02);  // FLAG1: single-slot mode
+        s_last_zero = 0;
+        s_ok = 1;
+        for (s_i = 1; s_i <= 64; s_i++) begin
+          if (s_ok) begin
+            ow_tx = 8'h01; ow_xbit; s_id = ow_b;   // the bit
+            ow_tx = 8'h01; ow_xbit; s_cmp = ow_b;  // its complement
+            if (s_id && s_cmp) s_ok = 0;            // nobody answered
+            else begin
+              if (s_id != s_cmp) s_dir = s_id;
+              else begin                            // discrepancy: devices differ here
+                if (s_i < s_last_disc) s_dir = s_rom[s_i-1];
+                else s_dir = (s_i == s_last_disc);
+                if (!s_dir) s_last_zero = s_i;
+              end
+              s_rom[s_i-1] = s_dir;
+              ow_tx = {7'b0, s_dir};
+              ow_xbit;                              // devices that differ drop out
+            end
+          end
+        end
+        wait_tx_empty(1);
+        reg_write(7'h04, 8'h00);  // back to byte mode
+        s_last_disc = s_last_zero;
+        if (s_last_disc == 0) s_done = 1;
+      end
+    end
+  endtask
+
+  // ---------------- Modbus RTU device (RS-485) on pins 0 (master TX), 1 (master RX), 2 (DE) ----------------
+  // Independent of the RTL: it samples at exactly 19200 baud, checks even parity, stop bits,
+  // that DE is on during every character and off before it answers, and the gaps between
+  // characters, then answers with mb_resp (parity flipped on byte mb_bad, if set).
+  real MB_BIT = 1.0e9 / 19200.0;  // ns
+  bit mb_en = 0;
+  int mb_bad = -1, mb_frames = 0, mb_par_err = 0, mb_stop_err = 0, mb_de_err = 0, mb_k, mb_m;
+  real mb_max_gap = 0;
+  realtime mb_t_end;
+  logic [7:0] mb_req_got[$], mb_resp[$];
+  logic [7:0] mb_c, mb_o;
+  bit mb_p, mb_s, mb_more, mb_first;
+  initial forever begin
+    wait (mb_en && !bus[0]);  // start bit of a request
+    #(MB_BIT / 4);
+    if (!bus[0]) begin        // still low: a real start bit, not a glitch (BUG-014)
+    mb_req_got.delete();
+    mb_more = 1;
+    mb_first = 1;
+    while (mb_more) begin
+      #(mb_first ? MB_BIT * 1.25 : MB_BIT * 1.5);
+      mb_first = 0;
+      for (mb_k = 0; mb_k < 8; mb_k++) begin
+        mb_c[mb_k] = bus[0];
+        if (!bus[2]) mb_de_err++;
+        #(MB_BIT);
+      end
+      mb_p = bus[0];
+      #(MB_BIT);
+      mb_s = bus[0];
+      if (^{mb_c, mb_p}) mb_par_err++;
+      if (!mb_s) mb_stop_err++;
+      mb_req_got.push_back(mb_c);
+      mb_t_end = $realtime + MB_BIT / 2;
+      while (bus[0] && $realtime - mb_t_end < 3.5 * 11 * MB_BIT) #(MB_BIT / 16);
+      if (!bus[0]) begin
+        if ($realtime - mb_t_end > mb_max_gap) mb_max_gap = $realtime - mb_t_end;
+      end else mb_more = 0;
+    end
+    mb_frames++;
+    if (bus[2]) mb_de_err++;  // the master must have turned its driver off by now
+    ext_drive[1] = 1;
+    ext_val[1] = 1;
+    #(MB_BIT);
+    for (mb_m = 0; mb_m < mb_resp.size(); mb_m++) begin
+      mb_o = mb_resp[mb_m];
+      ext_val[1] = 0;  // start
+      #(MB_BIT);
+      for (mb_k = 0; mb_k < 8; mb_k++) begin
+        ext_val[1] = mb_o[mb_k];
+        #(MB_BIT);
+      end
+      ext_val[1] = ^mb_o ^ (mb_m == mb_bad);  // even parity, optionally wrong
+      #(MB_BIT);
+      ext_val[1] = 1;  // stop
+      #(MB_BIT);
+    end
+    ext_drive[1] = 0;
+    end
+  end
+
+  // Any low pulse on the master's TX line shorter than half a bit is a glitch (BUG-013).
+  realtime mb_fell = 0;
+  int mb_glitches = 0;
+  always @(negedge bus[0]) if (mb_en) mb_fell = $realtime;
+  always @(posedge bus[0]) if (mb_en && $realtime - mb_fell < MB_BIT / 2) mb_glitches++;
+
+  // Host side of the modbus_rtu program on engine 0.
+  logic [7:0] mb_rx[$], mb_par[$], mb_buf[$];
+  logic [7:0] mb_f, mb_st, mb_d, mb_x, mb_b;
+  logic [15:0] mb_crc;
+  bit mb_fdone;
+  int mb_i, mb_j, mb_perr;  // mb_i/mb_j belong to the tasks; static tasks share variables
+  task mb_crc16;  // Modbus CRC over mb_buf -> mb_crc ({high byte, low byte}; low byte is sent first)
+    mb_crc = 16'hFFFF;
+    for (mb_i = 0; mb_i < mb_buf.size(); mb_i++) begin
+      mb_b = mb_buf[mb_i];
+      mb_crc = mb_crc ^ {8'h00, mb_b};
+      for (mb_j = 0; mb_j < 8; mb_j++)
+        if (mb_crc[0]) mb_crc = (mb_crc >> 1) ^ 16'hA001;
+        else mb_crc = mb_crc >> 1;
+    end
+  endtask
+  task mb_send;  // send mb_buf as one request frame
+    for (mb_i = 0; mb_i < mb_buf.size(); mb_i++) begin
+      mb_b = mb_buf[mb_i];
+      fifo_send(0, mb_b);
+      fifo_send(0, {7'b0, ^mb_b});  // even parity bit
+    end
+    wait_tx_empty(0);
+    reg_write(7'h04, 8'h02);         // FLAG1: request complete
+    do reg_read(7'h04, mb_f); while (mb_f[1]);
+  endtask
+  task mb_receive;  // collect one response frame into mb_rx / mb_par
+    mb_rx.delete();
+    mb_par.delete();
+    mb_fdone = 0;
+    while (!mb_fdone) begin
+      reg_read(7'h04, mb_f);
+      mb_fdone = mb_f[2];  // read the flag first, so every byte before it gets drained
+      reg_read(7'h01, mb_st);
+      while (!mb_st[0]) begin
+        fifo_recv(0, mb_d);
+        fifo_recv(0, mb_x);
+        mb_rx.push_back(mb_d);
+        mb_par.push_back(mb_x);
+        reg_read(7'h01, mb_st);
+      end
+    end
+  endtask
+  assign dev_pull = {1'b0, ow_pull_any, 6'b0};
+
   // ---------------- tests ----------------
   initial begin
     logic [7:0] sent[$], got;
-    $dumpfile("tb_pbe.vcd");
-    $dumpvars(0, tb_pbe);
+    if ($test$plusargs("vcd")) begin  // waveforms on request: vvp sim.vvp +vcd
+      $dumpfile("tb_pbe.vcd");
+      $dumpvars(0, tb_pbe);
+    end
 
     repeat (5) @(posedge clk);
     rst_n = 1;
@@ -427,6 +663,136 @@ module tb_pbe;
     $display("  SCL min low %0.0f ns, min high %0.0f ns, min period %0.0f ns", scl_min_low, scl_min_high, scl_min_period);
 
     // $fatal gives a non-zero exit code, so make and CI see the failure (BUG-007)
+    // ===== Test 4: 1-Wire =====
+    $display("Test 4: 1-Wire controller (engine 1, pin 6) with two DS18B20-style devices");
+    reg_write(7'h00, 8'b1100_0000);      // stop both, flush FIFOs
+    uart_mon_en = 0;
+    i2c_en = 0;
+    loop01 = 0;
+    ext_drive = '0;
+    reg_write(7'h04, 8'h00);
+    reg_write(7'h02, 8'h03);
+    load_program("ow_image.hex");
+    reg_write(7'h03, 8'b0100_0000);      // pin 6 belongs to E1
+    reg_write(7'h20, 8'($rtoi(1000.0 / CLK_NS + 0.5) - 1));  // tick = 1 us
+    reg_write(7'h21, 0);
+    reg_write(7'h22, OW);
+    reg_write(7'h24, 2'b00);             // LSB first
+    reg_write(7'h25, 0);
+    ow_mon = 1;
+    reg_write(7'h00, 8'b0010_0010);      // restart + run E1 only
+
+    ow_reset;
+    check(!ow_present, "1-Wire: presence reported with no device on the bus");
+    ow_en_a = 1;
+    ow_reset;
+    check(ow_present, "1-Wire: no presence pulse from device A");
+    ow_tx = 8'h33; ow_xbyte;             // READ ROM (one device only)
+    ow_i = 8; ow_read_bytes;
+    for (ow_i = 0; ow_i < 8; ow_i++)
+      check(ow_buf[ow_i] === ROM_A[8*ow_i+:8], $sformatf("1-Wire READ ROM byte %0d: %02x", ow_i, ow_buf[ow_i]));
+    ow_crc8;
+    check(ow_crc == 0, "1-Wire: READ ROM CRC8 failed");
+    $display("  presence, absence and READ ROM ok");
+
+    ow_en_b = 1;                         // two devices: find both with Search ROM
+    s_done = 0;
+    s_last_disc = 0;
+    ow_search_next;
+    check(s_ok, "1-Wire: search found no device");
+    ow_buf.delete();
+    for (ow_i = 0; ow_i < 8; ow_i++) ow_buf.push_back(s_rom[8*ow_i+:8]);
+    ow_crc8;
+    check(ow_crc == 0 && (s_rom == ROM_A || s_rom == ROM_B), $sformatf("1-Wire: search 1 found %016x", s_rom));
+    ow_tx = 8'hxx;
+    begin
+      logic [63:0] first;
+      first = s_rom;
+      ow_search_next;
+      check(s_ok && s_done, "1-Wire: search did not find a second device");
+      check(s_rom != first && (s_rom == ROM_A || s_rom == ROM_B), $sformatf("1-Wire: search 2 found %016x", s_rom));
+      $display("  Search ROM found %016x and %016x", first, s_rom);
+    end
+
+    ow_reset;                            // MATCH ROM device B, then READ SCRATCHPAD
+    ow_tx = 8'h55; ow_xbyte;
+    for (ow_j = 0; ow_j < 8; ow_j++) begin
+      ow_tx = ROM_B[8*ow_j+:8];
+      fifo_send(1, ow_tx);
+      fifo_recv(1, ow_r);
+    end
+    ow_tx = 8'hBE; ow_xbyte;
+    ow_i = 9; ow_read_bytes;
+    for (ow_i = 0; ow_i < 9; ow_i++)
+      check(ow_buf[ow_i] === OW_SP[8*ow_i+:8], $sformatf("1-Wire scratchpad byte %0d: %02x", ow_i, ow_buf[ow_i]));
+    ow_crc8;
+    check(ow_crc == 0, "1-Wire: scratchpad CRC8 failed");
+    ow_mon = 0;
+    check(ow_bad == 0 && ow_short > 0 && ow_long > 0 && ow_resets >= 5,
+          $sformatf("1-Wire timing: %0d bad, %0d short, %0d long, %0d resets", ow_bad, ow_short, ow_long, ow_resets));
+    $display("  MATCH ROM + READ SCRATCHPAD ok; timing checked on %0d short, %0d long pulses and %0d resets",
+             ow_short, ow_long, ow_resets);
+    ow_en_a = 0;
+    ow_en_b = 0;
+
+    // ===== Test 5: Modbus RTU =====
+    $display("Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 19200 8E1");
+    reg_write(7'h00, 8'b1100_0000);
+    reg_write(7'h04, 8'h00);
+    reg_write(7'h02, 8'h03);
+    load_program("modbus_image.hex");
+    reg_write(7'h03, 8'h00);
+    begin
+      int div;
+      div = $rtoi(1.0e9 / 19200.0 / 8.0 / CLK_NS + 0.5) - 1;  // tick = 1/8 bit
+      reg_write(7'h10, div[7:0]);
+      reg_write(7'h11, div[15:8]);
+    end
+    reg_write(7'h12, 0);
+    reg_write(7'h13, 1);                 // JMP pin = rx
+    reg_write(7'h14, 2'b00);             // LSB first
+    reg_write(7'h15, 0);
+    mb_en = 1;
+    reg_write(7'h00, 8'b0001_0001);      // restart + run E0 only
+
+    for (int round = 0; round < 2; round++) begin
+      mb_bad = round ? 3 : -1;           // second round: response byte 3 has a parity error
+      mb_resp = '{8'h01, 8'h03, 8'h04, 8'h12, 8'h34, 8'h56, 8'h78, 8'h81, 8'h07};
+      mb_buf = '{8'h01, 8'h03, 8'h00, 8'h00, 8'h00, 8'h02};
+      mb_crc16;
+      mb_buf.push_back(mb_crc[7:0]);
+      mb_buf.push_back(mb_crc[15:8]);
+      check(mb_crc == 16'h0BC4, $sformatf("tb Modbus CRC model: %04x, expected 0bc4 (bytes C4 0B)", mb_crc));
+      mb_send;
+      mb_receive;
+      check(uo_out[1], "Modbus: no IRQ at the end of the response");
+      reg_write(7'h04, 8'h00);
+      reg_write(7'h02, 8'h03);
+      check(mb_req_got.size() == 8, $sformatf("Modbus: device got %0d request bytes", mb_req_got.size()));
+      for (mb_i = 0; mb_i < 8 && mb_i < mb_req_got.size(); mb_i++)
+        check(mb_req_got[mb_i] === mb_buf[mb_i], $sformatf("Modbus request byte %0d: %02x", mb_i, mb_req_got[mb_i]));
+      check(mb_rx.size() == mb_resp.size(), $sformatf("Modbus: host got %0d response bytes", mb_rx.size()));
+      mb_perr = 0;
+      for (mb_i = 0; mb_i < mb_rx.size(); mb_i++) begin
+        check(mb_rx[mb_i] === mb_resp[mb_i], $sformatf("Modbus response byte %0d: %02x", mb_i, mb_rx[mb_i]));
+        mb_x = mb_par[mb_i];
+        mb_d = mb_rx[mb_i];
+        if ((^mb_d) != mb_x[7]) mb_perr++;  // parity errors the host detects
+      end
+      mb_buf = mb_rx;
+      mb_crc16;
+      check(mb_crc == 16'h0000, "Modbus: response CRC failed");  // CRC over data + CRC is 0
+      check(mb_perr == (round ? 1 : 0), $sformatf("Modbus round %0d: host found %0d parity errors", round, mb_perr));
+    end
+    check(mb_par_err == 0 && mb_stop_err == 0 && mb_de_err == 0,
+          $sformatf("Modbus: device saw %0d parity, %0d stop, %0d DE errors", mb_par_err, mb_stop_err, mb_de_err));
+    check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus: %0.0f ns gap inside a request", mb_max_gap));
+    check(mb_glitches == 0, $sformatf("Modbus: %0d glitches on the TX line", mb_glitches));
+    $display("  2 request/response exchanges ok; largest gap inside a request %0.0f ns (limit %0.0f)",
+             mb_max_gap, 1.5 * 11 * MB_BIT);
+    $display("  a parity error in the response was reported to the host");
+    mb_en = 0;
+
     if (errors == 0) begin
       $display("PASS");
       $finish;
@@ -434,7 +800,103 @@ module tb_pbe;
   end
 
   initial begin
-    #20ms;
+    #200ms;
     $fatal(1, "FAILED: timeout");
+  end
+endmodule
+
+// A DS18B20-style 1-Wire device: presence pulse, READ ROM (33), SEARCH ROM (F0), MATCH ROM (55),
+// SKIP ROM (CC) and READ SCRATCHPAD (BE). It samples written bits 30 us into a slot and holds
+// the line low for 30 us to send a 0. Written independently of the RTL.
+module ow_device #(
+    parameter logic [63:0] ROM = 64'h0,
+    parameter logic [71:0] SP  = 72'h0
+) (
+    input  wire  dq,
+    input  wire  enable,
+    output logic pull
+);
+  localparam int S_IDLE = 0, S_CMD = 1, S_ROMTX = 2, S_SRCH = 3, S_MATCH = 4, S_FUNC = 5, S_SPTX = 6;
+  int st = S_IDLE, n = 0, sub = 0;
+  logic [63:0] sh;
+  bit tx_mode, tx_bit, b;
+  realtime t0;
+  initial begin
+    pull = 0;
+    forever begin
+      @(negedge dq);
+      if (enable && !pull) begin
+        tx_mode = 0;
+        tx_bit = 1;
+        if (st == S_ROMTX) begin tx_mode = 1; tx_bit = ROM[n]; end
+        if (st == S_SRCH && sub < 2) begin tx_mode = 1; tx_bit = sub ? !ROM[n] : ROM[n]; end
+        if (st == S_SPTX) begin tx_mode = 1; tx_bit = SP[n]; end
+        t0 = $realtime;
+        if (tx_mode && !tx_bit) pull = 1;
+        #30000;
+        b = dq;
+        pull = 0;
+        while (!dq && $realtime - t0 < 400000) #1000;
+        if (!dq) begin  // reset pulse: answer with a presence pulse
+          @(posedge dq);
+          #30000;
+          pull = 1;
+          #120000;
+          pull = 0;
+          st = S_CMD;
+          n = 0;
+          sh = 0;
+        end else begin
+          case (st)
+            S_CMD: begin
+              sh[n] = b;
+              n++;
+              if (n == 8) begin
+                n = 0;
+                case (sh[7:0])
+                  8'h33: st = S_ROMTX;
+                  8'hF0: begin st = S_SRCH; sub = 0; end
+                  8'h55: st = S_MATCH;
+                  8'hCC: st = S_FUNC;
+                  default: st = S_IDLE;
+                endcase
+                sh = 0;
+              end
+            end
+            S_ROMTX: begin n++; if (n == 64) st = S_IDLE; end
+            S_SRCH: begin
+              if (sub < 2) sub++;
+              else begin
+                sub = 0;
+                if (b != ROM[n]) st = S_IDLE;  // controller chose the other branch
+                else begin
+                  n++;
+                  if (n == 64) st = S_IDLE;
+                end
+              end
+            end
+            S_MATCH: begin
+              sh[n] = b;
+              n++;
+              if (n == 64) begin
+                st = (sh == ROM) ? S_FUNC : S_IDLE;
+                n = 0;
+                sh = 0;
+              end
+            end
+            S_FUNC: begin
+              sh[n] = b;
+              n++;
+              if (n == 8) begin
+                st = (sh[7:0] == 8'hBE) ? S_SPTX : S_IDLE;
+                n = 0;
+              end
+            end
+            S_SPTX: begin n++; if (n == 72) st = S_IDLE; end
+            default: ;
+          endcase
+        end
+      end
+    end
   end
 endmodule

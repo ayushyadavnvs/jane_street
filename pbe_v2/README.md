@@ -17,8 +17,9 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_usb_line.sv` | Low-speed USB line unit: NRZI, bit stuffing, SYNC/EOP, CRC5/CRC16, edge re-centring |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 64-word hex image |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller, I2C controller, USB packet TX, USB packet RX |
-| `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller, I2C controller, 1-Wire controller, Modbus RTU master, USB packet TX, USB packet RX |
+| `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
+| `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
 ## Run
@@ -102,6 +103,31 @@ the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tic
   status bit 0 = CRC5 ok (tokens), bit 1 = CRC16 ok (DATA), bit 2 = bit-stuffing error
   (reject the packet).
 
+## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)
+
+Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pull-up.
+
+- **Reset/presence:** with the TX FIFO empty, set FLAG0. The engine returns `0x00` if a device
+  answered, `0x80` if not, then clears FLAG0.
+- **Bytes:** each TX byte becomes 8 slots; the byte seen on DQ comes back. Send `0xFF` to read.
+- **Single slots** (Search ROM): set FLAG1 with the TX FIFO empty. Each TX byte is then one slot
+  (bit 0), and the bit seen comes back in bit 7.
+- Slots are 65 µs: 6 µs low for a 1 or a read, 60 µs low for a 0, sample at 13 µs.
+
+## Modbus RTU host protocol (`programs/modbus_rtu.pbe`)
+
+RS-485 half duplex, up to 19200 baud. Tick = 1/8 bit, LSB first, `JMP_PIN` = 1.
+Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
+
+- **Send:** two TX bytes per character, `[data] [parity]`, where bit 0 of the parity byte is the
+  parity bit (or 1 for 8N2). When the request is queued and the TX FIFO is empty, set FLAG1;
+  the engine turns the driver off after the last stop bit and clears FLAG1.
+- **Receive:** two RX bytes per character, `[data] [status]`, status bit 7 = parity bit
+  received. After 3.5 characters of silence the engine sets FLAG2 and raises IRQ.
+- The host computes the CRC and checks parity.
+- Flags: FLAG0/FLAG1 are also used by the I2C, 1-Wire and USB programs, so only one of those can
+  run at a time (see D27 in `docs/DESIGN_DECISIONS.md`).
+
 ## Status
 
 - Simulation (`make test`, 48 MHz clock, exits non-zero on any failure), all through the chip's pins:
@@ -120,12 +146,14 @@ the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tic
        flagged in status bit 2.
      - Turning off the receiver's edge re-centring, or the transmitter's bit stuffing, makes
        the test fail, so both features are really exercised.
+  5. 1-Wire with two DS18B20-style device models (as in v1).
+  6. Modbus RTU master at 19200 8E1 against an RS-485 device model (as in v1).
   - Unit test: a restart in the same cycle as an instruction cancels its side effects.
 - Area, Yosys with the IHP sg13g2 typical library: about 7,480 cells, 2,028 flip-flops,
-  189,389 µm² of cell area, about 21% of the 6×4 tiles (916,229 µm²). Compared with version 1
+  189,403 µm² of cell area, about 21% of the 6×4 tiles (916,229 µm²). Compared with version 1
   (141,141 µm²), the USB logic adds about 15,600 µm² (one line unit is 5,733 µm²) and the
   16-byte FIFOs add about 32,800 µm².
-- Timing, ABC with the slow library: 3.96 ns of logic on the worst path, about 4.8 ns with
+- Timing, ABC with the slow library: 3.79 ns of logic on the worst path, about 4.7 ns with
   flip-flop overhead, against 20.8 ns at 48 MHz. Wire delay and clock skew are not included.
 
 ## What a complete USB device still needs

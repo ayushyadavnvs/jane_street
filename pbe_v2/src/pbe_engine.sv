@@ -221,8 +221,7 @@ module pbe_engine (
       x        <= '0;
       osr      <= '0;
       isr      <= '0;
-      pout     <= '0;
-      poe      <= '0;
+      poe      <= '0;  // release every pin; keep pout so a line held high cannot glitch low
     end else begin
       pins_prev  <= pins_in;
       flags_prev <= flags;
