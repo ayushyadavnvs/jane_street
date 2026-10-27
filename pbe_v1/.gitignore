@@ -1,0 +1,7 @@
+test/sim.vvp
+test/dbg.*
+test/*.vcd
+synth/synth.ys
+synth/synth.log
+synth/*_netlist.v
+synth/*.log

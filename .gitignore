@@ -1,0 +1,6 @@
+*.vvp
+*.vcd
+synth/synth.ys
+synth/*.log
+synth/*_netlist.v
+test/dbg.*

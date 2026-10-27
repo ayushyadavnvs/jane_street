@@ -1,0 +1,12 @@
+; UART transmitter, 8N1.
+; Config: tick = 1/2 bit (CLKDIV = clk / (2 * baud) - 1), OUT LSB first.
+.equ tx 0
+
+        PIN  tx, DRV1        ; idle high
+start:  PULL                 ; wait for a byte from the host
+        PIN  tx, DRV0        ; start bit           (2 ticks)
+        SET  X, 7
+bit:    PIN  tx, OUT         ; data bit, LSB first (2 ticks each)
+        JMP  X--, bit
+        PIN  tx, DRV1        ; stop bit (at least 1.5 bits before the next start)
+        JMP  start
