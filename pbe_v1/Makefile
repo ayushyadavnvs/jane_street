@@ -3,7 +3,7 @@
 SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_engine.sv src/tt_um_pbe.sv
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
-.PHONY: test test-proto test-usb synth timing clean
+.PHONY: test test-proto test-usb test-gl synth timing clean
 
 test/uart_image.hex: programs/uart_tx.pbe programs/uart_rx.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/uart_tx.pbe@0 programs/uart_rx.pbe@8
@@ -66,6 +66,21 @@ test-usb: $(IMAGES:%=test/%_image.hex)
 test-proto: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
+
+# The end-to-end testbenches on the gate-level netlist from the Tiny Tapeout flow (run by the
+# gds workflow). GL_NETLIST is the routed netlist (tt_submission/*.v); PDK_ROOT and PDK point at
+# the standard-cell Verilog models.
+PDK      ?= ihp-sg13cmos5l
+PDK_CELL  = $(patsubst ihp-%,%,$(PDK))
+PDK_VLOG  = $(PDK_ROOT)/$(PDK)/libs.ref/$(PDK_CELL)_stdcell/verilog
+GL_SRC    = $(abspath $(GL_NETLIST)) $(wildcard $(PDK_VLOG)/$(PDK_CELL)_udp.v) $(PDK_VLOG)/$(PDK_CELL)_stdcell.v
+GL_FLAGS  = -DGL_TEST -DFUNCTIONAL -DSIM
+
+test-gl: $(IMAGES:%=test/%_image.hex)
+	test -f "$(GL_NETLIST)" && test -d "$(PDK_VLOG)"
+	cd test && iverilog -g2012 $(GL_FLAGS) -o proto_gl.vvp tb_proto.sv $(GL_SRC) && vvp -n proto_gl.vvp
+	cd test && iverilog -g2012 $(GL_FLAGS) -o usb_gl.vvp tb_usb.sv $(GL_SRC) && vvp -n usb_gl.vvp
+	cd test && iverilog -g2012 $(GL_FLAGS) -o sim_gl.vvp tb_pbe.sv $(GL_SRC) && vvp -n sim_gl.vvp
 
 synth:
 	mkdir -p synth

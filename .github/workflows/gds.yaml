@@ -45,3 +45,41 @@ jobs:
       id-token: write # to verify the deployment originates from an appropriate source
     steps:
       - uses: TinyTapeout/tt-gds-action/viewer@ttihp27a
+
+  # The design's full end-to-end testbenches (pbe_v1/test: every protocol, USB enumeration) on
+  # the routed netlist, not only the small cocotb test that gl_test runs.
+  gl_regression:
+    needs: gds
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v6
+
+      - name: Download GDS artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: tt_submission
+          path: tt_submission
+
+      - name: Read the PDK version
+        working-directory: tt_submission
+        run: |
+          echo "PDK=$(jq -r '.PDK' pdk.json)" >> $GITHUB_ENV
+          echo "PDK_VERSION=$(jq -r '.PDK_VERSION' pdk.json)" >> $GITHUB_ENV
+          echo "PDK_ROOT=/home/runner/pdk" >> $GITHUB_ENV
+
+      - name: Install the PDK
+        uses: TinyTapeout/ciel-action@v1
+        with:
+          pdk_name: ${{ env.PDK }}
+          pdk_version: ${{ env.PDK_VERSION }}
+          pdk_root: ${{ env.PDK_ROOT }}
+
+      - name: Install iverilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      - name: Run the testbenches on the gate-level netlist
+        run: |
+          NETLIST=$(ls $GITHUB_WORKSPACE/tt_submission/*.v | head -1)
+          cd pbe_v1 && make test-gl GL_NETLIST="$NETLIST"
+

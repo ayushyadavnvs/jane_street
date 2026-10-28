@@ -190,10 +190,13 @@ module tb_pbe;
     scl_fell = $realtime;
   end
 
-  // FLAG1 must clear only once the STOP is on the bus (BUG-011)
+  // FLAG1 must clear only once the STOP is on the bus (BUG-011). This monitor looks inside the
+  // design (the flags register), so it runs on the RTL only, not on the gate-level netlist.
+`ifndef GL_TEST
   wire i2c_stop_flag = dut.flags[fphys(1, 1)];  // engine 1's FLAG1
   always @(negedge i2c_stop_flag) if (i2c_en)
     check(bus[SDA] && bus[SCL], "I2C: FLAG1 (STOP) cleared before the STOP finished");
+`endif
 
   // host-side helpers for the i2c_ctrl program on engine 1
   // FLAG0 = START: happens when the next byte is queued.
@@ -505,7 +508,8 @@ module tb_pbe;
     reg_write(7'h00, 8'b0001_0001);      // restart + run E0
     repeat (300) @(posedge clk);
     check(uio_oe == 8'h00, $sformatf("NOP drove pins: uio_oe = %08b", uio_oe));
-    check(dut.flags == '0 && !uo_out[1], "NOP changed flags or raised IRQ");
+    reg_read(7'h04, got);                // the flags, through the host port
+    check(got == '0 && !uo_out[1], "NOP changed flags or raised IRQ");
     reg_write(7'h00, 8'b0000_0000);
 
     // ===== Test 1: UART loopback =====
