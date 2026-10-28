@@ -47,6 +47,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-033 | RTL (line coder) | Without SE0, the idle line after a frame was reported as a stuffing error | tb_line, written first | Fixed |
 | BUG-034 | Testbench | A pile-up test that overflowed the 16-byte RX FIFO | Full suite | Fixed |
 | BUG-035 | Tooling | More Icarus 12 limits: queue arguments, `return` in tasks, array ports, and others | Bring-up of tb_line, tb_usb | Worked around |
+| BUG-036 | CI | The gate-level regression job looked for the netlist one folder too deep | First CI run | Fixed |
 
 ---
 
@@ -887,4 +888,36 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   | A declaration after a statement in a block | syntax error | Declarations first |
   | Declaration initializers in blocks (BUG-023) | warning | Caught twice more in new code; the lint step stops it |
 - **Test:** all testbenches compile and run to `PASS`.
+
+## BUG-036 — The gate-level regression job could not find the routed netlist
+
+- **Where:** `.github/workflows/gds.yaml`, job `gl_regression`.
+- **Found by:** its first run, after the first successful GDS build. It failed at "Install
+  the PDK" after 17 seconds. The job log could not be read from this workspace (GitHub serves
+  logs from a host the network policy blocks), so the cause was found from Tiny Tapeout's
+  action code:
+  - the `tt_submission` artifact is uploaded with `src/*`, `docs/*`, `tt_submission/*` and
+    `info.yaml`, so it holds its own `tt_submission/` folder;
+  - downloading it with `path: tt_submission` put `pdk.json` in
+    `tt_submission/tt_submission/`;
+  - `jq` failed inside `$(...)`, which an `echo` hides, so the step "passed" with an empty
+    PDK name and the next step failed.
+- **Before:**
+  ```yaml
+  with:
+    name: tt_submission
+    path: tt_submission
+  ...
+  echo "PDK=$(jq -r '.PDK' pdk.json)" >> $GITHUB_ENV
+  ```
+- **After:** download into the workspace root, as Tiny Tapeout's `gl_test` does, and fail at once
+  if a value is missing:
+  ```yaml
+  with:
+    name: tt_submission
+  ...
+  set -euo pipefail
+  PDK=$(jq -er '.PDK' pdk.json)
+  ```
+- **Test:** the job's next run.
 

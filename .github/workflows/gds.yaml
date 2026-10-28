@@ -2,6 +2,15 @@ name: gds
 
 on:
   push:
+    # The flow takes about 4 hours: run it only when the design or its tests change.
+    paths:
+      - 'src/**'
+      - 'info.yaml'
+      - 'test/**'
+      - 'pbe_v1/test/**'
+      - 'pbe_v1/programs/**'
+      - 'pbe_v1/Makefile'
+      - '.github/workflows/gds.yaml'
   workflow_dispatch:
 
 jobs:
@@ -55,17 +64,21 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v6
 
+      # Into the workspace root, as gl_test does: the artifact holds its own tt_submission/
+      # folder (a `path: tt_submission` here nests it one level too deep: BUG-036).
       - name: Download GDS artifact
         uses: actions/download-artifact@v7
         with:
           name: tt_submission
-          path: tt_submission
 
       - name: Read the PDK version
         working-directory: tt_submission
         run: |
-          echo "PDK=$(jq -r '.PDK' pdk.json)" >> $GITHUB_ENV
-          echo "PDK_VERSION=$(jq -r '.PDK_VERSION' pdk.json)" >> $GITHUB_ENV
+          set -euo pipefail
+          PDK=$(jq -er '.PDK' pdk.json)
+          PDK_VERSION=$(jq -er '.PDK_VERSION' pdk.json)
+          echo "PDK=$PDK" >> $GITHUB_ENV
+          echo "PDK_VERSION=$PDK_VERSION" >> $GITHUB_ENV
           echo "PDK_ROOT=/home/runner/pdk" >> $GITHUB_ENV
 
       - name: Install the PDK
