@@ -1,0 +1,59 @@
+; Unit test program for tb_engine_ops: JEQ, JNE, MOV, OSRCRC INV, and the CRC good value.
+; Each check pushes a byte; a wrong branch pushes 0xEE. The testbench compares the list.
+; CRC unit: USB CRC16 (poly 0x8005, init ones, reversed), fed by OUT; good value 0x800d.
+        SET  OSR, 0x5A
+        MOV  ISR, OSR
+        JEQ  a1
+        JMP  bad
+a1:     JNE  bad
+        SET  OSR, 0x33
+        JEQ  bad
+        JNE  a2
+        JMP  bad
+a2:     MOV  X, ISR          ; X = 5a
+        MOV  OSR, X
+        MOV  ISR, 0
+        MOV  ISR, X
+        PUSH                 ; -> 5a
+        SET  OSR, 0x81
+        MOV  ISR, OSR
+        PUSH                 ; -> 81
+        SET  X, 3
+        MOV  ISR, X
+        PUSH                 ; -> 03
+        NOP                  ; 0xD800 must still do nothing
+        CRCRST
+bytes:  JMP  TX_EMPTY, done  ; the testbench queues 80 06 00 01 00 00 40 00
+        PULL
+        SET  X, 7
+b:      PIN  0, OUT
+        JMP  X--, b
+        JMP  bytes
+done:   OSRCRC LO, INV
+        MOV  ISR, OSR
+        PUSH                 ; -> dd (the USB CRC16 field, low byte)
+        OSRCRC HI, INV
+        MOV  ISR, OSR
+        PUSH                 ; -> 94
+        OSRCRC LO
+        MOV  ISR, OSR
+        PUSH                 ; -> 22 (not inverted)
+        SET  OSR, 0xDD
+        SET  X, 7
+c1:     PIN  0, OUT
+        JMP  X--, c1
+        SET  OSR, 0x94
+        SET  X, 7
+c2:     PIN  0, OUT
+        JMP  X--, c2
+        STAT
+        PUSH                 ; -> 02: CRC ok (the register is at the good value 800d)
+        JCRCBAD bad
+        SET  OSR, 0xA5
+        MOV  ISR, OSR
+        PUSH                 ; -> a5: done
+end:    JMP  end
+bad:    SET  OSR, 0xEE
+        MOV  ISR, OSR
+        PUSH
+        JMP  end

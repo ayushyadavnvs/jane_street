@@ -416,11 +416,12 @@ module tb_proto;
     begin
       bit ack;
       logic [7:0] b;
-      // 1: write the pointer 0x10 and five bytes (more than the RX FIFO holds)
+      // 1: write the pointer 0x10 and 20 bytes (more than the 16-byte RX FIFO holds)
       ic_start;
       ic_write({TGT_ADDR, 1'b0}, ack); check(ack, "I2C target: address+W not ACKed");
       ic_write(8'h10, ack); check(ack, "I2C target: pointer not ACKed");
       exp = '{8'hDE, 8'hAD, 8'hBE, 8'hEF, 8'h01};
+      for (int i = 5; i < 20; i++) exp.push_back(8'(8'h30 + i));
       foreach (exp[i]) begin
         ic_write(exp[i], ack);
         check(ack, $sformatf("I2C target: data byte %0d not ACKed", i));
@@ -488,7 +489,7 @@ module tb_proto;
     check(ic_stretch > 0, "I2C target never stretched SCL");
     check(ic_hold_min >= 300, $sformatf("I2C target: SDA hold %0d ns after SCL fell", ic_hold_min));
     check(ic_setup_min >= 250, $sformatf("I2C target: SDA setup %0d ns before SCL release", ic_setup_min));
-    $display("  write 5 bytes, read 3 after a repeated START, ignore another device's transfer; hold >= %0d ns, setup >= %0d ns",
+    $display("  write 20 bytes, read 3 after a repeated START, ignore another device's transfer; hold >= %0d ns, setup >= %0d ns",
              ic_hold_min, ic_setup_min);
     ic_en = 0;
 

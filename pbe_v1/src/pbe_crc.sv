@@ -4,10 +4,12 @@
 // term is implied). Feed bits in the order they are on the wire. For CRCs sent LSB first
 // (Modbus CRC-16, 1-Wire CRC-8) read the result bit-reversed (out_rev); for CRCs sent MSB
 // first (CAN CRC-15) read it plain. A frame followed by its own correct CRC leaves the
-// register at zero, which is the "CRC ok" check, for every CRC without a final inversion.
+// register at zero for every CRC without a final inversion, and at a fixed residual for CRCs
+// sent inverted (USB CRC16: 0x800d). "CRC ok" means the register equals `good`.
 //
 //   Modbus CRC-16: poly 0x8005, 16 bits, init all ones, reversed output
 //   1-Wire CRC-8:  poly 0x31,    8 bits, init zero,     reversed output
+//   USB CRC16:     poly 0x8005, 16 bits, init all ones, reversed output, sent inverted, good 0x800d
 module pbe_crc (
     input  logic        clk,
     input  logic        rst_n,
@@ -18,8 +20,9 @@ module pbe_crc (
     input  logic [3:0]  width_m1,   // CRC width - 1
     input  logic        init_ones,
     input  logic        out_rev,
+    input  logic [15:0] good,       // the register value that means "ok"
     output logic [15:0] value,      // the CRC field, ready to send LSB first if out_rev
-    output logic        zero
+    output logic        ok
 );
   logic [15:0] crc, rev;
 
@@ -38,5 +41,5 @@ module pbe_crc (
   end
 
   assign value = out_rev ? rev : crc;
-  assign zero  = (crc == '0);
+  assign ok    = (crc == good);
 endmodule

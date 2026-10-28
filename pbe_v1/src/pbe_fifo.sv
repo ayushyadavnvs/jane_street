@@ -12,7 +12,8 @@ module pbe_fifo #(
     input  logic             pop,
     output logic [WIDTH-1:0] dout,
     output logic             empty,
-    output logic             full
+    output logic             full,
+    output logic [ADDR_BITS:0] count  // bytes held
 );
   localparam int DEPTH = 1 << ADDR_BITS;
 
@@ -22,6 +23,7 @@ module pbe_fifo #(
   assign empty = (wptr == rptr);
   assign full  = (wptr[ADDR_BITS-1:0] == rptr[ADDR_BITS-1:0]) && (wptr[ADDR_BITS] != rptr[ADDR_BITS]);
   assign dout  = mem[rptr[ADDR_BITS-1:0]];
+  assign count = wptr - rptr;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

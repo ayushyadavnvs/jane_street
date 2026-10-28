@@ -5,7 +5,7 @@ up to 6×4 tiles, due 18 January 2027).
 
 | Folder | What |
 |---|---|
-| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity and timeout hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU and WS2812, all tested |
+| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812 and a USB low-speed device, all tested |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
@@ -32,4 +32,4 @@ turns the clock into the bit rate a protocol needs.
 
 | Results | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
 |---|---|---|
-| Version 1 | 262,618 µm² (29%) | 3.97 ns |
+| Version 1 | 333,841 µm² (36%) | 4.33 ns |

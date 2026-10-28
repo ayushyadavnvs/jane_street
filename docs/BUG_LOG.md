@@ -38,6 +38,15 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-024 | Tooling | Icarus 12 aborts on a too-wide `push_back` and on a bit-select as an `output` argument | Bring-up of `tb_proto` | Worked around |
 | BUG-025 | Testbench | I2C controller model never sent a repeated START | First Test 10 run | Fixed |
 | BUG-026 | Testbench | SPI peripheral test never had an empty TX FIFO at CS fall | Mutation check | Fixed |
+| BUG-027 | Testbench | Stimulus read a DUT output in the same time step it changed (tb_line, tb_engine_ops) | First unit-test runs | Fixed |
+| BUG-028 | RTL (line coder) | A byte left unread when its frame ended was taken as the next frame's first byte | Test 11 (USB), trace | Fixed |
+| BUG-029 | Testbench | The USB host model overwrote the OUT payload with the SETUP request | Test 11, FIFO trace | Fixed |
+| BUG-030 | RTL (host port) | A burst read of an RX FIFO could lose a byte arriving during the burst | Review of the read pipeline | Fixed (RX_COUNT) |
+| BUG-031 | Firmware flow | Flushing both FIFOs on SETUP dropped the OUT record arriving behind it | Test 11, FIFO trace | Fixed (TX_FLUSH) |
+| BUG-032 | Design (USB records) | Records that piled up in the RX FIFO could not be told apart | Test 11, firmware trace | Fixed |
+| BUG-033 | RTL (line coder) | Without SE0, the idle line after a frame was reported as a stuffing error | tb_line, written first | Fixed |
+| BUG-034 | Testbench | A pile-up test that overflowed the 16-byte RX FIFO | Full suite | Fixed |
+| BUG-035 | Tooling | More Icarus 12 limits: queue arguments, `return` in tasks, array ports, and others | Bring-up of tb_line, tb_usb | Worked around |
 
 ---
 
@@ -698,4 +707,184 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   - Before: that mutation ran with `0 FAIL lines, exit 0`.
   - After: the mutation fails with `FAIL: SPI peripheral with nothing queued replied fe ff,
     expected ff ff`, and the unmodified program passes.
+
+## BUG-027 — Stimulus raced the DUT at clock edges
+
+- **Where:** `test/tb_line.sv` (task `send_u`/`send_v`) and `test/tb_engine_ops.sv` (its TX FIFO
+  stand-in).
+- **Cause:** both read or changed a signal in the same time step as the clock edge at which the
+  DUT updates it.
+  - `send_u` checked `tx_ready` right after `@(posedge clk)`, before the coder's update from the
+    previous byte, so it put a second byte into the full queue and overwrote the first.
+  - The FIFO stand-in popped its queue at the same edge at which the engine loaded `tx_data`,
+    so the engine sometimes took the next byte.
+- **Before:**
+  ```systemverilog
+  while (!ready_u) @(posedge clk);
+  data_u <= d; put_u <= !is_end; end_u <= is_end;
+  ...
+  if (tx_pop) d = tx_q.pop_front();
+  ```
+- **After:**
+  ```systemverilog
+  @(negedge clk);  // between edges, so tx_ready already shows the last put (BUG-027)
+  while (!ready_u) @(negedge clk);
+  data_u = d; put_u = !is_end; end_u = is_end;
+  ...
+  if (tx_pop) begin
+    #1;  // after the engine has taken tx_data at this edge
+    d = tx_q.pop_front();
+  ```
+- **Test:**
+  - Before: `FAIL: USB TX: driven for 1184 clocks, expected 72 bits x 32` and `FAIL: byte 3 is 3f,
+    expected dd` (a CRC over the wrong bytes).
+  - After: both unit tests pass. The coder's transmit matches the reference encoder bit for bit.
+
+## BUG-028 — An unread byte survived the end of its frame
+
+- **Where:** `src/pbe_line.sv`, with `programs/usb_dev.pbe`'s `skip` loop.
+- **Found by:** Test 11. After SET_ADDRESS, every SETUP at the new address went unanswered,
+  until a keep-alive. A trace showed what happened:
+  - An IN for the old address went to `skip`, which waits for the end of the packet without
+    reading it.
+  - The token's third byte stayed in the coder. After the end-of-frame event, `idle` read that
+    stale byte as the next PID.
+  - From then on every packet was off by one byte.
+- **Before:** `rx_valid` was cleared only by a read.
+- **After:**
+  ```systemverilog
+  // A byte the engine has not taken when its frame ends belongs to that frame: drop it,
+  // so it cannot be read as the start of the next frame (BUG-028).
+  if (frame_end) rx_valid <= 1'b0;
+  ```
+  Every reading path in a program takes its bytes within a few clocks; only code that ignores a
+  frame on purpose leaves one behind. Fixing the program instead (`skip` reading the rest) would
+  have cost a word the 64-word program does not have.
+- **Test:**
+  - Before: `FAIL: USB: SETUP not ACKed` (nine times), `FAIL: USB: device descriptor at the new
+    address: 0 bytes`.
+  - After: Test 11 passes. Removing the line (mutation) makes it fail again.
+
+## BUG-029 — The USB host model overwrote the OUT payload
+
+- **Where:** `test/tb_usb.sv`, tasks `hs_setup` / `hs_out`.
+- **Cause:** both used the queue `u_data`. The test put the vendor-write payload `AA BB CC` in
+  it, and `hs_setup` then replaced it with the 8 request bytes. The OUT stage sent those, and
+  the RX FIFO trace showed `e1 4b 40 01 00 00 ...`.
+- **After:** the OUT payload has its own queue, `out_data`, which `hs_out` copies into
+  `u_data` just before sending.
+- **Test:** before: `FAIL: USB: vendor write data`. After: the vendor write and read-back pass.
+
+## BUG-030 — A burst read of an RX FIFO could lose a byte
+
+- **Where:** `src/pbe_host_spi.sv` with `src/tt_um_pbe.sv`.
+- **Found by:** review, while making the USB firmware read faster. The host port latches the
+  byte to send about 3 clocks after the previous byte, and pops when the byte has been sent.
+  Suppose the FIFO was empty at the latch, and a byte arrives before the pop:
+  - the host gets a stale value;
+  - the pop removes the new byte;
+  - so the byte is lost.
+
+  Checking the RX-data pin between bytes cannot close that window.
+- **After:** `RX_COUNT` registers (and `TX_COUNT`). The host reads the count, then bursts exactly
+  that many bytes, which are all in the FIFO. `pbe_fifo` gained a `count` output.
+- **Test:** not reproduced in simulation (the byte must land in a window of about 13 clocks).
+  The fix is a protocol rule, documented in the register map and followed by the USB firmware
+  model, which reads every record by count.
+
+## BUG-031 — A FIFO flush on SETUP dropped the OUT record behind it
+
+- **Where:** the USB firmware model (`test/tb_usb.sv`), and the host port's flush.
+- **Cause:** on a SETUP the firmware flushed engine 0's FIFOs to drop a stale IN reply. The
+  only flush (CTRL bits 7:6) empties TX *and* RX. A USB host sends the OUT data right after the
+  SETUP's ACK, so that record was already arriving: the flush cut it, and the next read found
+  `00 00 00 03 00 ab f4 f5 02`.
+- **After:** `TX_FLUSH` (0x0E) empties only TX FIFOs; the firmware uses it.
+  ```systemverilog
+  reg_write(7'h0E, 8'h01);  // drop a stale reply; not the RX FIFO: an OUT may already be arriving
+  ```
+- **Test:**
+  - Before: `FAIL: USB firmware: 9 bytes do not split into records`, `FAIL: USB: vendor write
+    data`.
+  - After: passes.
+
+## BUG-032 — USB records had no length
+
+- **Where:** `programs/usb_dev.pbe` and the firmware model.
+- **Found by:** the first Test 11 run. The firmware drained the RX FIFO slowly, one byte per two
+  host transactions, while the host model kept sending. Four records arrived in one read
+  (`e1 4b 00 00 02 2d c3 84 06 ...`), and the firmware took them as one, so SET_ADDRESS was
+  never answered. A data record's end (the status byte) cannot be found without its length.
+- **After:**
+  - The data loop counts bytes down in X, and a record ends `[255 − n] [status]`. The firmware
+    parses from the end: a status byte is below 0x20, an ACK record is 0xD2.
+  - The firmware reads by `RX_COUNT` in one burst.
+  - The 3 words this cost came from removing a redundant first instruction and sharing one
+    `PUSH` between the ACK record and the status.
+  ```
+  db:     IN   dm
+          JLINE deop
+          PUSH
+          JMP  X--, db         ; X started at 255
+  deop:   MOV  ISR, X
+          PUSH                 ; 255 - number of bytes
+  ```
+- **Test:** before: `FAIL: USB: IN answered with 1 bytes, PID 5a`, `FAIL: USB: status stage is
+  not a DATA1 ZLP`. After: Test 11 passes. A step in it holds the firmware while two records
+  arrive, and checks they are split apart (`up to 2 at once`).
+
+## BUG-033 — The idle line after a frame looked like a stuffing error
+
+- **Where:** `src/pbe_line.sv`, receive side, modes without SE0.
+- **Found by:** `tb_line.sv`, written before the coder ran. After an HDLC- or CAN-style frame
+  the line rests at its idle level. To the receiver that is a run of equal bits with no stuff
+  bit, so every good frame ended in a stuffing error.
+- **Before:**
+  ```systemverilog
+  if (rstuff) begin
+    rstuff <= 1'b0;
+    if (r_bit != r_exp) err <= 1'b1;
+  ```
+- **After:** without pair mode, a stuffing violation at the idle level is the end of the frame
+  (HDLC flag or abort, CAN end of frame); anywhere else it is still an error.
+  ```systemverilog
+  if (r_bit != r_exp) begin
+    if (!pair && a_in) begin
+      rs        <= R_IDLE;
+      frame_end <= 1'b1;
+    end else err <= 1'b1;
+  end
+  ```
+- **Test:**
+  - Before: `FAIL: CAN-style RX: stuff error on a good frame`, `FAIL: HDLC-style RX: stuff error
+    on a good frame`.
+  - After: `PASS: line coder`. The USB case, seven 1s in a packet, is still reported.
+
+## BUG-034 — A pile-up test that could not pass
+
+- **Where:** `test/tb_usb.sv`.
+- **Cause:** to show that piled-up records can be split, the test held the firmware during two
+  bad SETUPs. Two SETUP records are 28 bytes; the RX FIFO holds 16. So the engine stalled with a
+  full FIFO, and the test failed (`records did not pile up (1 at most)`) on a limit it should
+  have respected.
+- **After:** the pile is two corrupted zero-length OUT records (6 bytes each). The design
+  decision D42 now states the limit: the firmware must read a SETUP record before the next
+  SETUP.
+- **Test:** passes; `up to 2 at once`.
+
+## BUG-035 — More Icarus Verilog 12 limits
+
+- **Where:** `test/tb_line.sv`, `test/tb_usb.sv`, `test/tb_engine_ops.sv`.
+
+  | Construct | Icarus | Workaround |
+  |---|---|---|
+  | A queue as a task argument | `vthread_get_rd_context_item` assertion | A module-level queue |
+  | Bit-select of a queue element (`all[i][k]`) | "Array index expressions must be constant" | Copy the element to a variable first |
+  | `return` in a task | "Cannot return from tasks" | A named block and `disable` |
+  | Array ports on tasks; assigning a whole fixed array | "sorry: not yet supported" | Module-level queue |
+  | A ternary on a queue in a port connection | internal error | A task that updates plain variables |
+  | `always @*` reading a queue | not woken by queue changes | Update by hand after each change |
+  | A declaration after a statement in a block | syntax error | Declarations first |
+  | Declaration initializers in blocks (BUG-023) | warning | Caught twice more in new code; the lint step stops it |
+- **Test:** all testbenches compile and run to `PASS`.
 

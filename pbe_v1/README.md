@@ -11,14 +11,18 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/tt_um_pbe.sv` | Top level: pin map, register map, program memory, FIFOs, pin mux |
 | `src/pbe_engine.sv` | One engine: decoder, PC/branch, timing and timeout, pin unit, X counter, OSR/ISR, parity |
 | `src/pbe_crc.sv` | General CRC unit (one per engine) |
+| `src/pbe_line.sv` | Line coder (one per engine): NRZ/NRZI, bit stuffing, pair mode, SYNC hunt |
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
-| `src/pbe_fifo.sv` | 4 × 8-bit FIFO |
+| `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 128-word hex image; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
+| `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
+| `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
+| `test/tb_line.sv` | Unit test: the line coder in USB, CAN and HDLC styles against reference models |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
 ## Run
@@ -26,6 +30,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 ```sh
 make test                                  # Icarus Verilog, all testbenches
 make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
+make test-usb                              # only tb_usb
 make synth                                 # area, IHP library in ../ihp_lib
 make timing                                # critical path, slow corner
 ```
@@ -53,20 +58,21 @@ idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per e
 
 | OP | Mnemonic | Does |
 |---|---|---|
-| 000 | `PIN p, DRV0/DRV1/REL/TOG/OUT/OUTOD/OUTPAR` | Drive, release or toggle a pin; OUT sends the next OSR bit; OUTOD is open drain; OUTPAR sends the parity of the bits sent since the last OSR load. `OUT`/`OUTOD` take an optional `, NOCRC` |
+| 000 | `PIN p, DRV0/DRV1/REL/TOG/OUT/OUTOD/OUTPAR/END` | Drive, release or toggle a pin; OUT sends the next OSR bit; OUTOD is open drain; OUTPAR sends the parity of the bits sent since the last OSR load; END ends a line-coder frame. `OUT`/`OUTOD` take an optional `, NOCRC` |
 | 001 | `IN p [, NOCRC]` | Shift a pin into the ISR (and the receive parity, and the CRC unless `NOCRC`) |
 | 010 | `WAIT p, LOW/HIGH/RISE/FALL` (or `WAIT FLAG n, …`) | Block until true; checked every clock; restarts the tick timer |
 | 011 | `JMP [cond,] label` | ALWAYS, X--, PIN_HI, PIN_LO, TX_EMPTY, TX_READY, FLAG0, FLAG1 (6-bit address) |
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL` / `PUSH` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full) |
-| 110 | `FLAG n, SET/CLR/IRQ` | Shared flags between engines, or interrupt the host. Action 3 does nothing: the assembler's `NOP` (`0xD800`) |
-| 111 | `CRCRST`, `OSRCRC LO/HI`, `STAT`, `JCRCBAD label` | Restart the CRC; load a CRC byte into the OSR; ISR ← {timeout happened, CRC ok, parity error}; jump if the CRC is not zero. Sub-ops 4–7 free |
+| 110 | `FLAG n, SET/CLR/IRQ`, `MOV dst, src` | Shared flags between engines, or interrupt the host. Action 3 is `MOV` between X, OSR and ISR (source `0` = zero); with no destination it does nothing: the assembler's `NOP` (`0xD800`) |
+| 111 | `CRCRST`, `OSRCRC LO/HI [, INV]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC; load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the CRC is not ok; jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). Sub-op 7 free |
 
 **Timeout:** if `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks (engine register
 +C/+D, 0 = never), the engine abandons it and jumps to `TIMEOUT_PC` (`LINE_CFG[5:0]`, +E).
 
 **CRC unit:** polynomial (+9/+A), and `CRC_CFG` (+B): width − 1, initial value all ones,
-reversed output, fed by `OUT` bits, fed by `IN` bits. "CRC ok" means the register is zero. The
+reversed output, fed by `OUT` bits, fed by `IN` bits. "CRC ok" means the register equals
+`CRC_GOOD` (second page, default 0; USB: 0x800d, the residual of its inverted CRC16). The
 host can restart it and read the status through `STATUS` (+F), and **reading +9/+A returns the
 CRC's current value**, which is how the host checks CRCs that are sent inverted.
 
@@ -75,6 +81,28 @@ CRC's current value**, which is how the host checks CRCs that are sent inverted.
 
 **RX overflow:** a `PUSH` that finds the RX FIFO full sets `STATUS[3]` and raises IRQ, so a host
 that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
+
+**Line coder** (second register page, 0x30 for engine 0, 0x40 for engine 1: +0 `LINE`, +1 `SYNC`,
++2/+3 `CRC_GOOD`):
+- **`LINE` fields:** [1:0] mode (0 off, 1 NRZ, 2 NRZI); [3:2] stuffing (0 none, 1 after 6 ones,
+  2 after 5 ones, 3 after 5 equal bits); [4] pair (pin base + 1 is the complement, both low =
+  SE0 ends a frame); [5] byte transfers.
+- **Timing:** when it is on, `CLKDIV` is the bit time − 1, and instructions run every clock.
+- **Instructions:**
+  - `OUT`/`OUTOD` hand it a byte (or a bit) and wait while it is busy; `PIN p, END` ends the
+    frame.
+  - `IN` takes a received byte (or bit), or completes with ISR unchanged at the end of the
+    frame (then `JLINE` jumps).
+- **Frames:** a frame starts with a 2-bit gap and the `SYNC` byte; reception hunts for `SYNC`.
+  In byte mode the CRC takes each byte's 8 bits one per clock, and the next instruction waits
+  for that.
+- **Errors:** a stuff bit with the wrong value, a receive overrun or a send underrun set
+  `STATUS[4]` (line error); write `STATUS[3]` = 1 to clear it.
+
+**FIFO counts:**
+- `RX_COUNT` (0x0A, 0x0B) and `TX_COUNT` (0x0C, 0x0D) give the bytes in each engine's FIFOs.
+  Read RX FIFOs in bursts of at most `RX_COUNT` bytes.
+- `TX_FLUSH` (0x0E, bit e) empties one TX FIFO and leaves the RX FIFOs alone.
 
 ## Flags
 
@@ -141,6 +169,42 @@ the order the LEDs expect (G, R, B), keeping the FIFO from running dry: burst-wr
 register and pause while the TX-full pin (`uo_out[6]` for engine 0) is high. When the host
 stops, the line stays low and the LEDs latch after 50 µs.
 
+## USB low-speed device host protocol (`programs/usb_dev.pbe`)
+
+Endpoint 0 (control transfers), one engine. Pins: D− = pin base (with an external 1.5 kΩ
+pull-up), D+ = pin base + 1.
+
+**Settings at 48 MHz:**
+
+| Register | Value |
+|---|---|
+| `CLKDIV` | 31 |
+| `SHIFT` | 0 (LSB first) |
+| `CRC_POLY` | 0x8005 |
+| `CRC_CFG` | 0xFF |
+| `LINE_CFG` | 0x40 |
+| `LINE` | 0x36 |
+| `SYNC` | 0x80 |
+| `CRC_GOOD` | 0x800D |
+
+**IN packets:**
+- Queue `[DATA0/DATA1 PID] [0..8 bytes]`, then set FLAG0. The engine adds the CRC.
+- With nothing queued it NAKs; set FLAG1 to STALL instead (clear it at the next SETUP).
+
+**Records in the RX FIFO**, each ending with FLAG2 and IRQ:
+- `[0x2D or 0xE1] [DATA PID] [n bytes: data and CRC] [255 − n] [status]`: a SETUP or OUT data
+  packet. It was ACKed only if status bit 1 (CRC ok) is set; otherwise the host sends it again.
+- `[0xD2]`: the host ACKed our IN packet.
+
+**Firmware rules:**
+- Read by `RX_COUNT` and parse records from the end: a status byte is below 0x20.
+- Read a SETUP record (14 bytes) before the next SETUP.
+- On a SETUP, drop a stale reply with `TX_FLUSH`, not the CTRL flush.
+- After a SET_ADDRESS status stage, rewrite words 6 and 9 of the program (`SET OSR` with the
+  token's 2nd and 3rd byte for the new address, endpoint 0).
+
+The engine answers every token itself in about 3 bit times.
+
 ## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)
 
 Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pull-up.
@@ -205,22 +269,51 @@ for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up
   9. SPI peripheral (`tb_proto`): a 2 MHz mode-0 controller model; replies queued, 0xFF defaults,
      a pause inside a transaction, MISO released after CS rises and changing only while SCLK is
      low.
-  10. I2C target (`tb_proto`): a fast-mode controller model; a 5-byte write (more than the FIFO
+  10. I2C target (`tb_proto`): a fast-mode controller model; a 20-byte write (more than the FIFO
      holds), a 3-byte read after a repeated START, another device's transfer ignored, and SDA
      hold (≥ 300 ns) and setup (≥ 250 ns) times measured.
+  11. USB low-speed device (`tb_usb`): a host model at ±1.5 % enumerates it:
+     - GET_DESCRIPTOR (device; configuration, 9 and 18 bytes), SET_ADDRESS, SET_CONFIGURATION,
+       STALL for an unsupported request, a vendor write and read;
+     - not ACKed: a SETUP with a flipped bit and one with a stuffing error;
+     - ignored: tokens for another address and with a bad CRC5;
+     - no reply: keep-alives and a bus reset;
+     - piled-up records split apart.
+
+     The host model checks the device's CRCs and stuffing itself. Every reply starts 2–7.5 bit
+     times after the host's EOP (measured 2.97–3.05), and host and device never drive the bus
+     together.
   - The testbenches run at 48 MHz, the planned clock.
-  - Unit test: a restart in the same cycle as an instruction cancels its side effects.
+  - Unit tests:
+    - a restart in the same cycle as an instruction cancels its side effects;
+    - `JEQ`/`JNE`/`MOV`, the inverted CRC and the CRC good value (USB CRC16 `dd 94`, residual
+      0x800d);
+    - the line coder in USB, CAN and HDLC styles against reference models, USB receive at
+      ±1.5 %, and a stuffing error.
   - Shortening the 1-Wire write-0 pulse, never turning the RS-485 driver off, a dead `OUTPAR`,
     a CRC check that always passes, or a timeout that never fires each make the tests fail.
     So do 10 mutations of the new programs (WS2812 pulse widths; SPI default reply, timeout
     routine, MISO release; I2C target START flag, repeated START, hold and setup delays) and
-    the ACK bit feeding the PEC.
-- Area, Yosys with the IHP sg13g2 typical library: 262,618 µm² of cell area. 6×4 tiles are
-  1289.28 × 710.64 µm = 916,229 µm², so cells fill about 29%. The 128-word program memory
-  (flip-flops) is most of it; a latch-based memory could save roughly 70,000 µm².
-- Timing, ABC with the slow library (1.08 V, 125 °C): 3.97 ns of logic on the worst path
+    the ACK bit feeding the PEC. And 7 mutations of the USB hardware and program:
+    - no edge re-centring;
+    - no stuffing;
+    - a 1-bit gap;
+    - no frame-end drop;
+    - no CRC5 check;
+    - no CRC check before the ACK;
+    - "CRC ok" back to zero.
+- Area, Yosys with the IHP sg13g2 typical library: 333,841 µm² of cell area. 6×4 tiles are
+  1289.28 × 710.64 µm = 916,229 µm², so cells fill about 36%.
+  - USB's features added 71,223 µm²: FIFOs 4 → 16 bytes 33,121, two line coders 24,283, and
+    instructions and registers about 13,800.
+  - The 128-word program memory (flip-flops) is still the largest part; a latch-based memory
+    could save roughly 70,000 µm².
+- Timing, ABC with the slow library (1.08 V, 125 °C): 4.33 ns of logic on the worst path
   (engine PC → program memory read → decode → pin select → next state). With flip-flop
-  clock-to-Q and setup, about 4.9 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
+  clock-to-Q and setup, about 5.2 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
   delay and clock skew, so the real place-and-route timing report is still needed.
-- Not done yet: the input glitch filter, Tiny Tapeout `info.yaml` and docs, USB (see
-  `../docs/USB_NOTES.md`).
+- Not done yet:
+  - the input glitch filter;
+  - Tiny Tapeout `info.yaml` and docs;
+  - a second USB endpoint (HID), which does not fit a 64-word program;
+  - the USB electrical check (see `../docs/USB_NOTES.md`, section 5).

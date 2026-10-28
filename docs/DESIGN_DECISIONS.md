@@ -9,7 +9,7 @@ mark the old one **Changed** instead of deleting it.
 
 | Version | Folder | Protocols |
 |---|---|---|
-| v1 | `pbe_v1/` | UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812; CRC unit, parity bit, WAIT timeout |
+| v1 | `pbe_v1/` | UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812, USB low-speed device (control endpoint); CRC unit, parity bit, WAIT timeout, line coder |
 | v2 (retired, D28) | branch `archive/v2-usb` | v1 plus low-speed USB; lessons in `docs/USB_NOTES.md` |
 
 ## Changes forced by new protocols
@@ -34,6 +34,12 @@ mark the old one **Changed** instead of deleting it.
 | WS2812, SPI peripheral | Nothing: both are programs on the existing instructions (the SPI peripheral uses the timeout vector to see the end of a transaction) | — | D34, D35 |
 | SMBus PEC | The I2C controller fed its ACK bits into the CRC, but a PEC covers bytes only | The ACK slot's `IN` is marked `NOCRC` (program change) | D36, BUG-022 |
 | I2C target | START/STOP are SDA edges while SCL is high: one engine cannot wait on two pins at once | Both engines run it, sharing flags: one watches for START/STOP, one shifts bits (no hardware change) | D37 |
+| USB (back in v1) | NRZI, bit stuffing and a 32-clock bit with no gaps cannot be done one instruction per bit; SE0 needs both pins at once | A general line coder (NRZ/NRZI, three stuffing rules, pair mode, SYNC hunt, byte transfers) | D39 |
+| USB | The device must pick its reply by PID and address within 7.5 bit times | `JEQ`/`JNE`/`JLINE` and `MOV`; opcode 111 now has one free sub-op | D6, D32, D40 |
+| USB | Its CRC16 is sent inverted: "CRC ok = zero" never holds | `CRC_GOOD`: "ok" = the register equals a set value (USB's residual 0x800d) | D29, D41 |
+| USB | A packet must leave without gaps and a SETUP arrives at line rate | FIFOs 4 → 16 bytes (now in v1) | D10 |
+| USB | New per-engine settings, but +0..+F were full | Second register page per engine at 0x30 / 0x40 | D32, D44 |
+| USB (its firmware) | Burst reads could lose a byte; a flush on SETUP threw away an OUT record | `RX_COUNT`/`TX_COUNT` registers, `TX_FLUSH` | D43, BUG-030, BUG-031 |
 
 ---
 
@@ -124,11 +130,14 @@ mark the old one **Changed** instead of deleting it.
 | 100 | `SET X/OSR` | Bit counts and constants (USB SYNC) |
 | 101 | `PULL/PUSH` | Bytes to and from the host |
 | 110 | `FLAG` | Coordination between engines and with the host; host interrupt |
-| 111 | `EXT` sub-ops: `CRCRST`, `OSRCRC`, `STAT`, `JCRCBAD` (4 of 8 used) | **Changed:** was reserved; v2 used it for USB (D20, retired). Now general extensions (D29–D31); sub-ops 4–7 stay free |
+| 111 | `EXT` sub-ops: `CRCRST`, `OSRCRC`, `STAT`, `JCRCBAD`, `JEQ`, `JNE`, `JLINE` (7 of 8 used) | **Changed:** was reserved; v2 used it for USB (D20, retired). Then general extensions (D29–D31). **Changed again (USB in v1):** sub-ops 4–6 are the compare and line-event jumps (D40); sub-op 7 stays free |
 
 - **`NOP` — Changed (USB):** The assembler originally emitted opcode 111 with argument 0 for
   `NOP`. That was harmless in v1 but in v2 the same word is `UTX`. `NOP` is now `FLAG` with
   action 3, which has no effect in either version (BUG-008).
+- **`MOV` — added (USB in v1):** `FLAG` action 3 with a non-zero destination field is
+  `MOV dst, src` (D40). `NOP` (`0xD800`, destination 0) is still a no-op, as BUG-008 requires.
+- **`PIN p, END` — added (USB in v1):** pin action 7 ends a line-coder frame (D39).
 
 ## D7. Timing: tick divider, WAIT checks every clock and restarts the divider
 
@@ -160,7 +169,7 @@ mark the old one **Changed** instead of deleting it.
   an opcode slot and complicates every other protocol.
 - **Cost:** 8 more flip-flops per engine.
 
-## D10. FIFOs, 4 → 16 bytes — **Changed (USB, v2 only)**
+## D10. FIFOs, 4 → 16 bytes — **Changed (USB, v2; and in v1 since USB came back)**
 
 - **Chosen originally:** 4-byte TX and RX FIFO per engine; `PULL`/`PUSH` block when
   empty/full.
@@ -170,6 +179,11 @@ mark the old one **Changed** instead of deleting it.
 - **Alternatives:** Faster host link; a separate packet buffer. A deeper FIFO is the
   simplest and also helps SPI bursts.
 - **Cost:** about 32,800 µm², most of v2's growth.
+- **Changed in v1 (USB, D42):** the same reason, now in v1. A low-speed IN packet (PID and up to
+  8 bytes) and a SETUP record (14 bytes) each fit; v1 measured +33,121 µm². Every protocol gains
+  host-latency tolerance. Two tests leaned on the old depth: the I2C target's "more than the
+  FIFO holds" write grew from 5 to 20 bytes so it still makes the engine stretch SCL on a full
+  FIFO; the Modbus overflow round still overflows (18 bytes for 9 characters).
 
 ## D11. Flags — **Changed (running two protocols at once)**
 
@@ -411,6 +425,9 @@ mark the old one **Changed** instead of deleting it.
 - **Plan for USB later:** bring it back on general features that other protocols also use:
   the CRC unit (D29), a line coder with NRZI/stuffing/Manchester modes, compare-and-branch on
   received data, and `MOV X, ISR` (see `docs/USB_NOTES.md`, section 4).
+- **Done:** USB is back in v1 (D39–D44). The line coder has NRZ and NRZI, three stuffing rules
+  and a pair mode; Manchester waits for a protocol that needs it (1553). The coder is
+  unit-tested in USB, CAN and HDLC styles, so it is not USB-only hardware.
 
 ## D29. General CRC unit
 
@@ -434,6 +451,10 @@ mark the old one **Changed** instead of deleting it.
      engine cannot act on the result, which USB and CAN need.
   2. Fixed CRCs, like v2's USB unit. Rejected: a new protocol would need new hardware.
   3. A final-inversion option. Left out: no current protocol needs it (USB does; see notes).
+- **Changed (USB):** USB's CRC16 is sent inverted, so a good packet leaves the register at the
+  residual 0x800d, not zero, and the device must check it before it ACKs. "CRC ok" now means
+  the register equals `CRC_GOOD` (default 0, so every earlier program is unchanged), and
+  `OSRCRC ..., INV` sends the inverted field (D41).
 - **Verified:** a Python model of the same register gives Modbus `C4 0B` for `01 03 00 00 00 02`,
   1-Wire CRC-8 `1C` for the DS18B20 scratchpad, and zero after a frame plus its CRC.
 - **Cost:** ~3,600 µm² per engine, plus its registers.
@@ -470,6 +491,9 @@ mark the old one **Changed** instead of deleting it.
 
 ## D32. Register and opcode budget
 
+- **Changed (USB):** the second register page (D44) holds the new per-engine settings, and
+  sub-ops 4–6 of opcode 111 became `JEQ`, `JNE`, `JLINE` (D40). Sub-op 7 is the last free one;
+  `MOV` went into the unused bits of `FLAG` action 3 instead. `STATUS` uses 5 of 8 bits.
 - **Engine registers:** +0 to +F are now all used (+7 is free only by accident of history:
   it was v2's `BITDIV`). New per-engine settings will need a second register window.
   `LINE_CFG` is full too ([5:0] timeout PC, [6] no parity, [7] odd parity), and `STATUS` uses 4
@@ -615,4 +639,154 @@ mark the old one **Changed** instead of deleting it.
   their own pin models and need nothing from the old tests' state.
 - **Lint step:** `make test` first fails on Icarus's "Static variable initialization" warning
   (BUG-023).
+
+## D39. Line coder: a general serializer between the shift registers and the pins
+
+- **Chosen:** `src/pbe_line.sv`, one per engine, off by default (`LINE` = 0). Settings:
+  - **mode:** NRZ, or NRZI (0 = change level);
+  - **stuffing:** after 6 ones (USB), after 5 ones (HDLC) or after 5 equal bits (CAN);
+  - **pair mode:** pin base + 1 carries the complement, SE0 ends a frame;
+  - **transfers:** byte or bit;
+  - **SYNC:** a frame-start pattern.
+- **What it does:**
+  - **Bit timing:** it owns the bit timing (`CLKDIV` becomes the bit time, and instructions then
+    run every clock), because a stuffed bit must cost the program nothing. That was v2's lesson.
+  - **Transmit:** one queued entry. A frame starts with a 2-bit-time gap and the SYNC byte,
+    and `PIN p, END` ends it (pair mode: SE0, SE0, J, then release).
+  - **Receive:** samples mid-bit and re-centres on every edge. It hunts for SYNC, unstuffs
+    (a stuff bit with the wrong value is a line error), and reports the end of a frame as an
+    event: SE0 then J in pair mode; otherwise 8 idle bits, or a stuffing violation at the
+    idle level.
+  - An `IN` waits for a byte or the event. An unread byte is dropped when its frame ends
+    (BUG-028).
+- **CRC in byte mode:** an `OUT` or `IN` hands over 8 bits at once, so the CRC unit takes them
+  one per clock afterwards, and the next instruction waits those 8 clocks. That keeps the
+  CRC unit bit-serial and keeps `NOCRC` per instruction.
+- **Why general:** the same block covers USB (NRZI, 6 ones, pair), HDLC/SDLC (NRZI, 5 ones,
+  flag as SYNC) and CAN (NRZ, 5 equal bits, bit transfers). `tb_line.sv` tests all three
+  against reference models written independently of the RTL.
+- **Alternatives:**
+  1. v2's USB line unit: rejected, USB-only (D28).
+  2. Host pre-encodes NRZI and stuffing: almost no hardware, but the device would then ACK
+     packets without checking their CRC, and the host would have to stream at line rate.
+  3. Bit-by-bit in instructions: at 32 clocks per bit there is no "branch on this bit".
+- **Not yet:** a Manchester mode (1553), CAN's sample point and resynchronization jump width.
+  A non-pair frame ends only by idle or a stuffing violation.
+- **Cost:** 12,141 µm² per coder. I estimated 6–8k: the two 16-bit bit timers (transmit and
+  receive) are most of the difference, and could be one, since the coder is half duplex.
+
+## D40. Compare and move instructions
+
+- **Chosen:**
+  - `JEQ label` / `JNE label`: jump if ISR equals / differs from OSR (opcode 111, sub-ops 4, 5).
+  - `JLINE label`: jump if the line coder saw the end of a frame, and clear the event (sub-op 6).
+  - `MOV dst, src` with dst and src in {X, OSR, ISR} and src 0 = zero (`FLAG` action 3).
+- **Why:** a USB device must choose ACK, NAK, STALL or DATA from the PID and address within
+  7.5 bit times, and the host is far too slow for that. `JEQ` against `SET OSR` constants checks
+  bytes; `MOV X, ISR` keeps the PID while the address bytes arrive, and later counts bytes.
+- **Also for:** Modbus slave addresses, the I2C target address check on the engine, CAN IDs,
+  the 1553 terminal address, and any loop with a received count (`MOV X, ISR`).
+- **Why `JNE` too:** the USB program is exactly 64 words; each `JNE` saves the `JMP` after a
+  `JEQ`. That spent another sub-op, so `MOV` went into `FLAG` action 3 instead.
+- **Tested:** `tb_engine_ops.sv` (unit test) checks every compare and move, and that `NOP` is
+  still a no-op.
+
+## D41. CRC good value and inverted CRC output
+
+- **Chosen:** a per-engine `CRC_GOOD` register: "CRC ok" means register == `CRC_GOOD` (0 by
+  default). `OSRCRC LO|HI, INV` loads the inverted CRC byte.
+- **Why:** USB sends its CRC16 inverted. A good packet leaves the register at 0x800d. Our model
+  of the CRC unit gives the field `dd 94` for the real-trace packet `DATA0 80 06 00 01 00 00 40 00`,
+  and 0x800d after any good packet. The unit test checks both values in RTL.
+- **Also for:** the 1-Wire inverted CRC-16 (DS2408, DS2431), which the host had to check by
+  reading the value (D29); and CRC-16/X.25 (HDLC).
+- **Alternative:** a final-inversion flag with the residual worked out in hardware: more logic
+  for the same result.
+
+## D42. USB low-speed device: control endpoint 0, one engine
+
+- **Chosen:** `programs/usb_dev.pbe`, exactly 64 words.
+  - **Received tokens:** checks PID, address and endpoint (with the CRC5 included, by comparing
+    the token's 2nd and 3rd bytes with two `SET OSR` constants). It receives SETUP/OUT data,
+    checks the CRC16 against the residual, and ACKs only good packets.
+  - **IN tokens:** sends the host-queued packet with the CRC appended, NAK when nothing is
+    queued, or STALL. It reports the host's ACK.
+  - **Settings:** CLKDIV 31 (32 clocks a bit at 48 MHz), coder 0x36, SYNC 0x80, CRC16 0x8005,
+    CRC_GOOD 0x800d.
+- **Host side:**
+  - The firmware answers at its own pace: USB's NAK flow control means the engine NAKs IN
+    tokens until data is queued, so the host never has to meet the 5 µs turnaround.
+  - Records go to the RX FIFO: `[D2]` for an ACK, and `[token] [DATA PID] [n bytes] [255 − n]
+    [status]` for data. The count makes records that pile up in the FIFO separable; the
+    firmware parses them from the end (a status byte is below 0x20, an ACK is 0xD2).
+  - After SET_ADDRESS, the firmware rewrites the two address words in program memory.
+  - It uses `RX_COUNT`, `TX_FLUSH` and flags (FLAG0 = IN packet queued, FLAG1 = STALL,
+    FLAG2 = record).
+- **Scope: endpoint 0 only.** A HID keyboard also needs an interrupt IN endpoint, about 10 more
+  words, and a program window is 64 words (6-bit jump targets). What would make room:
+  - a one-level `CALL`/`RET`;
+  - jumps relative to the PC, so a program could use the whole memory;
+  - USB on both engines (receive and transmit).
+
+  These are open. EP0 covers what V-USB's common gadgets use: enumeration and vendor requests.
+- **Limits:**
+  - A SETUP record is 14 bytes, so the firmware must read it before the next SETUP arrives
+    (USB's own flow guarantees that).
+  - Electrical: plain I/O pins switch faster than USB's 75–300 ns edges (works in practice,
+    as with V-USB, but not compliant). The pad voltage still needs checking.
+  - Full speed is impossible at 4 clocks per bit.
+- **Tested (Test 11, `tb_usb.sv`):** a USB host model at ±1.5 % enumerates the device:
+  - GET_DESCRIPTOR (device; configuration 9 and 18 bytes), SET_ADDRESS, SET_CONFIGURATION,
+    STALL for an unsupported request, and a vendor write and read;
+  - refused: a SETUP with a flipped bit, one with a stuffing error, tokens for the old address
+    and with a bad CRC5;
+  - no reply: keep-alives and a bus reset;
+  - two records piled up and split apart.
+
+  The device's CRCs are checked by the host model's own CRC code. Every turnaround is
+  2.97–3.05 bit times (allowed 2–7.5), and host and device never drive the bus at the same time.
+  Mutations caught:
+  - no edge re-centring;
+  - no stuffing;
+  - a 1-bit gap (turnaround 1.97);
+  - no frame-end drop;
+  - no CRC5 check;
+  - no CRC check before the ACK;
+  - "CRC ok" back to zero.
+
+## D43. Host port: FIFO counts and a TX-only flush
+
+- **Chosen:**
+  - `RX_COUNT` (0x0A/0x0B) and `TX_COUNT` (0x0C/0x0D): bytes in each engine's FIFOs.
+  - `TX_FLUSH` (0x0E): empties an engine's TX FIFO only.
+- **Why:**
+  - A burst read of an RX FIFO could lose a byte arriving during the burst (BUG-030). With the
+    count, the host reads exactly the bytes that are there.
+  - The USB firmware must drop a stale IN reply when a SETUP arrives. Flushing both FIFOs threw
+    away the OUT record already arriving behind the SETUP (BUG-031).
+- **Also for:** any protocol whose host reads in bursts, or aborts a queued transmission.
+
+## D44. A second register page per engine
+
+- **Chosen:** 0x30 + 0x10·e: +0 `LINE` (coder), +1 `SYNC`, +2/+3 `CRC_GOOD`.
+- **Why:** the first page (+0..+F) was full (D32). The free +7 slot alone could not hold four
+  bytes of new settings.
+
+## D45. Area and timing after USB
+
+| | Area | Share of 6×4 tiles | Worst logic path (slow corner) |
+|---|---|---|---|
+| Before USB (D34–D38) | 262,618 µm² | 29 % | 3.97 ns |
+| With USB features | 333,841 µm² | 36.4 % | 4.33 ns (~5.2 ns with flip-flop overheads, budget 20.8 ns) |
+
+Breakdown of the +71,223 µm²:
+
+| Part | Area |
+|---|---|
+| FIFOs 4 → 16 bytes | 33,121 µm² |
+| Two line coders | 24,283 µm² |
+| Instructions, `CRC_GOOD`, byte-mode CRC feed, registers | ~13,800 µm² |
+
+My estimate was about +50k µm²: 40 % low, as with the 128-word memory (D4). The coder was the
+part I under-estimated most.
 

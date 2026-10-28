@@ -85,3 +85,35 @@ protocols too:
 
 With those in place, USB low speed becomes mostly programs plus the line coder's USB mode,
 instead of a USB block bolted onto the engine.
+
+## 5. USB in v1 (done)
+
+The plan of section 4, as built (design decisions D39–D45):
+
+| Planned | Built | Also used by |
+|---|---|---|
+| CRC5, CRC16 | The general CRC unit, plus `CRC_GOOD` (USB residual 0x800d) and `OSRCRC ..., INV`. CRC5 is checked by comparing the token's bytes, so it needs no CRC unit | 1-Wire inverted CRC-16, HDLC |
+| Line coder | `pbe_line.sv`: NRZ/NRZI, stuffing after 6 ones / 5 ones / 5 equal, pair mode with SE0, SYNC hunt, byte or bit transfers; owns the bit timing; re-centres on every edge | HDLC, CAN (unit-tested) |
+| Compare and branch | `JEQ`, `JNE` (ISR vs OSR), `JLINE` (end of frame) | Modbus addresses, CAN IDs, 1553 |
+| `MOV X, ISR` | `MOV dst, src` over X, OSR, ISR | Received counts, keeping a byte |
+| Whole packet queued | FIFOs 16 bytes | Every protocol |
+| Two CRCs at once (v2) | Not needed: the program knows the packet type | |
+
+The device program (`programs/usb_dev.pbe`, 64 words) handles endpoint 0: it answers every
+token by itself in about 3 bit times (allowed 2–7.5) and leaves request decoding to the host
+firmware. Test 11 (`test/tb_usb.sv`) enumerates it with a host model at ±1.5 %.
+
+### Still open
+
+- **A second endpoint (HID).** It needs about 10 more words than a 64-word program window has.
+  Options:
+  - a one-level `CALL`/`RET`, which every protocol would use;
+  - PC-relative jumps, so a program could span the whole 128 words;
+  - USB on both engines: one receiving, one sending, coordinated through flags.
+- **Electrical check.** IHP pad voltage and drive against USB's 3.3 V signalling and 75–300 ns
+  edges; external series resistors, as V-USB uses, are likely.
+- **Full speed** (12 Mbit/s) stays out of reach: 4 clocks per bit at 48 MHz.
+- **Manchester mode** in the coder, when 1553 comes.
+- **The address switch.** It rewrites two program words while the engine runs. That is safe
+  because USB gives the device 2 ms after SET_ADDRESS, but a byte-at-a-time write leaves a
+  half-written word for a few microseconds.

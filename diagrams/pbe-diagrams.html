@@ -91,7 +91,7 @@ tr.added td:first-child { color: var(--new); }
   <header>
     <div class="eyebrow">Jane Street protocol emulator ASIC · pbe_v1</div>
     <h1>Programmable Bit Engine</h1>
-    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI (controller and peripheral), I2C (controller, with SMBus PEC, and target), 1-Wire, Modbus RTU and WS2812 are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit and a WAIT timeout, and sees its own window of 8 shared flags. This matches the RTL as built: 128-word program memory (each engine jumps within its own 64-word window from its START_PC), 4-byte FIFOs, about 29% of the 6×4 tile area.</p>
+    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI (controller and peripheral), I2C (controller, with SMBus PEC, and target), 1-Wire, Modbus RTU, WS2812 and a USB low-speed device are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit, a WAIT timeout and an optional line coder (NRZI, bit stuffing, differential pair), and sees its own window of 8 shared flags. This matches the RTL as built: 128-word program memory (each engine jumps within its own 64-word window from its START_PC), 16-byte FIFOs, about 36% of the 6×4 tile area.</p>
   </header>
 
   <section>
@@ -134,13 +134,13 @@ tr.added td:first-child { color: var(--new); }
           <!-- FIFOs -->
           <rect class="box" x="365" y="66" width="110" height="96" rx="4"/>
           <text class="t" x="420" y="96" text-anchor="middle">FIFOs · E0</text>
-          <text class="s" x="420" y="116" text-anchor="middle">TX 4 × 8 b</text>
-          <text class="s" x="420" y="134" text-anchor="middle">RX 4 × 8 b</text>
+          <text class="s" x="420" y="116" text-anchor="middle">TX 16 × 8 b</text>
+          <text class="s" x="420" y="134" text-anchor="middle">RX 16 × 8 b</text>
 
           <rect class="box" x="365" y="370" width="110" height="96" rx="4"/>
           <text class="t" x="420" y="400" text-anchor="middle">FIFOs · E1</text>
-          <text class="s" x="420" y="420" text-anchor="middle">TX 4 × 8 b</text>
-          <text class="s" x="420" y="438" text-anchor="middle">RX 4 × 8 b</text>
+          <text class="s" x="420" y="420" text-anchor="middle">TX 16 × 8 b</text>
+          <text class="s" x="420" y="438" text-anchor="middle">RX 16 × 8 b</text>
 
           <!-- host <-> FIFOs -->
           <path class="wd" d="M260 212V114H365" marker-start="url(#ad)" marker-end="url(#ad)"/>
@@ -160,12 +160,12 @@ tr.added td:first-child { color: var(--new); }
           <rect class="box" x="510" y="60" width="180" height="108" rx="4"/>
           <text class="t" x="600" y="92" text-anchor="middle">Engine 0</text>
           <text class="s" x="600" y="112" text-anchor="middle">PC · decoder · timeout</text>
-          <text class="s" x="600" y="130" text-anchor="middle">OSR/ISR · parity · CRC</text>
+          <text class="s" x="600" y="130" text-anchor="middle">OSR/ISR · CRC · line coder</text>
 
           <rect class="box" x="510" y="364" width="180" height="108" rx="4"/>
           <text class="t" x="600" y="396" text-anchor="middle">Engine 1</text>
           <text class="s" x="600" y="416" text-anchor="middle">PC · decoder · timeout</text>
-          <text class="s" x="600" y="434" text-anchor="middle">OSR/ISR · parity · CRC</text>
+          <text class="s" x="600" y="434" text-anchor="middle">OSR/ISR · CRC · line coder</text>
 
           <!-- program memory + flags between the engines -->
           <rect class="box" x="510" y="230" width="112" height="72" rx="4"/>
@@ -253,7 +253,7 @@ tr.added td:first-child { color: var(--new); }
     <h2>2 · Inside one engine</h2>
     <figure>
       <div class="scroll">
-        <svg viewBox="0 0 1000 430" role="img" aria-label="Engine internals: the decoder drives every unit; the timing unit stalls the program counter or makes it jump to the timeout routine; the pin unit feeds pin levels to timing and branch logic and exchanges bits with the shift registers; shifted bits feed the CRC unit, whose zero result drives a branch and whose bytes can be loaded into the OSR.">
+        <svg viewBox="0 0 1000 560" role="img" aria-label="Engine internals: the decoder drives every unit; the timing unit stalls the program counter or makes it jump to the timeout routine; the pin unit feeds pin levels to timing and branch logic and exchanges bits with the shift registers; shifted bits feed the CRC unit, whose ok result drives a branch and whose bytes can be loaded into the OSR; the optional line coder takes bytes from the shift registers, drives the engine's first pin or pair with its own bit timing, and reports the end of a frame to the branch logic.">
           <defs>
             <marker id="bc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mc" d="M0 0L10 5L0 10z"/></marker>
             <marker id="bd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="md" d="M0 0L10 5L0 10z"/></marker>
@@ -280,7 +280,7 @@ tr.added td:first-child { color: var(--new); }
           <rect class="box" x="40" y="130" width="220" height="100" rx="4"/>
           <text class="t" x="150" y="158" text-anchor="middle">PC &amp; branch</text>
           <text class="s" x="150" y="178" text-anchor="middle">7-bit PC · jumps from START_PC</text>
-          <text class="s" x="150" y="196" text-anchor="middle">JMP conditions · JCRCBAD</text>
+          <text class="s" x="150" y="196" text-anchor="middle">JMP · JCRCBAD · JEQ/JNE · JLINE</text>
           <text class="s ln" x="150" y="214" text-anchor="middle">timeout → TIMEOUT_PC</text>
 
           <rect class="nbox" x="300" y="130" width="200" height="100" rx="4"/>
@@ -298,7 +298,7 @@ tr.added td:first-child { color: var(--new); }
           <path class="wc" d="M300 180H260" marker-end="url(#bc)"/><text class="xs lc" x="280" y="160" text-anchor="middle">stall</text>
           <path class="wn" d="M300 205H260" marker-end="url(#bn)"/><text class="xs ln" x="280" y="200" text-anchor="middle">jump</text>
           <path class="wp" d="M660 170H500" marker-end="url(#bp)"/><text class="xs lp" x="580" y="162" text-anchor="middle">level · edge</text>
-          <path class="wp" d="M860 180H950" marker-start="url(#bp)" marker-end="url(#bp)"/><text class="xs lp" x="905" y="172" text-anchor="middle">to pin bus</text>
+          <path class="wp" d="M860 180H990" marker-start="url(#bp)"/><text class="xs lp" x="915" y="172" text-anchor="middle">to pin bus</text>
           <path class="wp" d="M680 230V268H245V230" marker-end="url(#bp)"/><text class="xs lp" x="460" y="262" text-anchor="middle">pin level for JMP</text>
 
           <!-- row 3 -->
@@ -310,8 +310,8 @@ tr.added td:first-child { color: var(--new); }
           <rect class="nbox" x="240" y="310" width="190" height="80" rx="4"/>
           <text class="t" x="335" y="342" text-anchor="middle">CRC unit</text>
           <text class="s" x="335" y="362" text-anchor="middle">any poly ≤ 16 bits</text>
-          <text class="s" x="335" y="378" text-anchor="middle">ok = register is 0</text>
-          <path class="wn" d="M300 310V286H215V230" marker-end="url(#bn)"/><text class="xs ln" x="306" y="301">CRC = 0</text>
+          <text class="s" x="335" y="378" text-anchor="middle">ok = register = CRC_GOOD</text>
+          <path class="wn" d="M300 310V286H215V230" marker-end="url(#bn)"/><text class="xs ln" x="306" y="301">CRC ok</text>
 
           <rect class="box" x="560" y="310" width="200" height="80" rx="4"/>
           <text class="t" x="660" y="342" text-anchor="middle">Shift registers</text>
@@ -329,11 +329,21 @@ tr.added td:first-child { color: var(--new); }
           <path class="wd" d="M820 332H760" marker-end="url(#bd)"/><text class="xs ld" x="790" y="326" text-anchor="middle">PULL</text>
           <path class="wd" d="M760 370H820" marker-end="url(#bd)"/><text class="xs ld" x="790" y="364" text-anchor="middle">PUSH</text>
 
-          <text class="s" x="500" y="420" text-anchor="middle">STAT puts {timeout happened, CRC ok, parity error} into the ISR; the host reads the same bits in STATUS</text>
+          <!-- row 4: line coder -->
+          <rect class="nbox" x="530" y="440" width="260" height="80" rx="4"/>
+          <text class="t" x="660" y="468" text-anchor="middle">Line coder (optional)</text>
+          <text class="s" x="660" y="488" text-anchor="middle">NRZ/NRZI · bit stuffing · SYNC</text>
+          <text class="s" x="660" y="504" text-anchor="middle">pair + SE0 · own bit timer</text>
+          <path class="wd" d="M640 390V440" marker-end="url(#bd)"/><text class="xs ld" x="634" y="420" text-anchor="end">byte out</text>
+          <path class="wd" d="M680 440V390" marker-end="url(#bd)"/><text class="xs ld" x="688" y="420">byte in</text>
+          <path class="wp" d="M790 480H990V180" marker-start="url(#bp)"/><text class="xs lp" x="890" y="472" text-anchor="middle">pin base (and base + 1)</text>
+          <path class="wn" d="M530 480H120V230" marker-end="url(#bn)"/><text class="xs ln" x="330" y="472" text-anchor="middle">end of frame → JLINE</text>
+
+          <text class="s" x="500" y="548" text-anchor="middle">STAT puts {line error, RX overflow, timeout happened, CRC ok, parity error} into the ISR; the host reads the same bits in STATUS</text>
         </svg>
       </div>
-      <div class="legend"><span><i class="c"></i>control</span><span><i class="d"></i>data</span><span><i class="p"></i>pins</span><span><i class="n"></i>added: CRC unit, parity, timeout</span></div>
-      <figcaption>Each instruction takes one tick plus its delay field. A blocked <code>WAIT</code>, <code>PULL</code> or <code>PUSH</code> is re-checked every clock; if it stays blocked for <code>TIMEOUT</code> ticks it is abandoned and the PC jumps to <code>TIMEOUT_PC</code>. Every bit shifted out or in can feed the CRC unit and the parity bits, which is how the engine adds and checks Modbus CRC and parity by itself.</figcaption>
+      <div class="legend"><span><i class="c"></i>control</span><span><i class="d"></i>data</span><span><i class="p"></i>pins</span><span><i class="n"></i>added: CRC unit, parity, timeout, line coder</span></div>
+      <figcaption>Each instruction takes one tick plus its delay field. A blocked <code>WAIT</code>, <code>PULL</code> or <code>PUSH</code> is re-checked every clock; if it stays blocked for <code>TIMEOUT</code> ticks it is abandoned and the PC jumps to <code>TIMEOUT_PC</code>. Every bit shifted out or in can feed the CRC unit and the parity bits, which is how the engine adds and checks Modbus CRC and parity by itself. With the line coder on, <code>CLKDIV</code> is the bit time, instructions run every clock, and <code>OUT</code>/<code>IN</code> move whole bytes through the coder, which adds and removes stuff bits without costing the program anything: that is how the engine runs low-speed USB.</figcaption>
     </figure>
   </section>
 
@@ -367,14 +377,14 @@ tr.added td:first-child { color: var(--new); }
       <table>
         <thead><tr><th>OP</th><th>Mnemonic</th><th>Does</th></tr></thead>
         <tbody>
-          <tr><td>000</td><td>PIN p, act [, NOCRC]</td><td>Drive 0, drive 1, release, toggle, send the next OSR bit (OUT), open-drain send (OUTOD), or send the parity bit (OUTPAR)<span class="tag">OUTPAR, NOCRC new</span></td></tr>
+          <tr><td>000</td><td>PIN p, act [, NOCRC]</td><td>Drive 0, drive 1, release, toggle, send the next OSR bit (OUT), open-drain send (OUTOD), or send the parity bit (OUTPAR); END ends a line-coder frame<span class="tag">OUTPAR, END, NOCRC new</span></td></tr>
           <tr><td>001</td><td>IN p [, NOCRC]</td><td>Sample a pin into the ISR, the receive parity and the CRC (unless NOCRC)</td></tr>
           <tr><td>010</td><td>WAIT p, cond</td><td>Wait for a pin or flag to be low, high, rising or falling; checked every clock, gives up after TIMEOUT ticks if set</td></tr>
           <tr><td>011</td><td>JMP cond, addr</td><td>Always, X-- ≠ 0, pin high, pin low, TX FIFO empty, TX FIFO has data, FLAG0, FLAG1</td></tr>
           <tr><td>100</td><td>SET X/OSR, n</td><td>Load the loop counter or the OSR</td></tr>
           <tr><td>101</td><td>PULL / PUSH</td><td>TX FIFO to OSR, or ISR to RX FIFO; waits if empty or full</td></tr>
-          <tr><td>110</td><td>FLAG n, act</td><td>Set or clear one of this engine's 4 flags, or interrupt the host; action 3 is the assembler's NOP</td></tr>
-          <tr class="added"><td>111</td><td>CRCRST · OSRCRC · STAT · JCRCBAD</td><td>Restart the CRC; load a CRC byte into the OSR; ISR ← {timeout happened, CRC ok, parity error}; jump if the CRC is not zero. Sub-ops 4–7 free<span class="tag">new</span></td></tr>
+          <tr><td>110</td><td>FLAG n, act</td><td>Set or clear one of this engine's 4 flags, or interrupt the host; action 3 is MOV between X, OSR and ISR, and with no destination the assembler's NOP<span class="tag">MOV new</span></td></tr>
+          <tr class="added"><td>111</td><td>CRCRST · OSRCRC · STAT · JCRCBAD · JEQ · JNE · JLINE</td><td>Restart the CRC; load a CRC byte (optionally inverted) into the OSR; ISR ← status; jump if the CRC is not ok; jump if ISR equals / differs from OSR; jump at the end of a line-coder frame. Sub-op 7 free<span class="tag">new</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -399,7 +409,20 @@ tr.added td:first-child { color: var(--new); }
           <tr class="added"><td>+B</td><td>CRC_CFG</td><td>Width − 1, initial value all ones, reversed output, fed by OUT bits, fed by IN bits</td></tr>
           <tr class="added"><td>+C, +D</td><td>TIMEOUT</td><td>Ticks a blocked WAIT / PULL / PUSH may wait; 0 = forever</td></tr>
           <tr class="added"><td>+E</td><td>LINE_CFG</td><td>TIMEOUT_PC (where a timeout jumps), no parity (8N2), odd parity</td></tr>
-          <tr class="added"><td>+F</td><td>STATUS</td><td>Read: parity error, CRC ok, timeout happened, RX overflow. Write: restart the CRC, clear the timeout or overflow flag</td></tr>
+          <tr class="added"><td>+F</td><td>STATUS</td><td>Read: parity error, CRC ok, timeout happened, RX overflow, line error. Write: restart the CRC, clear the timeout, overflow or line-error flag</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A second page per engine (engine 0 at 0x30, engine 1 at 0x40) holds the line coder's settings. Global registers 0x0A–0x0E give the FIFO fill levels and a TX-only flush.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Slot</th><th>Register</th><th>Holds</th></tr></thead>
+        <tbody>
+          <tr class="added"><td>page 2, +0</td><td>LINE</td><td>Line coder: mode (off, NRZ, NRZI), stuffing (none, after 6 ones, after 5 ones, after 5 equal bits), pair mode, byte transfers</td></tr>
+          <tr class="added"><td>page 2, +1</td><td>SYNC</td><td>Frame start pattern sent and hunted for (USB: 0x80)</td></tr>
+          <tr class="added"><td>page 2, +2, +3</td><td>CRC_GOOD</td><td>The CRC value that means ok (0, or USB's residual 0x800D)</td></tr>
+          <tr class="added"><td>0x0A–0x0D</td><td>RX_COUNT, TX_COUNT</td><td>Bytes in each engine's RX and TX FIFO; read RX FIFOs in bursts of at most RX_COUNT</td></tr>
+          <tr class="added"><td>0x0E</td><td>TX_FLUSH</td><td>Empty one engine's TX FIFO, leaving its RX FIFO alone</td></tr>
         </tbody>
       </table>
     </div>

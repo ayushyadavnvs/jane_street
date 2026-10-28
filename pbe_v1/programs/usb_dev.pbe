@@ -1,0 +1,87 @@
+; USB low-speed device, control endpoint 0, on one engine with the line coder.
+; The engine answers every packet by itself within the USB turnaround time; the host prepares
+; data and decodes requests at its own pace (the engine NAKs IN tokens until data is queued).
+;
+; Pins: dm = pin base = D- (the coder's line; J = D- high at low speed), D+ = pin base + 1.
+;   A 1.5 kohm pull-up on D- is outside the chip.
+; Engine settings (48 MHz): CLKDIV = 31 (32 clocks per bit), OUT and IN LSB first,
+;   LINE = 0x36 (bytes, pair, stuff after 6 ones, NRZI), SYNC = 0x80,
+;   CRC_POLY = 0x8005, CRC_CFG = 0xFF, CRC_GOOD = 0x800D, LINE_CFG = 0x40 (no parity), TIMEOUT 0.
+; Device address: words 6 and 9 are `SET OSR` with the token's 2nd and 3rd byte for this
+;   address and endpoint 0 (address; endpoint bits 3..1 and CRC5). Address 0: 0x00 and 0x10.
+;   The host rewrites both words after a SET_ADDRESS status stage.
+;
+; Flags (host): FLAG0 = an IN packet is queued, FLAG1 = STALL IN tokens (until the next SETUP).
+; IN packet in the TX FIFO: [DATA0 or DATA1 PID] [0..8 data bytes]; the engine adds the CRC.
+; Records in the RX FIFO, each ends with FLAG2 (set by the engine, with IRQ):
+;   [0x2D or 0xE1] [DATA PID] [n bytes: data, CRC low, CRC high] [255 - n] [status]
+;       SETUP or OUT data; ACKed only if status bit 1 (CRC ok) is set, otherwise the host will
+;       send it again. The status byte is below 0x20.
+;   [0xD2]                     the host ACKed our IN data
+; Records can pile up in the RX FIFO before the host reads it: parse them from the end.
+.equ dm 0
+
+idle:   IN   dm, NOCRC       ; the PID (the coder has found the SYNC)
+        JLINE idle           ; a bare EOP (keep-alive) or a stale event: start over
+        SET  OSR, 0xD2
+        JEQ  ack             ; the host's ACK for our DATA
+        MOV  X, ISR          ; keep the PID
+        IN   dm, NOCRC       ; token byte 2: address, endpoint bit 0
+addr:   SET  OSR, 0x00       ; word 6: patched by the host
+        JNE  skip
+        IN   dm, NOCRC       ; token byte 3: endpoint bits 3..1, CRC5
+crc5:   SET  OSR, 0x10       ; word 9: patched by the host
+        JNE  skip
+w:      JLINE e              ; wait for the end of the token
+        JMP  w
+e:      MOV  ISR, X
+        SET  OSR, 0x69       ; IN
+        JEQ  in
+        SET  OSR, 0x2D       ; SETUP
+        JEQ  dat
+        SET  OSR, 0xE1       ; OUT
+        JNE  idle
+dat:    PUSH                 ; record: the token PID
+        IN   dm, NOCRC       ; the DATA0/DATA1 PID
+        PUSH
+        CRCRST
+        SET  X, 255          ; counts the bytes down
+db:     IN   dm              ; data, then the CRC16: all of it feeds the CRC
+        JLINE deop
+        PUSH
+        JMP  X--, db
+deop:   MOV  ISR, X
+        PUSH                 ; 255 - number of bytes
+        STAT
+        JCRCBAD ack          ; a bad packet gets no ACK
+        SET  OSR, 0xD2       ; ACK (ISR still holds the status)
+        PIN  dm, OUT, NOCRC
+        PIN  dm, END
+ack:    PUSH                 ; the status, or 0xD2 when the host ACKed us
+        FLAG 2, SET
+        FLAG 2, IRQ
+        JMP  idle
+skip:   JLINE idle           ; not for us: wait for the end of the packet
+        JMP  skip
+in:     JMP  FLAG1, stall
+        JMP  FLAG0, send
+nak:    SET  OSR, 0x5A
+hs:     PIN  dm, OUT, NOCRC  ; a handshake packet: SYNC (from the coder), PID, EOP
+        PIN  dm, END
+        JMP  idle
+stall:  SET  OSR, 0x1E
+        JMP  hs
+send:   JMP  TX_EMPTY, nak
+        PULL                 ; DATA0/DATA1 PID
+        PIN  dm, OUT, NOCRC
+        CRCRST
+sd:     JMP  TX_EMPTY, sc
+        PULL
+        PIN  dm, OUT
+        JMP  sd
+sc:     OSRCRC LO, INV       ; USB sends the CRC16 inverted, low byte first
+        PIN  dm, OUT, NOCRC
+        OSRCRC HI, INV
+        PIN  dm, OUT, NOCRC
+        PIN  dm, END
+        JMP  idle

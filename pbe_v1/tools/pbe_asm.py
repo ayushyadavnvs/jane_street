@@ -13,6 +13,7 @@ Syntax (case-insensitive, ';' starts a comment):
     .equ name value           define a constant (handy for pin names)
     label:
     PIN  p, DRV0|DRV1|REL|TOG|OUT|OUTOD|OUTPAR   (OUT and OUTOD take an optional ", NOCRC")
+    PIN  p, END               line coder: end the frame (pair mode: EOP, then release)
     IN   p [, NOCRC]
     WAIT p, LOW|HIGH|RISE|FALL
     WAIT FLAG n, LOW|HIGH|RISE|FALL
@@ -21,7 +22,10 @@ Syntax (case-insensitive, ';' starts a comment):
     PULL | PUSH
     FLAG n, SET|CLR|IRQ
     NOP
-    CRCRST | OSRCRC LO|HI | STAT | JCRCBAD label     (opcode 111)
+    MOV  X|OSR|ISR, X|OSR|ISR|0                      (FLAG action 3 with a non-zero move)
+    CRCRST | OSRCRC LO|HI [, INV] | STAT | JCRCBAD label     (opcode 111)
+    JEQ label | JNE label     jump if ISR == OSR / ISR != OSR    (opcode 111)
+    JLINE label               jump if the line coder saw the end of a frame; clears it
 Any instruction may end with [d], d = 0..15 extra ticks of delay.
 """
 import argparse
@@ -31,9 +35,10 @@ import sys
 MEM_WORDS = 128   # program memory
 PROG_WORDS = 64   # one program: jump targets are 6 bits, relative to its start
 
-OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 6}
-PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5, "OUTPAR": 6}
-EXT_OPS = {"CRCRST": 0, "OSRCRC": 1, "STAT": 2, "JCRCBAD": 3}
+OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 6, "MOV": 6}
+PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5, "OUTPAR": 6, "END": 7}
+EXT_OPS = {"CRCRST": 0, "OSRCRC": 1, "STAT": 2, "JCRCBAD": 3, "JEQ": 4, "JNE": 5, "JLINE": 6}
+MOV_REG = {"X": 1, "OSR": 2, "ISR": 3}
 WAIT_CND = {"LOW": 0, "HIGH": 1, "RISE": 2, "FALL": 3}
 JMP_CND = {"ALWAYS": 0, "X--": 1, "PIN_HI": 2, "PIN_LO": 3, "TX_EMPTY": 4, "TX_READY": 5, "FLAG0": 6, "FLAG1": 7}
 FLAG_ACT = {"SET": 0, "CLR": 1, "IRQ": 2}
@@ -117,9 +122,12 @@ def assemble(text, base, name="<src>"):
         if mnem in EXT_OPS:
             sub = EXT_OPS[mnem] << 6
             if mnem == "OSRCRC":
+                inv = len(args) == 2 and args[1].upper() == "INV"
+                if inv:
+                    args = args[:1]
                 need(1)
-                arg = sub | pick({"LO": 0, "HI": 1}, args[0], n, "CRC byte")
-            elif mnem == "JCRCBAD":
+                arg = sub | (int(inv) << 1) | pick({"LO": 0, "HI": 1}, args[0], n, "CRC byte")
+            elif mnem in ("JCRCBAD", "JEQ", "JNE", "JLINE"):
                 need(1)
                 t = args[0].lower()
                 arg = sub | (labels[t] if t in labels else num(args[0], n, 0, PROG_WORDS - 1))
@@ -161,10 +169,15 @@ def assemble(text, base, name="<src>"):
         elif mnem in ("PULL", "PUSH"):
             need(0)
             arg = (1 << 8) if mnem == "PUSH" else 0
+        elif mnem == "MOV":
+            need(2)
+            dst = pick(MOV_REG, args[0], n, "MOV destination")
+            src = 0 if args[1] == "0" else pick(MOV_REG, args[1], n, "MOV source")
+            arg = (3 << 7) | (dst << 4) | (src << 2)
         elif mnem == "FLAG":
             need(2)
             arg = (pick(FLAG_ACT, args[1], n, "flag action") << 7) | num(args[0], n, 0, 3)
-        else:  # NOP: FLAG with action 3, which does nothing (opcode 111 is USB in v2)
+        else:  # NOP: FLAG with action 3 and no move, which does nothing
             need(0)
             arg = 3 << 7
         words.append(word(op, arg, dly))

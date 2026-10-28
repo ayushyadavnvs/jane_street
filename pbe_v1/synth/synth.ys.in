@@ -1,4 +1,4 @@
-read_verilog -sv src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_engine.sv src/tt_um_pbe.sv
+read_verilog -sv src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_engine.sv src/tt_um_pbe.sv
 synth -top tt_um_pbe -flatten
 dfflibmap -liberty $LIB
 abc -liberty $LIB
