@@ -1,0 +1,18 @@
+; WS2812 / NeoPixel LED driver (800 kbit/s, one data line).
+; Config: tick = 2 clocks (CLKDIV = 1 at 48 MHz, 41.7 ns), OUT MSB first, data = pin base.
+; Host protocol: queue 3 bytes per LED in the order the LEDs expect (G, R, B), as fast as the
+; FIFO accepts them. When the FIFO runs dry the line stays low; after 50 us the LEDs latch.
+; The host must stream about 100 kB/s, so its SPI port should run near clk / 8.
+;
+; Bit timing (spec +/-150 ns): 0 = 0.42 us high + 0.83 us low; 1 = 0.83 us high + 0.42 us low.
+; At a byte boundary the low phase is 3 ticks (125 ns) longer: 0.96 / 0.54 us, still in spec.
+.equ d 0
+
+        PIN  d, DRV0
+next:   PULL                 ; waits with the line low: a long wait latches the LEDs
+        SET  X, 7
+bit:    PIN  d, DRV1 [9]     ; t = 0:     high
+        PIN  d, OUT [9]      ; t = 0.42:  a 1 stays high, a 0 goes low
+        PIN  d, DRV0 [8]     ; t = 0.83:  low
+        JMP  X--, bit        ; t = 1.21:  next bit at 1.25 us
+        JMP  next

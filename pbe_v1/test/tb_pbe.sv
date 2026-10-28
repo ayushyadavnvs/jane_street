@@ -28,108 +28,7 @@ module tb_pbe;
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 
-  int errors = 0;
-  task automatic check(input bit ok, input string msg);
-    if (!ok) begin
-      errors++;
-      $display("  FAIL: %s", msg);
-    end
-  endtask
-
-  // ---------------- host SPI (mode 0) ----------------
-  task automatic spi_byte(input logic [7:0] tx, output logic [7:0] rx);
-    for (int i = 7; i >= 0; i--) begin
-      ui_in[2] = tx[i];
-      repeat (HOST_HALF) @(posedge clk);
-      ui_in[0] = 1;  // rising: both sides sample
-      rx[i] = uo_out[0];
-      repeat (HOST_HALF) @(posedge clk);
-      ui_in[0] = 0;
-    end
-  endtask
-
-  // One host port: a transaction holds it from CS_n low to CS_n high, so two host processes
-  // can share it (BUG-001). A ticket lock serves them in arrival order; a plain busy flag let
-  // the process that just released the port take it again at once and starve the other.
-  int host_next = 0, host_serving = 0;
-  task automatic cs(input bit level);
-    int ticket;
-    if (!level) begin
-      ticket = host_next++;
-      while (host_serving != ticket) @(posedge clk);
-    end
-    repeat (HOST_HALF) @(posedge clk);
-    ui_in[1] = level;
-    repeat (HOST_HALF) @(posedge clk);
-    if (level) host_serving++;
-  endtask
-
-  task automatic reg_write(input logic [6:0] addr, input logic [7:0] data);
-    logic [7:0] d;
-    cs(0);
-    spi_byte({1'b1, addr}, d);
-    spi_byte(data, d);
-    cs(1);
-  endtask
-
-  task automatic reg_read(input logic [6:0] addr, output logic [7:0] data);
-    logic [7:0] d;
-    cs(0);
-    spi_byte({1'b0, addr}, d);
-    spi_byte(8'h00, data);
-    cs(1);
-  endtask
-
-  task automatic load_program(input string file);
-    logic [15:0] img[128];
-    logic [7:0] d;
-    $readmemh(file, img);
-    reg_write(7'h06, 0);         // program memory pointer = word 0, high byte
-    cs(0);
-    spi_byte({1'b1, 7'h07}, d);  // burst into PM_DATA; the pointer advances per byte
-    for (int w = 0; w < 128; w++) begin
-      spi_byte(img[w][15:8], d);
-      spi_byte(img[w][7:0], d);
-    end
-    cs(1);
-  endtask
-
-  task automatic fifo_send(input int e, input logic [7:0] data);
-    logic [7:0] st;
-    do reg_read(7'h01, st); while (st[e*4+3]);  // TX full
-    reg_write(e ? 7'h26 : 7'h16, data);
-  endtask
-
-  task automatic fifo_recv(input int e, output logic [7:0] data);
-    logic [7:0] st;
-    int tries = 0;
-    do begin
-      reg_read(7'h01, st);
-      tries++;
-    end while (st[e*4+0] && tries < 400);  // RX empty
-    check(!st[e*4+0], $sformatf("engine %0d RX FIFO stayed empty", e));
-    reg_read(e ? 7'h26 : 7'h16, data);
-  endtask
-
-
-  // ---------------- engine-relative flags ----------------
-  // Engine e's FLAG n is physical flag (FLAG_BASE[e] + n) mod 8; by default engine 0 has
-  // flags 0-3 and engine 1 has flags 4-7. FLAG_SET (0x08) and FLAG_CLR (0x09) change single
-  // bits, so the host never overwrites a flag the other engine just changed.
-  function automatic int fphys(input int e, input int n);
-    return (e * 4 + n) % 8;
-  endfunction
-  task automatic flag_set(input int e, input int n);
-    reg_write(7'h08, 8'h01 << fphys(e, n));
-  endtask
-  task automatic flag_clear(input int e, input int n);
-    reg_write(7'h09, 8'h01 << fphys(e, n));
-  endtask
-  task automatic flag_get(input int e, input int n, output bit v);
-    logic [7:0] f;
-    reg_read(7'h04, f);
-    v = f[fphys(e, n)];
-  endtask
+  `include "tb_host.svh"
 
   // ---------------- independent UART monitor on pin 0 ----------------
   logic [7:0] uart_seen[$];
@@ -190,6 +89,8 @@ module tb_pbe;
   // ---------------- behavioural I2C peripheral at 0x50, SDA = pin 4, SCL = pin 5 ----------------
   // Register device: write [reg] [data...] stores bytes; reads return bytes from the pointer.
   // It holds SCL low for I2C_STRETCH clocks after bit 4 and bit 8 of every byte (clock stretching).
+  // SMBus PEC (i_pec_mode): it keeps its own CRC-8 (poly 0x07) over every byte since the last
+  // STOP, in both directions, and sends it as the third byte of a read (i_pec_corrupt flips a bit).
   localparam int SDA = 4, SCL = 5, I2C_STRETCH = 120;
   localparam logic [6:0] I2C_ADDR = 7'h50;
   localparam int I_IDLE = 0, I_ADDR = 1, I_REG = 2, I_WDATA = 3, I_RDATA = 4;
@@ -197,6 +98,16 @@ module tb_pbe;
   logic [7:0] i_ptr, i_sh;
   int i_st = I_IDLE, i_bit = 0, i_starts = 0, i_stops = 0, i_stretches = 0;
   bit i2c_en = 0, i_acking = 0;
+  bit i_pec_mode = 0, i_pec_corrupt = 0;
+  logic [7:0] i_pec = 0, i_pec_at_stop = 0;
+  int i_rd_count = 0;
+
+  // CRC-8 as SMBus defines it: poly x^8 + x^2 + x + 1, init 0, MSB first, no final XOR
+  function automatic logic [7:0] crc8(input logic [7:0] crc, input logic [7:0] b);
+    crc ^= b;
+    for (int i = 0; i < 8; i++) crc = crc[7] ? {crc[6:0], 1'b0} ^ 8'h07 : {crc[6:0], 1'b0};
+    return crc;
+  endfunction
 
   task automatic i_sda(input bit v);  // open drain: 0 pulls low, 1 releases
     ext_drive[SDA] = !v;
@@ -206,10 +117,13 @@ module tb_pbe;
   always @(negedge bus[SDA]) if (i2c_en && bus[SCL]) begin  // START
     i_st = I_ADDR;
     i_bit = 0;
+    i_rd_count = 0;
     i_starts++;
   end
   always @(posedge bus[SDA]) if (i2c_en && bus[SCL]) begin  // STOP
     i_st = I_IDLE;
+    i_pec_at_stop = i_pec;  // 0 when the message ended in its correct PEC
+    i_pec = 0;
     i_stops++;
   end
   always @(posedge bus[SCL]) if (i2c_en && i_st != I_IDLE) begin
@@ -219,6 +133,7 @@ module tb_pbe;
   end
   always @(negedge bus[SCL]) if (i2c_en && i_st != I_IDLE) begin
     if (i_bit == 8) begin
+      i_pec = crc8(i_pec, i_sh);  // the byte just sent or received
       i_acking = 1;
       case (i_st)
         I_ADDR:  if (i_sh[7:1] == I2C_ADDR) i_st = i_sh[0] ? I_RDATA : I_REG;
@@ -231,8 +146,12 @@ module tb_pbe;
     end else if (i_bit == 9) begin
       i_bit = 0;
       if (i_st == I_RDATA) begin
-        i_sh = i2c_mem[i_ptr];
-        i_ptr++;
+        if (i_pec_mode && i_rd_count == 2) i_sh = i_pec ^ {7'b0, i_pec_corrupt};
+        else begin
+          i_sh = i2c_mem[i_ptr];
+          i_ptr++;
+        end
+        i_rd_count++;
         i_sda(i_sh[7]);
       end else i_sda(1);
     end else if (i_st == I_RDATA && i_bit >= 1) begin
@@ -277,10 +196,6 @@ module tb_pbe;
     check(bus[SDA] && bus[SCL], "I2C: FLAG1 (STOP) cleared before the STOP finished");
 
   // host-side helpers for the i2c_ctrl program on engine 1
-  task automatic wait_tx_empty(input int e);
-    logic [7:0] st;
-    do reg_read(7'h01, st); while (!st[e*4+2]);
-  endtask
   // FLAG0 = START: happens when the next byte is queued.
   // FLAG1 = STOP: happens right away; wait until the engine clears the flag.
   task automatic i2c_cond(input logic [3:0] flag);
@@ -1026,6 +941,72 @@ module tb_pbe;
     ow_en_a = 0;
     ow_en_b = 0;
     i2c_en = 0;
+
+    // ===== Test 7: SMBus PEC =====
+    $display("Test 7: SMBus PEC: I2C controller (engine 1) with its CRC unit as CRC-8 (poly 0x07)");
+    begin
+      logic [7:0] seen, ack, pec, lo, hi, st, c;
+      string s;
+      s = "123456789";
+      c = 0;
+      for (int i = 0; i < 9; i++) c = crc8(c, s[i]);
+      check(c == 8'hF4, $sformatf("testbench CRC-8 of \"123456789\" is %02x, the standard says f4", c));
+
+      reg_write(7'h00, 8'b1100_0000);
+      reg_write(7'h04, 8'h00);
+      load_program("conc_image.hex");    // i2c_ctrl at word 0
+      reg_write(7'h03, 8'b0011_0000);
+      reg_write(7'h20, 17);              // E1: I2C fast mode, as in test 3
+      reg_write(7'h21, 0);
+      reg_write(7'h22, 4);
+      reg_write(7'h24, 2'b11);
+      reg_write(7'h25, 0);
+      reg_write(7'h29, 8'h07);           // CRC-8, poly 0x07
+      reg_write(7'h2A, 8'h00);
+      reg_write(7'h2B, 8'h87);           // 8 bits, init 0, plain output, fed by IN bits only
+      i2c_en = 1;
+      i_pec_mode = 1;
+      i_pec_corrupt = 0;
+      reg_write(7'h00, 8'b0010_0010);    // restart + run E1
+
+      // Write Word with PEC: [addr+W] [command 0x30] [0x12] [0x34] [PEC]
+      reg_write(7'h2F, 8'h01);           // restart the CRC for a new message
+      i2c_cond(1);
+      i2c_xfer(8'hA0, 8'h80, seen, ack); check(ack == 0, "SMBus: address+W not ACKed");
+      i2c_xfer(8'h30, 8'h80, seen, ack);
+      i2c_xfer(8'h12, 8'h80, seen, ack);
+      i2c_xfer(8'h34, 8'h80, seen, ack);
+      reg_read(7'h29, pec);              // the CRC unit's value is the PEC
+      c = crc8(crc8(crc8(crc8(0, 8'hA0), 8'h30), 8'h12), 8'h34);
+      check(pec == c, $sformatf("SMBus write: engine PEC %02x, expected %02x", pec, c));
+      i2c_xfer(pec, 8'h80, seen, ack); check(ack == 0, "SMBus: PEC byte not ACKed");
+      i2c_cond(2);
+      check(i_pec_at_stop == 0, $sformatf("SMBus write: the device's CRC over the message and PEC is %02x", i_pec_at_stop));
+      check(i2c_mem[8'h30] === 8'h12 && i2c_mem[8'h31] === 8'h34, "SMBus write: device did not store the word");
+
+      // Read Word with PEC: [addr+W] [0x30] Sr [addr+R] [low] [high] [PEC], then once with a bad PEC
+      for (int bad = 0; bad < 2; bad++) begin
+        i_pec_corrupt = bad;
+        reg_write(7'h2F, 8'h01);
+        i2c_cond(1);
+        i2c_xfer(8'hA0, 8'h80, seen, ack);
+        i2c_xfer(8'h30, 8'h80, seen, ack);
+        i2c_cond(1);
+        i2c_xfer(8'hA1, 8'h80, seen, ack); check(ack == 0, "SMBus: address+R not ACKed");
+        i2c_xfer(8'hFF, 8'h00, lo, ack);
+        i2c_xfer(8'hFF, 8'h00, hi, ack);
+        i2c_xfer(8'hFF, 8'h80, pec, ack);  // NACK the PEC: last byte
+        i2c_cond(2);
+        reg_read(7'h2F, st);
+        check(lo == 8'h12 && hi == 8'h34, $sformatf("SMBus read word %02x%02x", hi, lo));
+        check(st[1] == !bad, $sformatf("SMBus read with %s PEC %02x: CRC ok = %0d",
+                                       bad ? "a bad" : "the right", pec, st[1]));
+      end
+      $display("  Write Word and Read Word with PEC; the engine computes the PEC and checks the device's");
+      i2c_en = 0;
+      i_pec_mode = 0;
+      reg_write(7'h2B, 8'h00);
+    end
 
     if (errors == 0) begin
       $display("PASS");

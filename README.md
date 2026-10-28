@@ -5,7 +5,7 @@ up to 6×4 tiles, due 18 January 2027).
 
 | Folder | What |
 |---|---|
-| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity and timeout hardware; UART, SPI, I2C, 1-Wire and Modbus RTU programs, all tested |
+| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity and timeout hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU and WS2812, all tested |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 

@@ -9,7 +9,7 @@ mark the old one **Changed** instead of deleting it.
 
 | Version | Folder | Protocols |
 |---|---|---|
-| v1 | `pbe_v1/` | UART, SPI, I2C, 1-Wire, Modbus RTU; CRC unit, parity bit, WAIT timeout |
+| v1 | `pbe_v1/` | UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812; CRC unit, parity bit, WAIT timeout |
 | v2 (retired, D28) | branch `archive/v2-usb` | v1 plus low-speed USB; lessons in `docs/USB_NOTES.md` |
 
 ## Changes forced by new protocols
@@ -31,6 +31,9 @@ mark the old one **Changed** instead of deleting it.
 | Modbus RTU, 1-Wire | Host had to compute CRC and parity; 3.5-character silence limited Modbus to 19200 baud | General CRC unit, parity bit, WAIT timeout on opcode 111 / pin action 6 | D6, D26, D29–D31 |
 | 1-Wire (strong pull-up) + I2C at once | 35 + 34 words did not fit the shared 64-word memory; Modbus alone is 56 | 128-word memory, jumps relative to `START_PC` | D4, D13 |
 | Modbus 8N2, 1-Wire inverted CRC-16 | `OUTPAR` always sent parity; "CRC ok = zero" cannot check inverted CRCs | No-parity bit in `LINE_CFG`; CRC value readable by the host | D29, D30 |
+| WS2812, SPI peripheral | Nothing: both are programs on the existing instructions (the SPI peripheral uses the timeout vector to see the end of a transaction) | — | D34, D35 |
+| SMBus PEC | The I2C controller fed its ACK bits into the CRC, but a PEC covers bytes only | The ACK slot's `IN` is marked `NOCRC` (program change) | D36, BUG-022 |
+| I2C target | START/STOP are SDA edges while SCL is high: one engine cannot wait on two pins at once | Both engines run it, sharing flags: one watches for START/STOP, one shifts bits (no hardware change) | D37 |
 
 ---
 
@@ -486,3 +489,130 @@ mark the old one **Changed** instead of deleting it.
   character). The data is then damaged either way; the point is that the host finds out.
 - **Alternatives:** drop the byte and keep going (keeps timing, loses data silently); deeper
   FIFOs (area; v2 needed 16 bytes for USB and paid ~32,800 µm²).
+
+## D34. WS2812 (NeoPixel) LED driver: a program, timed by delays
+
+- **Chosen:** `programs/ws2812.pbe`, 8 words, tick = 2 clocks (41.7 ns at 48 MHz). Each bit is
+  three pin instructions: `DRV1 [9]` (0.42 µs), `OUT [9]` (a 1 stays high for another 0.42 µs, a
+  0 goes low), `DRV0 [8]`, and `JMP X--`: 30 ticks = 1.25 µs. High times are 0.42 / 0.83 µs
+  (datasheet 0.4 / 0.8 µs ± 150 ns); the `PULL`/`SET` at a byte boundary make that bit's low phase
+  125 ns longer, still in spec. The engine waits in `PULL` with the line low, so a frame ends
+  (the LEDs latch after 50 µs low) simply when the host stops sending.
+- **Host requirement:** 800 kbit/s is 100 kB/s with a 4-byte FIFO (40 µs of data). The host
+  bursts the bytes into the FIFO and pauses while the TX-full pin (`uo_out[6]`) is high. At a
+  host SCK of clk/16 a byte takes 2.7 µs, against 10 µs on the LED line. An underrun stretches
+  a low phase out of spec, and one of 50 µs latches the LEDs mid-frame.
+- **Alternatives:** a hardware PWM or one-shot pulse unit (WS2812-specific: rejected, D28); one
+  instruction per bit with the delay chosen by the data (no instruction reads OSR into the delay
+  field).
+- **Tested (Test 8):** a decoder measures every high and low against the datasheet and rebuilds
+  the bytes: 2 frames of 5 LEDs. Mutations caught: `DRV1 [4]` (high too short) and `DRV0 [3]`
+  (low too short).
+
+## D35. SPI peripheral (device): a program; the timeout vector ends a transaction
+
+- **Chosen:** `programs/spi_periph.pbe`, 21 words, mode 0, CLKDIV 0. It waits for CS low and puts
+  bit 7 on MISO, then loops: wait SCLK rise → `IN` MOSI → wait fall → `OUT` MISO. A reply byte the
+  host has not queued goes out as 0xFF (`SET OSR, 0xFF` and `JMP TX_EMPTY`).
+- **End of transaction:** the engine is blocked in `WAIT sclk, RISE` when CS rises, and a
+  `WAIT` cannot watch two pins. The timeout vector (D31) breaks the wait: after `TIMEOUT` ticks
+  with no clock, the routine at word 1 checks CS (`JMP PIN_HI`, the JMP pin is CS). If CS is high,
+  it releases MISO and waits for the next select; if CS is still low (the controller paused), it
+  goes back to waiting for the clock.
+- **Limits (documented in the program):**
+  - SCLK up to 2 MHz at 48 MHz. After the 8th rising edge the engine needs about 10 clocks to
+    store the byte and load the next reply before the falling edge. Tested at 2 MHz.
+  - The first SCLK edge comes at least 250 ns after CS falls.
+  - A reply byte must be queued before the previous byte's last rising edge.
+  - CS must stay high for at least `TIMEOUT` ticks between transactions. MISO is released
+    within `TIMEOUT` ticks of CS rising, not at once: on a shared MISO line that gap matters.
+  - `TIMEOUT` must be longer than the longest SCLK high phase.
+- **Alternative for later:** a general "abort on pin edge" vector (like the timeout vector, but
+  fired by an edge on a chosen pin). It would end SPI transactions at once and also serve I2C
+  target STOP detection and UART break. That's hardware, so it waits for a second protocol that
+  needs it badly.
+- **Tested (Test 9):** a mode-0 controller model at 2 MHz that samples MISO just before each
+  rising edge, three transactions: replies queued, 0xFF defaults (also for the very first byte),
+  and a pause longer than the timeout inside a transaction. A monitor checks that MISO changes
+  only while SCLK is low. Mutations caught: either `SET OSR, 0xFF` removed (the first one only
+  after BUG-026), timeout routine always ending the transaction, MISO never released.
+
+## D36. SMBus PEC: the I2C controller plus the CRC unit as CRC-8
+
+- **Chosen:** no new hardware and one program change. The CRC unit is set to CRC-8, poly 0x07,
+  init 0, plain output (`CRC_CFG` 0x87), fed by `IN` bits only. The I2C controller reads back
+  every bit it sends, so `IN` sees each byte on the bus in both directions, including addresses.
+  The ACK slot's `IN` is marked `NOCRC`, because a PEC covers bytes, not ACK bits (BUG-022).
+- **Host protocol:** restart the CRC (`STATUS` write bit 0) at the start of a message, not at a
+  repeated START: the PEC covers both address bytes.
+  - Write: after the last byte, read the CRC value (+9) and send it as the PEC.
+  - Read: receive the PEC like a data byte. `STATUS` bit 1 ("CRC ok") is then set only if it
+    was right.
+- **Alternatives:** the host computes the PEC (works, but costs host time per byte); feeding the
+  CRC from `OUTOD` too (would count each bit twice, since the program both drives and reads it).
+- **Tested (Test 7, in `tb_pbe`):**
+  - The device model computes its own PEC. The testbench's CRC-8 is first checked against the
+    standard check value (0xF4 for "123456789").
+  - Write Word with PEC: the engine's PEC must equal the model's, and the device's CRC over the
+    message plus the PEC must be 0.
+  - Read Word with PEC: once with the right PEC (CRC ok = 1) and once with a corrupted one
+    (CRC ok = 0).
+
+## D37. I2C target: two engines share the job through flags
+
+- **Chosen:** `programs/i2c_target.pbe` (58 words, bit engine) on one engine and
+  `programs/i2c_watch.pbe` (8 words) on the other. Both engines use the same pins and the same
+  `FLAG_BASE`, so they see the same four flags (D27).
+  - The watcher waits for SDA edges and checks SCL. A fall while SCL is high sets FLAG0
+    (START); a rise while SCL is high sets FLAG3 (STOP, with IRQ). It drives nothing.
+  - The bit engine shifts the address and data bits on SCL edges. After each SCL fall it checks
+    FLAG0, so a repeated START restarts the address phase.
+- **Why two engines:** START/STOP are SDA edges while SCL is high. A single engine blocked in
+  `WAIT scl` cannot see an SDA edge. The alternatives each need hardware:
+  - a `WAIT` on two pins (no free argument bits, D32);
+  - a pin-change flag;
+  - the abort-on-edge vector of D35.
+
+  The cost is that the I2C target uses both engines, so nothing else can run beside it.
+- **The host decides, the engine stretches SCL:**
+  - After the address byte, the engine holds SCL low, pushes the address and sets FLAG2 (with
+    IRQ). The host ACKs by clearing FLAG2 (the engine waits in `WAIT FLAG 2, LOW`). It NACKs by
+    restarting the engine, which releases both lines and waits for the next START.
+  - For reads, the engine holds SCL until the host has queued the next byte.
+  - I2C allows any amount of clock stretching, so host latency only slows the bus.
+  - The host can therefore answer any address, several addresses or the general call; there is
+    no address-comparator hardware.
+- **Rejected in review (first draft):** a NACK queued as a byte. In that draft the engine then
+  decided "did we ACK?" by reading SDA in the ACK slot. On a bus with several targets, another
+  device's ACK pulls SDA low, and the engine would have joined someone else's transfer. Test 10
+  now covers this.
+- **Timing:**
+  - SDA changes at least 300 ns after SCL falls. `WAIT scl, FALL [12]` covers the I2C hold rule:
+    a transmitter must bridge SCL's undefined falling region.
+  - SDA is set up at least 333 ns before the engine releases a stretched SCL (`[15]`; standard
+    mode needs 250 ns).
+  - Measured: hold ≥ 333 ns, setup ≥ 333 ns.
+- **Host rule:** read FLAGS *after* draining the RX FIFO. The engine sets FLAG2 one clock after
+  pushing an address, so if FLAG2 was still clear, the drained bytes were all data.
+- **Tested (Test 10):** a fast-mode controller model that supports stretching:
+  - a write of a pointer plus five bytes (more than the RX FIFO holds);
+  - a read of three bytes after a repeated START;
+  - another device's address, ACKed by that device and followed by two bytes: our chip must not
+    touch SDA and must pass nothing to the host;
+  - a read after that.
+
+  Monitors check that SDA never changes while SCL is high, the hold and setup times, and that
+  stretching happened. Mutations caught: the watcher's START flag removed, the repeated-START
+  check removed, the hold delay removed (104 ns), the setup delay cut (83 ns).
+
+## D38. A second end-to-end testbench
+
+- **Chosen:** tests 8–10 live in `test/tb_proto.sv`; the host-port helpers (SPI framing, register
+  access, FIFOs, flags) moved to `test/tb_host.svh`, which both testbenches include.
+  `make test` runs all three testbenches; `make test-proto` runs only the new one (3 s, against
+  ~2 min for `tb_pbe`).
+- **Why:** `tb_pbe.sv` had grown past 1,100 lines and two minutes per run; the new protocols use
+  their own pin models and need nothing from the old tests' state.
+- **Lint step:** `make test` first fails on Icarus's "Static variable initialization" warning
+  (BUG-023).
+

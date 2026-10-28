@@ -1,0 +1,14 @@
+; I2C START/STOP watcher, runs beside i2c_target.pbe on the other engine.
+; Config: CLKDIV = 0, JMP_PIN = scl (1), the same pins and FLAG_BASE as the bit engine, drives nothing.
+; A START or STOP is an SDA edge while SCL is high; a data bit changes SDA only while SCL is low.
+.equ sda 0
+.equ scl 1
+
+w:      WAIT sda, FALL
+        JMP  PIN_LO, w2      ; SCL low: just data
+        FLAG 0, SET          ; START or repeated START
+w2:     WAIT sda, RISE
+        JMP  PIN_LO, w
+        FLAG 3, SET          ; STOP
+        FLAG 3, IRQ
+        JMP  w

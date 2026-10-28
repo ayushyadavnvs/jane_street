@@ -14,15 +14,18 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 4 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 128-word hex image; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller, I2C controller, 1-Wire controller, Modbus RTU master |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
+| `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
+| `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
 ## Run
 
 ```sh
-make test                                  # Icarus Verilog
+make test                                  # Icarus Verilog, all testbenches
+make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
 make synth                                 # area, IHP library in ../ihp_lib
 make timing                                # critical path, slow corner
 ```
@@ -97,6 +100,47 @@ the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tic
 4 ticks and high for 3. At 48 MHz: `CLKDIV` = 17 for fast mode (381 kHz), 68 for standard mode
 (99 kHz).
 
+**SMBus PEC:** set the engine's CRC unit to CRC-8: `CRC_POLY` = 0x07, `CRC_CFG` = 0x87 (8 bits,
+init 0, fed by `IN` bits, which see every byte on the bus; ACK bits are `NOCRC`). Restart the
+CRC (`STATUS` write bit 0) before a message's first START, not at a repeated START. To send the
+PEC, read the CRC value (+9) after the last byte and send it. After receiving a PEC, `STATUS`
+bit 1 (CRC ok) says whether it was right.
+
+## I2C target host protocol (`programs/i2c_target.pbe` + `programs/i2c_watch.pbe`)
+
+Uses both engines on the same two pins: the bit engine (owns the pins, `JMP_PIN` = 0) and the
+watcher (`JMP_PIN` = 1, drives nothing), both `CLKDIV` 0, both with the same `FLAG_BASE`.
+sda = pin base, scl = base + 1. The watcher sets FLAG0 on a START and FLAG3 (with IRQ) on a STOP.
+The bit engine holds SCL low (clock stretching) whenever it needs the host:
+
+- **FLAG2 with a byte in the RX FIFO:** the last byte is an address (7 bits + R/W). ACK: clear
+  FLAG2. NACK: restart the bit engine, then clear FLAG2. The host matches addresses itself, so
+  any address, several, or the general call work.
+- **FLAG2 with the RX FIFO empty:** a read needs its next byte. Queue it, then clear FLAG2.
+- **Bytes the controller writes** arrive in the RX FIFO and are ACKed by the engine (it stretches
+  SCL while the FIFO is full).
+- Read `FLAGS` *after* draining the RX FIFO: if FLAG2 was still clear, no address was drained.
+
+Up to fast mode plus. SDA changes ≥ 300 ns after SCL falls and ≥ 333 ns before the engine lets
+go of SCL.
+
+## SPI peripheral host protocol (`programs/spi_periph.pbe`)
+
+Mode 0, MSB first. Pins: sclk = pin base, mosi = +1, miso = +2, cs = +3 (active low). Settings:
+`CLKDIV` 0, `JMP_PIN` = 3, `LINE_CFG` = 0x01 (timeout routine at word 1), `TIMEOUT` a little
+longer than the longest SCLK high phase (64 clocks in the test). Queue reply bytes before they
+are due (before the previous byte's last rising edge); with nothing queued the reply is 0xFF.
+Every byte the controller sends arrives in the RX FIFO. SCLK up to 2 MHz at 48 MHz. The first
+SCLK edge must come ≥ 250 ns after CS falls. CS must stay high ≥ `TIMEOUT` ticks between
+transactions: that is how the engine sees the end, and when it releases MISO.
+
+## WS2812 host protocol (`programs/ws2812.pbe`)
+
+`CLKDIV` = 1 at 48 MHz (tick 41.7 ns), OUT MSB first, data = pin base. Queue 3 bytes per LED in
+the order the LEDs expect (G, R, B), keeping the FIFO from running dry: burst-write the FIFO
+register and pause while the TX-full pin (`uo_out[6]` for engine 0) is high. When the host
+stops, the line stays low and the LEDs latch after 50 µs.
+
 ## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)
 
 Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pull-up.
@@ -154,10 +198,23 @@ for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up
   6. Two flag-using protocols at once: a 1-Wire Search ROM on engine 0 while engine 1 runs I2C
      write/read rounds, from two host processes sharing the host port. The 1-Wire program sits
      at word 64, so this also checks jumps relative to `START_PC`.
-  - The testbench runs at 48 MHz, the planned clock.
+  7. SMBus PEC: Write Word and Read Word against a device model that computes its own PEC;
+     the engine's PEC must match, and a corrupted PEC must be reported.
+  8. WS2812 (`tb_proto`): 2 frames of 5 LEDs; a decoder checks every high and low phase against
+     the datasheet (± 150 ns) and rebuilds the bytes.
+  9. SPI peripheral (`tb_proto`): a 2 MHz mode-0 controller model; replies queued, 0xFF defaults,
+     a pause inside a transaction, MISO released after CS rises and changing only while SCLK is
+     low.
+  10. I2C target (`tb_proto`): a fast-mode controller model; a 5-byte write (more than the FIFO
+     holds), a 3-byte read after a repeated START, another device's transfer ignored, and SDA
+     hold (≥ 300 ns) and setup (≥ 250 ns) times measured.
+  - The testbenches run at 48 MHz, the planned clock.
   - Unit test: a restart in the same cycle as an instruction cancels its side effects.
   - Shortening the 1-Wire write-0 pulse, never turning the RS-485 driver off, a dead `OUTPAR`,
     a CRC check that always passes, or a timeout that never fires each make the tests fail.
+    So do 10 mutations of the new programs (WS2812 pulse widths; SPI default reply, timeout
+    routine, MISO release; I2C target START flag, repeated START, hold and setup delays) and
+    the ACK bit feeding the PEC.
 - Area, Yosys with the IHP sg13g2 typical library: 262,618 µm² of cell area. 6×4 tiles are
   1289.28 × 710.64 µm = 916,229 µm², so cells fill about 29%. The 128-word program memory
   (flip-flops) is most of it; a latch-based memory could save roughly 70,000 µm².

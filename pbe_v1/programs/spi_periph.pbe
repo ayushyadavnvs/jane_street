@@ -1,0 +1,34 @@
+; SPI peripheral (device), mode 0 (CPOL 0, CPHA 0), MSB first.
+; Config: CLKDIV = 0, OUT and IN MSB first, JMP_PIN = cs (3), LINE_CFG = 1 (timeout routine is
+;   word 1), TIMEOUT = a few SCLK periods with no clock, e.g. 480 ticks (10 us at 48 MHz).
+; Pins: sclk = pin base, mosi = +1, miso = +2, cs = +3 (active low).
+; Host protocol: queue reply bytes before the controller clocks them out (a byte must be in the
+;   TX FIFO when its first bit is due); with nothing queued the reply is 0xFF. Every byte the
+;   controller sends arrives in the RX FIFO. MISO is released while CS is high.
+; Speed: SCLK up to about 2 MHz at 48 MHz (the engine needs ~10 clocks after the 8th rising edge).
+.equ sclk 0
+.equ mosi 1
+.equ miso 2
+.equ cs   3
+
+        JMP  idle
+tmo:    JMP  PIN_HI, idle    ; word 1: no clock for a while. CS high: the transaction is over
+        JMP  bit             ; still selected: keep waiting for the clock
+idle:   PIN  miso, REL       ; not selected: let go of MISO
+        WAIT cs, LOW
+        SET  OSR, 0xFF       ; reply 0xFF if the host queued nothing
+        JMP  TX_EMPTY, first
+        PULL
+first:  SET  X, 7
+        PIN  miso, OUT       ; bit 7 on MISO before the first rising edge
+bit:    WAIT sclk, RISE      ; both sides sample on the rising edge
+        IN   mosi
+        JMP  X--, mid
+        PUSH                 ; 8 bits from the controller
+        SET  OSR, 0xFF       ; next reply ready before the falling edge
+        JMP  TX_EMPTY, last
+        PULL
+last:   SET  X, 7
+mid:    WAIT sclk, FALL      ; shift out on the falling edge
+        PIN  miso, OUT
+        JMP  bit

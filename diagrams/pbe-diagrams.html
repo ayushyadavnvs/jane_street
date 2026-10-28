@@ -91,7 +91,7 @@ tr.added td:first-child { color: var(--new); }
   <header>
     <div class="eyebrow">Jane Street protocol emulator ASIC · pbe_v1</div>
     <h1>Programmable Bit Engine</h1>
-    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI, I2C, 1-Wire and Modbus RTU are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit and a WAIT timeout, and sees its own window of 8 shared flags. This matches the RTL as built: 128-word program memory (each engine jumps within its own 64-word window from its START_PC), 4-byte FIFOs, about 29% of the 6×4 tile area.</p>
+    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI (controller and peripheral), I2C (controller, with SMBus PEC, and target), 1-Wire, Modbus RTU and WS2812 are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit and a WAIT timeout, and sees its own window of 8 shared flags. This matches the RTL as built: 128-word program memory (each engine jumps within its own 64-word window from its START_PC), 4-byte FIFOs, about 29% of the 6×4 tile area.</p>
   </header>
 
   <section>

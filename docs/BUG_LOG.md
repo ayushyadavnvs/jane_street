@@ -33,6 +33,11 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-019 | Program (Modbus) / RTL | Rewriting Modbus for `OUTPAR` dropped 8N2 support | Completeness review | Fixed |
 | BUG-020 | Testbench | Tests ran at 50 MHz, not the planned 48 MHz | Completeness review | Fixed |
 | BUG-021 | Testbench | `strong` is a reserved word; the 200 ms time limit looked like a hang | Bring-up of this round | Fixed |
+| BUG-022 | Program (I2C) | ACK bits fed the CRC, so the SMBus PEC came out wrong | Test 7, written first | Fixed |
+| BUG-023 | Testbench | Variable initializers inside procedural blocks run once, at time 0 | Icarus warning hidden by a filter; a false failure | Fixed, lint step |
+| BUG-024 | Tooling | Icarus 12 aborts on a too-wide `push_back` and on a bit-select as an `output` argument | Bring-up of `tb_proto` | Worked around |
+| BUG-025 | Testbench | I2C controller model never sent a repeated START | First Test 10 run | Fixed |
+| BUG-026 | Testbench | SPI peripheral test never had an empty TX FIFO at CS fall | Mutation check | Fixed |
 
 ---
 
@@ -577,4 +582,120 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   | The 1-Wire device model's new port `strong` broke compilation: it is a SystemVerilog keyword (as `pulldown` and `before` were in BUG-006) | Renamed `hard_hi` |
   | The two-protocol test timed out. A progress probe showed it was running normally; the new 1-Wire and Modbus checks had pushed it past the 200 ms simulated-time limit (it started at 168.6 ms) | Limit raised to 400 ms |
 - **Lesson:** before treating a timeout as a hang, check whether the test is still making progress.
+
+## BUG-022 — I2C controller fed its ACK bits into the CRC
+
+- **Where:** `programs/i2c_ctrl.pbe`.
+- **Found by:** Test 7 (SMBus PEC), written before the fix.
+- **Cause:** every `IN` feeds the CRC unit when `CRC_CFG[7]` is set, including the one that
+  samples the ACK slot. An SMBus PEC covers bytes only, so each ACK bit (a 0) corrupted it. No
+  earlier test used the CRC unit with I2C.
+- **Before:**
+  ```
+          WAIT scl, HIGH
+          IN   sda
+          PIN  scl, DRV0 [1]
+          PUSH                 ; 0 = ACK, 1 = NACK
+  ```
+- **After:**
+  ```
+          WAIT scl, HIGH
+          IN   sda, NOCRC      ; the ACK bit is not part of an SMBus PEC
+          PIN  scl, DRV0 [1]
+          PUSH                 ; 0 = ACK, 1 = NACK
+  ```
+- **Test:** Test 7 in `tb_pbe.sv`.
+  - Before (old program, new test):
+    ```
+    FAIL: SMBus write: engine PEC 2c, expected ef
+    FAIL: SMBus write: the device's CRC over the message and PEC is 47
+    FAIL: SMBus read with the right PEC 88: CRC ok = 0
+    ```
+  - After: passes; the corrupted-PEC read still reports CRC ok = 0.
+
+## BUG-023 — Declaration initializers in procedural blocks run only once
+
+- **Where:** `test/tb_proto.sv` (new code), and one harmless case in `test/tb_pbe.sv`.
+- **Cause:** in SystemVerilog, a variable declared inside a `begin`/`end` of an `initial` or
+  `always` block is static, and its initializer runs once at time 0, not each time the block
+  runs.
+  - `realtime low = $realtime - ws_fall;` in the WS2812 decoder: caught when reading the code
+    before the first run.
+  - `int bytes_before = tgt_bytes;` in Test 10: produced a false failure. Icarus prints
+    `warning: Static variable initialization requires explicit lifetime`, but the build's output
+    filter (which hides Icarus's many "sorry: constant selects" notes) hid it too, the same
+    trap as BUG-005.
+- **Before:**
+  ```systemverilog
+  int bytes_before = tgt_bytes;   // runs at time 0: always 0
+  ```
+- **After:**
+  ```systemverilog
+  int bytes_before;
+  bytes_before = tgt_bytes;  // not an initializer: that would run once, at time 0
+  ```
+  plus a lint step in the Makefile, run first by `make test` and `make test-proto`:
+  ```make
+  LINT = cd test && for tb in tb_engine_restart tb_proto tb_pbe; do \
+  	  if iverilog -g2012 -o /dev/null $$tb.sv $(addprefix ../,$(SRC)) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
+  ```
+- **Test:**
+  - Before: `FAIL: I2C target passed 7 bytes of another device's transaction to the host`. The 7
+    bytes were all from the earlier transactions.
+  - After: passes. The lint step was checked against a file with a static initializer: it fails.
+
+## BUG-024 — Icarus 12 aborts on two testbench constructs
+
+- **Where:** `test/tb_proto.sv` (Icarus Verilog 12.0).
+- **Symptoms and fixes:**
+
+  | Construct | Icarus | Workaround |
+  |---|---|---|
+  | `exp.push_back(8'h10 * led + frame)`: a 32-bit value pushed into a queue of bytes; also `ws_bits.push_back(ws_last)` (1 bit into 8) | `vthread.cc:520: pop_value: Assertion 'value.size() == wid' failed` | Cast to the element width: `push_back(8'(...))` |
+  | `ic_bit(1, b[i])`: a bit-select of an automatic variable as an `output` argument | Segmentation fault | Pass a temporary, then `b[i] = r` |
+
+  Two more changes were made as a precaution while hunting the crashes and were not confirmed
+  as causes: a queue `pop_front()` passed straight as a task argument now goes through a
+  temporary, and the 1-bit queue became 8 bits wide.
+- **How it was found:** the simulation died with no output (lost in the buffer). A run under
+  `stdbuf -o0` and a copy of the testbench with a progress `$display` after each step located
+  each crash.
+- **Test:** `make test-proto` runs to `PASS`.
+
+## BUG-025 — I2C controller model never sent a repeated START
+
+- **Where:** `test/tb_proto.sv`, task `ic_start`.
+- **Found by:** the first run of Test 10: reads after a repeated START returned `ff ff ff`, and
+  the host saw only 3 of 4 address ACKs. A trace showed no START on the bus at that point: the
+  target had correctly taken the read address `0x85` as a data byte.
+- **Cause:** `ic_start` tested `bus[1]` (SCL) to decide between START and repeated START, in the
+  same time step that `ic_bit` had just pulled SCL low. The wired-AND net had not updated yet,
+  so the model saw SCL high and skipped raising SCL for the repeated START.
+- **Before:**
+  ```systemverilog
+  task automatic ic_start;  // START, or repeated START when SCL is low
+    if (!bus[1]) begin
+  ```
+- **After:**
+  ```systemverilog
+  task automatic ic_start;  // START, or repeated START when SCL is low
+    // Test our own drive, not bus[1]: right after ic_scl(0) the net has not updated yet.
+    if (ext_drive[1]) begin
+  ```
+- **Test:**
+  - Before: `FAIL: I2C target read ff ff ff, expected ad be ef`.
+  - After: passes. The mutation that removes the target's repeated-START check (`JMP FLAG0,
+    start` in the write loop) now fails it.
+
+## BUG-026 — SPI peripheral test missed the "nothing queued at select" case
+
+- **Where:** `test/tb_proto.sv`, Test 9.
+- **Found by:** mutation check. Removing the first `SET OSR, 0xFF` in `spi_periph.pbe` (the
+  default reply when CS falls with an empty TX FIFO) still passed. Every transaction in the test
+  queued a reply before selecting, so only the mid-transaction default was tested.
+- **Fix:** a third transaction with nothing queued, which expects `ff ff`.
+- **Test:**
+  - Before: that mutation ran with `0 FAIL lines, exit 0`.
+  - After: the mutation fails with `FAIL: SPI peripheral with nothing queued replied fe ff,
+    expected ff ff`, and the unmodified program passes.
 

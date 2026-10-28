@@ -1,0 +1,76 @@
+; I2C target (device), bit engine. Runs with i2c_watch.pbe on the other engine.
+; Config: CLKDIV = 0, OUT and IN MSB first, JMP_PIN = sda (0), both engines with the same
+;   FLAG_BASE so they share flags, this engine owning the two pins.
+; Pins: sda = pin base, scl = +1 (open drain, pull-ups on the bus).
+; Flags: FLAG0 = START seen (set by the watcher), FLAG1 = this transaction is a read (internal),
+;   FLAG2 = the host must act (with IRQ), FLAG3 = STOP seen (set by the watcher, with IRQ).
+;
+; The engine holds SCL low (clock stretching, which I2C allows) until the host has answered:
+;   FLAG2 with a byte in the RX FIFO: the last byte is an address (7 bits + R/W).
+;     ACK: clear FLAG2.  NACK: restart this engine, then clear FLAG2.
+;   FLAG2 with the RX FIFO empty: a read needs its next byte. Queue it, then clear FLAG2.
+;   Bytes the controller writes arrive in the RX FIFO and are ACKed by the engine.
+;   Read FLAGS after draining the RX FIFO: if FLAG2 was still clear, no address was drained.
+; Timing at 48 MHz: SDA changes >= 300 ns after SCL falls (data hold, [12]) and >= 333 ns
+;   before this engine lets go of SCL (data setup, [15]). Up to fast mode plus (1 MHz).
+.equ sda 0
+.equ scl 1
+
+        PIN  sda, REL
+        PIN  scl, REL
+idle:   JMP  FLAG0, start    ; wait for a START from the watcher
+        JMP  idle
+start:  FLAG 0, CLR
+        PIN  sda, REL
+        SET  X, 6
+abit:   WAIT scl, RISE       ; address bits 7..1
+        IN   sda
+        WAIT scl, FALL
+        JMP  FLAG0, start    ; repeated START: begin again
+        JMP  X--, abit
+        WAIT scl, RISE       ; bit 0: R/W
+        IN   sda
+        FLAG 1, CLR
+        JMP  PIN_LO, wmode   ; SDA still shows R/W while SCL is high
+        FLAG 1, SET          ; a read
+wmode:  WAIT scl, FALL [12]
+        PIN  scl, DRV0       ; hold SCL low while the host decides
+        PUSH                 ; the address byte
+        FLAG 2, SET
+        FLAG 2, IRQ
+        WAIT FLAG 2, LOW     ; the host ACKs by clearing FLAG2 (or NACKs by restarting us)
+        PIN  sda, DRV0 [15]  ; ACK
+        PIN  scl, REL
+        WAIT scl, RISE
+        WAIT scl, FALL [12]
+        JMP  FLAG1, rd
+        PIN  sda, REL        ; write: receive bytes
+wbyte:  SET  X, 7
+wbit:   WAIT scl, RISE
+        IN   sda
+        WAIT scl, FALL [12]  ; after a STOP the engine waits here until the next START
+        JMP  FLAG0, start
+        JMP  X--, wbit
+        PIN  scl, DRV0       ; hold SCL while the byte goes to the host (also if the FIFO is full)
+        PUSH
+        PIN  sda, DRV0 [15]  ; ACK
+        PIN  scl, REL
+        WAIT scl, RISE
+        WAIT scl, FALL [12]
+        PIN  sda, REL
+        JMP  wbyte
+rd:     PIN  scl, DRV0       ; read: hold SCL until the host queues the next byte
+        FLAG 2, SET
+        FLAG 2, IRQ
+        PULL
+        SET  X, 7
+rbit:   PIN  sda, OUTOD [15]
+        PIN  scl, REL
+        WAIT scl, RISE
+        WAIT scl, FALL [12]
+        JMP  X--, rbit
+        PIN  sda, REL        ; the controller ACKs or NACKs
+        WAIT scl, RISE
+        JMP  PIN_HI, idle    ; NACK: that was the last byte
+        WAIT scl, FALL [12]
+        JMP  rd

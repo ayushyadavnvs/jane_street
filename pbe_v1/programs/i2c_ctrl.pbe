@@ -1,5 +1,6 @@
 ; I2C controller: START, repeated START, STOP, ACK/NACK, clock stretching.
 ; Config: OUT and IN MSB first; sda = pin base + 0, scl = pin base + 1 (both need pull-ups).
+; SMBus PEC: set the CRC unit to CRC-8 poly 0x07 (CRC_CFG 0x87); data bits feed it, ACK bits do not.
 ; Tick = 1/7 of the SCL period: SCL is low 4 ticks, high 3 (I2C needs low longer than high).
 ; Fast mode (400 kHz) at 48 MHz: CLKDIV = 17. Standard mode (100 kHz): CLKDIV = 68.
 ;
@@ -30,7 +31,7 @@ bit:    PIN  sda, OUTOD      ; change SDA only while SCL is low
         PIN  sda, OUTOD
         PIN  scl, REL
         WAIT scl, HIGH
-        IN   sda
+        IN   sda, NOCRC      ; the ACK bit is not part of an SMBus PEC
         PIN  scl, DRV0 [1]
         PUSH                 ; 0 = ACK, 1 = NACK
         JMP  idle
