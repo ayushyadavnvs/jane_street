@@ -1,53 +1,78 @@
-; Modbus RTU over RS-485, half duplex, up to 19200 baud.
+; Modbus RTU master over RS-485, half duplex, any baud rate.
+; Uses the engine's CRC unit, parity bit and timeout.
+;
 ; Config: tick = 1/8 bit (CLKDIV = clk / (8 * baud) - 1), OUT and IN LSB first, JMP_PIN = rx.
+;   CRC_POLY = 0x8005, CRC_CFG = 0xFF (16 bits, init all ones, reversed output, fed by OUT and IN)
+;   LINE_CFG = 1 (timeout jumps to word 1; even parity) or 0x81 for odd parity
+;   TIMEOUT  = end-of-frame silence in ticks, + 9: 3.5 characters (317) up to 19200 baud,
+;              1.75 ms above.
 ; Pins: tx = pin base, rx = pin base + 1, de = pin base + 2 (RS-485 driver enable).
 ;
 ; Host protocol
-;   Send: queue each character as two TX bytes, [data] [parity]. Bit 0 of the parity byte is
-;     sent after the data: the even (or odd) parity bit, or 1 for 8N2 (a second stop bit).
-;     The engine turns the driver on before the first character. When the whole request is
-;     queued and the TX FIFO is empty, set FLAG1; the engine turns the driver off after the
-;     last stop bit and then clears FLAG1.
-;   Receive: each character arrives as two RX bytes, [data] [status]; status bit 7 is the
-;     parity bit received, for the host to check. After 3.5 characters of silence the engine
-;     sets FLAG2 (frame complete) and raises IRQ.
-; The silence count below assumes 11-bit characters and a tick of 1/8 bit. Above 19200 baud
-; Modbus specifies fixed 1.75 ms gaps, which no longer fit the 8-bit X counter.
+;   Send: queue the request's data bytes (no CRC). When everything is queued and the TX FIFO is
+;     empty, set FLAG1. The engine appends the CRC, turns the driver off after the last stop
+;     bit and clears FLAG1.
+;   Receive: each character arrives as [data] [status]: status bit 0 = parity error, bit 1 = CRC
+;     ok so far (so on the last character: the frame's CRC is correct). At the end of the frame
+;     the engine sets FLAG2 and raises IRQ.
+;   FLAG0 is used inside the program ("in a frame").
 .equ tx 0
 .equ rx 1
 .equ de 2
-.equ silence 156             ; 3.5 characters, counted in 2-tick polls
 
-        PIN  tx, DRV1        ; line idles at mark (1)
-        PIN  de, DRV0        ; driver off: listen
-idle:   JMP  PIN_LO, rxc     ; start bit of an incoming frame
-        JMP  TX_EMPTY, idle
-        PIN  de, DRV1 [7]    ; driver on, one bit before the first start bit
-txc:    PULL                 ; data
-        PIN  tx, DRV0 [6]    ; start bit, 8 ticks with the SET
+        JMP  init
+tmo:    JMP  FLAG0, fend     ; word 1: a timeout lands here. In a frame: frame complete
+        JMP  TX_EMPTY, idle  ; idle: anything to send?
+tx:     PIN  de, DRV1 [7]    ; driver on, one bit before the first start bit
+        CRCRST
+txc:    PULL                 ; data (also restarts the send parity)
+        PIN  tx, DRV0 [6]    ; start bit
         SET  X, 6
-tbit:   PIN  tx, OUT [6]     ; data bits 0..6, 8 ticks each with the JMP
+tbit:   PIN  tx, OUT [6]     ; data bits 0..6, into the CRC
         JMP  X--, tbit
-        PIN  tx, OUT [6]     ; data bit 7, 8 ticks with the PULL
-        PULL                 ; parity byte
-        PIN  tx, OUT [7]     ; parity bit (or second stop bit)
+        PIN  tx, OUT [7]     ; data bit 7
+        PIN  tx, OUTPAR [7]  ; parity bit
         PIN  tx, DRV1 [6]    ; stop bit
-txw:    JMP  TX_READY, txc   ; next character
-        JMP  FLAG1, txend    ; request complete
+txw:    JMP  TX_READY, txc
+        JMP  FLAG1, txcrc    ; request complete: append the CRC
         JMP  txw
-txend:  PIN  de, DRV0        ; driver off after the last stop bit
+txcrc:  OSRCRC LO            ; CRC low byte first
+        PIN  tx, DRV0 [6]
+        SET  X, 6
+c0:     PIN  tx, OUT, NOCRC [6]
+        JMP  X--, c0
+        PIN  tx, OUT, NOCRC [7]
+        PIN  tx, OUTPAR [7]
+        PIN  tx, DRV1 [6]
+        OSRCRC HI
+        PIN  tx, DRV0 [6]
+        SET  X, 6
+c1:     PIN  tx, OUT, NOCRC [6]
+        JMP  X--, c1
+        PIN  tx, OUT, NOCRC [7]
+        PIN  tx, OUTPAR [7]
+        PIN  tx, DRV1 [7]    ; last stop bit, full length
+        PIN  de, DRV0        ; driver off
         FLAG 1, CLR
         JMP  idle
-rxc:    SET  X, 6 [9]        ; first data bit 1.5 bits after the start edge
+fend:   FLAG 0, CLR
+        FLAG 2, SET          ; frame complete
+        FLAG 0, IRQ
+init:   PIN  tx, DRV1        ; line idles at mark (1)
+        PIN  de, DRV0        ; driver off: listen
+idle:   WAIT rx, FALL [3]    ; start bit of a new frame (or a timeout -> tmo); then 1/2 bit
+        JMP  PIN_HI, idle    ; line high again: a glitch
+        SET  X, 6
+        FLAG 0, SET          ; in a frame
+        CRCRST [4]           ; first data bit 1.5 bits after the start edge
 rbit:   IN   rx [6]          ; data bits 0..6
         JMP  X--, rbit
         IN   rx              ; data bit 7
         PUSH [6]
-        IN   rx              ; parity bit, in bit 7 of the status byte
+        IN   rx, NOCRC       ; parity bit: into the parity check, not the CRC
+        STAT                 ; ISR <= {.., CRC ok, parity error}
         PUSH
-        SET  X, silence [4]  ; start polling in the stop bit, not the parity bit
-gap:    JMP  PIN_LO, rxc     ; next character of the same frame
-        JMP  X--, gap
-        FLAG 2, SET          ; 3.5 characters of silence: frame complete
-        FLAG 0, IRQ
-        JMP  idle
+inframe: WAIT rx, FALL [3]   ; next character (or 3.5 characters of silence -> tmo)
+        JMP  PIN_HI, inframe
+        SET  X, 6 [5]
+        JMP  rbit

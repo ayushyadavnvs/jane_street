@@ -506,15 +506,30 @@ module tb_pbe;
         else mb_crc = mb_crc >> 1;
     end
   endtask
-  task mb_send;  // send mb_buf as one request frame
-    for (mb_i = 0; mb_i < mb_buf.size(); mb_i++) begin
+  task mb_send;  // send mb_buf without its last 2 bytes: the engine adds parity and the CRC
+    for (mb_i = 0; mb_i < mb_buf.size() - 2; mb_i++) begin
       mb_b = mb_buf[mb_i];
       fifo_send(0, mb_b);
-      fifo_send(0, {7'b0, ^mb_b});  // even parity bit
     end
     wait_tx_empty(0);
     flag_set(0, 1);                  // FLAG1: request complete
     do flag_get(0, 1, mb_fb); while (mb_fb);
+  endtask
+  int mb_div, mb_tmo;
+  real mb_baud = 19200.0;
+  task mb_config;  // engine 0 for Modbus at mb_baud: tick = 1/8 bit, CRC, parity, timeout
+    mb_div = $rtoi(1.0e9 / mb_baud / 8.0 / CLK_NS + 0.5) - 1;
+    // end of frame: 3.5 characters up to 19200 baud, 1.75 ms above; +9 ticks because the
+    // program starts waiting 9 ticks before the stop bit ends
+    if (mb_baud <= 19200) mb_tmo = 3.5 * 11 * 8 + 9;
+    else mb_tmo = $rtoi(1.75e6 / ((mb_div + 1) * CLK_NS) + 0.5) + 9;
+    reg_write(7'h00, 8'b0000_0000);    // stop E0
+    reg_write(7'h10, mb_div[7:0]);
+    reg_write(7'h11, mb_div[15:8]);
+    reg_write(7'h1C, mb_tmo[7:0]);     // TIMEOUT
+    reg_write(7'h1D, mb_tmo[15:8]);
+    MB_BIT = 1.0e9 / mb_baud;          // the device model follows
+    reg_write(7'h00, 8'b0001_0001);    // restart + run E0
   endtask
   task mb_receive;  // collect one response frame into mb_rx / mb_par
     mb_rx.delete();
@@ -730,8 +745,14 @@ module tb_pbe;
     ow_en_a = 1;
     ow_reset;
     check(ow_present, "1-Wire: no presence pulse from device A");
+    reg_write(7'h29, 8'h31);             // CRC unit: 1-Wire CRC-8, poly 0x31
+    reg_write(7'h2A, 8'h00);
+    reg_write(7'h2B, 8'hA7);             // 8 bits, init 0, reversed, fed by IN bits only
     ow_tx = 8'h33; ow_xbyte;             // READ ROM (one device only)
+    reg_write(7'h2F, 8'h01);             // restart the CRC after the command byte
     ow_i = 8; ow_read_bytes;
+    reg_read(7'h2F, ow_f);
+    check(ow_f[1], "1-Wire: hardware CRC-8 of the ROM ID not ok");
     for (ow_i = 0; ow_i < 8; ow_i++)
       check(ow_buf[ow_i] === ROM_A[8*ow_i+:8], $sformatf("1-Wire READ ROM byte %0d: %02x", ow_i, ow_buf[ow_i]));
     ow_crc8;
@@ -765,7 +786,14 @@ module tb_pbe;
       fifo_recv(ow_e, ow_r);
     end
     ow_tx = 8'hBE; ow_xbyte;
-    ow_i = 9; ow_read_bytes;
+    reg_write(7'h2F, 8'h01);             // restart the CRC
+    ow_i = 8; ow_read_bytes;
+    reg_read(7'h2F, ow_f);
+    check(!ow_f[1], "1-Wire: hardware CRC ok before the CRC byte was read");
+    ow_tx = 8'hFF; ow_xbyte;             // the 9th byte is the CRC
+    ow_buf.push_back(ow_r);
+    reg_read(7'h2F, ow_f);
+    check(ow_f[1], "1-Wire: hardware CRC-8 of the scratchpad not ok");
     for (ow_i = 0; ow_i < 9; ow_i++)
       check(ow_buf[ow_i] === OW_SP[8*ow_i+:8], $sformatf("1-Wire scratchpad byte %0d: %02x", ow_i, ow_buf[ow_i]));
     ow_crc8;
@@ -773,68 +801,70 @@ module tb_pbe;
     ow_mon = 0;
     check(ow_bad == 0 && ow_short > 0 && ow_long > 0 && ow_resets >= 5,
           $sformatf("1-Wire timing: %0d bad, %0d short, %0d long, %0d resets", ow_bad, ow_short, ow_long, ow_resets));
+    reg_write(7'h2B, 8'h00);             // CRC off again
+    $display("  hardware CRC-8 checked the ROM ID and the scratchpad");
     $display("  MATCH ROM + READ SCRATCHPAD ok; timing checked on %0d short, %0d long pulses and %0d resets",
              ow_short, ow_long, ow_resets);
     ow_en_a = 0;
     ow_en_b = 0;
 
     // ===== Test 5: Modbus RTU =====
-    $display("Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 19200 8E1");
+    $display("Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 8E1, hardware CRC/parity/timeout");
     reg_write(7'h00, 8'b1100_0000);
     reg_write(7'h04, 8'h00);
     reg_write(7'h02, 8'h03);
     load_program("modbus_image.hex");
     reg_write(7'h03, 8'h00);
-    begin
-      int div;
-      div = $rtoi(1.0e9 / 19200.0 / 8.0 / CLK_NS + 0.5) - 1;  // tick = 1/8 bit
-      reg_write(7'h10, div[7:0]);
-      reg_write(7'h11, div[15:8]);
-    end
     reg_write(7'h12, 0);
     reg_write(7'h13, 1);                 // JMP pin = rx
     reg_write(7'h14, 2'b00);             // LSB first
     reg_write(7'h15, 0);
+    reg_write(7'h19, 8'h05);             // CRC_POLY = 0x8005
+    reg_write(7'h1A, 8'h80);
+    reg_write(7'h1B, 8'hFF);             // CRC_CFG: 16 bits, init ones, reversed, fed by OUT and IN
+    reg_write(7'h1E, 8'h01);             // LINE_CFG: timeout jumps to word 1, even parity
     mb_en = 1;
-    reg_write(7'h00, 8'b0001_0001);      // restart + run E0 only
 
-    for (int round = 0; round < 2; round++) begin
-      mb_bad = round ? 3 : -1;           // second round: response byte 3 has a parity error
+    // round 0: normal; 1: response parity error; 2: response CRC corrupted; 3: normal at 115200
+    for (int round = 0; round < 4; round++) begin
+      mb_baud = (round == 3) ? 115200.0 : 19200.0;
+      if (round == 0 || round == 3) mb_config;
+      mb_bad = (round == 1) ? 3 : -1;
       mb_resp = '{8'h01, 8'h03, 8'h04, 8'h12, 8'h34, 8'h56, 8'h78, 8'h81, 8'h07};
-      mb_buf = '{8'h01, 8'h03, 8'h00, 8'h00, 8'h00, 8'h02};
-      mb_crc16;
-      mb_buf.push_back(mb_crc[7:0]);
-      mb_buf.push_back(mb_crc[15:8]);
-      check(mb_crc == 16'h0BC4, $sformatf("tb Modbus CRC model: %04x, expected 0bc4 (bytes C4 0B)", mb_crc));
+      if (round == 2) mb_resp[8] = 8'h06;  // wrong CRC high byte
+      mb_buf = '{8'h01, 8'h03, 8'h00, 8'h00, 8'h00, 8'h02, 8'hC4, 8'h0B};  // what must arrive
+      mb_max_gap = 0;
       mb_send;
       mb_receive;
       check(uo_out[1], "Modbus: no IRQ at the end of the response");
       flag_clear(0, 2);
       reg_write(7'h02, 8'h03);
-      check(mb_req_got.size() == 8, $sformatf("Modbus: device got %0d request bytes", mb_req_got.size()));
+      check(mb_req_got.size() == 8, $sformatf("Modbus round %0d: device got %0d request bytes", round, mb_req_got.size()));
       for (mb_i = 0; mb_i < 8 && mb_i < mb_req_got.size(); mb_i++)
-        check(mb_req_got[mb_i] === mb_buf[mb_i], $sformatf("Modbus request byte %0d: %02x", mb_i, mb_req_got[mb_i]));
-      check(mb_rx.size() == mb_resp.size(), $sformatf("Modbus: host got %0d response bytes", mb_rx.size()));
+        check(mb_req_got[mb_i] === mb_buf[mb_i],
+              $sformatf("Modbus round %0d request byte %0d: %02x, expected %02x", round, mb_i, mb_req_got[mb_i], mb_buf[mb_i]));
+      check(mb_rx.size() == mb_resp.size(), $sformatf("Modbus round %0d: host got %0d response bytes", round, mb_rx.size()));
       mb_perr = 0;
       for (mb_i = 0; mb_i < mb_rx.size(); mb_i++) begin
-        check(mb_rx[mb_i] === mb_resp[mb_i], $sformatf("Modbus response byte %0d: %02x", mb_i, mb_rx[mb_i]));
+        check(mb_rx[mb_i] === mb_resp[mb_i], $sformatf("Modbus round %0d response byte %0d: %02x", round, mb_i, mb_rx[mb_i]));
         mb_x = mb_par[mb_i];
-        mb_d = mb_rx[mb_i];
-        if ((^mb_d) != mb_x[7]) mb_perr++;  // parity errors the host detects
+        if (mb_x[0]) mb_perr++;            // parity errors found by the engine
       end
-      mb_buf = mb_rx;
-      mb_crc16;
-      check(mb_crc == 16'h0000, "Modbus: response CRC failed");  // CRC over data + CRC is 0
-      check(mb_perr == (round ? 1 : 0), $sformatf("Modbus round %0d: host found %0d parity errors", round, mb_perr));
+      check(mb_perr == (round == 1 ? 1 : 0), $sformatf("Modbus round %0d: engine reported %0d parity errors", round, mb_perr));
+      mb_x = mb_par[mb_par.size() - 1];  // status after the last character: CRC ok?
+      check(mb_x[1] == (round != 2), $sformatf("Modbus round %0d: CRC ok = %b", round, mb_x[1]));
+      check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus round %0d: %0.0f ns gap inside a request", round, mb_max_gap));
+      $display("  round %0d at %0.0f baud: request with hardware CRC ok; response %0d parity error(s), CRC ok = %b",
+               round, mb_baud, mb_perr, mb_x[1]);
     end
     check(mb_par_err == 0 && mb_stop_err == 0 && mb_de_err == 0,
           $sformatf("Modbus: device saw %0d parity, %0d stop, %0d DE errors", mb_par_err, mb_stop_err, mb_de_err));
-    check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus: %0.0f ns gap inside a request", mb_max_gap));
     check(mb_glitches == 0, $sformatf("Modbus: %0d glitches on the TX line", mb_glitches));
-    $display("  2 request/response exchanges ok; largest gap inside a request %0.0f ns (limit %0.0f)",
-             mb_max_gap, 1.5 * 11 * MB_BIT);
-    $display("  a parity error in the response was reported to the host");
     mb_en = 0;
+    reg_write(7'h1B, 8'h00);             // CRC off
+    reg_write(7'h1C, 8'h00);             // timeout off
+    reg_write(7'h1D, 8'h00);
+    reg_write(7'h1E, 8'h00);
 
     // ===== Test 6: two flag-using protocols at once (BUG-017) =====
     $display("Test 6: 1-Wire Search ROM (engine 0, pin 6) and I2C (engine 1, pins 4-5) at the same time");

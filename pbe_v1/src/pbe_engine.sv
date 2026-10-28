@@ -5,15 +5,29 @@
 // A tick is one clock every (clkdiv + 1) clocks.
 //
 //  OP   name        ARG
-//  000  PIN p, act  [8:6] pin, [5:3] act: 0 DRV0, 1 DRV1, 2 REL, 3 TOG, 4 OUT, 5 OUTOD
-//  001  IN p        [8:6] pin                 shift pin into ISR
+//  000  PIN p, act  [8:6] pin, [5:3] act: 0 DRV0, 1 DRV1, 2 REL, 3 TOG, 4 OUT, 5 OUTOD, 6 OUTPAR
+//                   [0] NOCRC (OUT/OUTOD): leave this bit out of the CRC
+//  001  IN p        [8:6] pin, [5] NOCRC       shift pin into ISR
 //  010  WAIT        [8:6] pin (or flag in [7:6]), [5] 1 = flag, [4:3] 0 LOW, 1 HIGH, 2 RISE, 3 FALL
 //  011  JMP         [8:6] cond, [5:0] addr    cond: 0 ALWAYS, 1 X-- != 0, 2 PIN_HI, 3 PIN_LO,
 //                                             4 TX_EMPTY, 5 TX_READY, 6 FLAG0, 7 FLAG1
 //  100  SET         [8] 0 = X, 1 = OSR; [7:0] value
 //  101  PULL/PUSH   [8] 0 = PULL (TX FIFO -> OSR), 1 = PUSH (ISR -> RX FIFO, then clear ISR)
 //  110  FLAG        [8:7] 0 SET, 1 CLR, 2 IRQ, 3 none (the assembler's NOP); [1:0] flag
-//  111  reserved    executes as NOP
+//  111  EXT         [8:6] sub-op, [5:0] param
+//                   0 CRCRST      load the CRC's initial value
+//                   1 OSRCRC      OSR <= CRC byte (param[0]: 0 low, 1 high)
+//                   2 STAT        ISR <= {5'b0, timeout happened, CRC ok, parity error};
+//                                 then clears the receive parity and the timeout flag
+//                   3 JCRCBAD a   jump to a if the CRC is not zero
+//                   4-7           reserved, execute as nothing
+//
+// Parity: OUT/OUTOD bits since the last OSR load make the send parity; OUTPAR drives it
+// (inverted for odd parity). IN bits since the last STAT make the receive parity; with the
+// parity bit included it must come out 0 (even) or 1 (odd), otherwise STAT reports an error.
+// CRC: OUT/OUTOD and IN bits feed the CRC unit when enabled in crc_cfg, unless marked NOCRC.
+// Timeout: if WAIT, PULL or PUSH stays blocked for timeout ticks (0 = never), the engine
+// abandons it, jumps to timeout_pc and sets the "timeout happened" status bit.
 //
 // WAIT, PULL and PUSH block until they can complete. While blocked the engine checks
 // every clock (not every tick), and when it unblocks the tick divider restarts, so
@@ -32,6 +46,13 @@ module pbe_engine (
     input  logic        out_msb_first,
     input  logic        in_msb_first,
     input  logic [5:0]  start_pc,
+    input  logic [15:0] crc_poly,
+    input  logic [7:0]  crc_cfg,      // [3:0] width-1, [4] init ones, [5] reversed, [6] feed OUT, [7] feed IN
+    input  logic [15:0] timeout,      // ticks a blocked instruction may wait (0 = forever)
+    input  logic [7:0]  line_cfg,     // [5:0] timeout_pc, [7] odd parity
+    input  logic        host_crc_init,
+    input  logic        host_tmo_clr,
+    output logic [2:0]  status,       // {timeout happened, CRC ok, parity error}
     // program memory
     output logic [5:0]  pc,
     input  logic [15:0] instr,
@@ -54,7 +75,8 @@ module pbe_engine (
     output logic        irq
 );
   localparam logic [2:0] OP_PIN = 3'd0, OP_IN = 3'd1, OP_WAIT = 3'd2, OP_JMP = 3'd3,
-                         OP_SET = 3'd4, OP_FIFO = 3'd5, OP_FLAG = 3'd6;
+                         OP_SET = 3'd4, OP_FIFO = 3'd5, OP_FLAG = 3'd6, OP_EXT = 3'd7;
+  localparam logic [2:0] E_CRCRST = 3'd0, E_OSRCRC = 3'd1, E_STAT = 3'd2, E_JCRCBAD = 3'd3;
 
   logic [15:0] div_cnt;
   logic [3:0]  dly_cnt;
@@ -62,6 +84,8 @@ module pbe_engine (
   logic [7:0]  x, osr, isr;
   logic [7:0]  pins_prev;
   logic [3:0]  flags_prev;
+  logic        par_out, par_in, tmo_seen;
+  logic [15:0] tmo_cnt;
 
   // ---- decode ----
   wire [2:0] op  = instr[15:13];
@@ -83,6 +107,11 @@ module pbe_engine (
   wire       out_bit = out_msb_first ? osr[7] : osr[0];
   wire [7:0] osr_shifted = out_msb_first ? {osr[6:0], 1'b0} : {1'b0, osr[7:1]};
   wire [7:0] isr_shifted = in_msb_first ? {isr[6:0], pin_now} : {pin_now, isr[7:1]};
+
+  wire [2:0] ext_op   = arg[8:6];
+  wire       odd      = line_cfg[7];
+  wire [5:0] tmo_pc   = line_cfg[5:0];
+  wire       par_err  = par_in ^ odd;
 
   // ---- issue and readiness ----
   wire tick  = (div_cnt >= clkdiv);
@@ -112,6 +141,30 @@ module pbe_engine (
 
   // A restart in the same cycle cancels the instruction, so it has no side effects.
   wire exec = issue && ready && !restart;
+
+  // A blocked instruction that has waited `timeout` ticks is abandoned.
+  wire tmo_hit = run && !restart && blocked && !ready && timeout != 16'd0 && tmo_cnt >= timeout;
+
+  // ---- CRC unit, fed by the bits the engine shifts ----
+  wire is_out = exec && op == OP_PIN && (pin_act == 3'd4 || pin_act == 3'd5);
+  wire is_in  = exec && op == OP_IN;
+  logic [15:0] crc_value;
+  logic        crc_zero;
+
+  pbe_crc u_crc (
+      .clk, .rst_n,
+      .init     (host_crc_init || restart || (exec && op == OP_EXT && ext_op == E_CRCRST)),
+      .step     ((is_out && !arg[0] && crc_cfg[6]) || (is_in && !arg[5] && crc_cfg[7])),
+      .bit_in   (is_out ? out_bit : pin_now),
+      .poly     (crc_poly),
+      .width_m1 (crc_cfg[3:0]),
+      .init_ones(crc_cfg[4]),
+      .out_rev  (crc_cfg[5]),
+      .value    (crc_value),
+      .zero     (crc_zero)
+  );
+
+  assign status = {tmo_seen, crc_zero, par_err};
 
   logic jmp_take;
   always_comb begin
@@ -149,6 +202,10 @@ module pbe_engine (
       pins_oe    <= '0;
       pins_prev  <= '0;
       flags_prev <= '0;
+      par_out    <= 1'b0;
+      par_in     <= 1'b0;
+      tmo_seen   <= 1'b0;
+      tmo_cnt    <= '0;
     end else if (restart) begin
       pc       <= start_pc;
       div_cnt  <= '0;
@@ -158,19 +215,28 @@ module pbe_engine (
       osr      <= '0;
       isr      <= '0;
       pins_oe  <= '0;  // release every pin; keep pins_out so a line held high cannot glitch low
+      par_out  <= 1'b0;
+      par_in   <= 1'b0;
+      tmo_seen <= 1'b0;
+      tmo_cnt  <= '0;
     end else begin
       pins_prev  <= pins_in;
       flags_prev <= flags;
+      if (host_tmo_clr) tmo_seen <= 1'b0;
 
       if (run) begin
         // tick divider; restarts when a blocked instruction completes
-        if (exec && blocked) div_cnt <= '0;
+        if ((exec && blocked) || tmo_hit) div_cnt <= '0;
         else if (tick) div_cnt <= '0;
         else div_cnt <= div_cnt + 1'b1;
 
         if (tick && dly_cnt != 4'd0 && !blocked) dly_cnt <= dly_cnt - 1'b1;
 
         if (issue && !ready) blocked <= 1'b1;
+
+        // timeout counter: ticks spent blocked
+        if (!blocked) tmo_cnt <= '0;
+        else if (tick) tmo_cnt <= tmo_cnt + 1'b1;
 
         if (exec) begin
           blocked <= 1'b0;
@@ -188,24 +254,57 @@ module pbe_engine (
                             osr <= osr_shifted;                                                      end
                 3'd5: begin pins_out[pin_idx] <= 1'b0;                 pins_oe[pin_idx] <= !out_bit;
                             osr <= osr_shifted;                                                      end
+                3'd6: begin pins_out[pin_idx] <= par_out ^ odd;        pins_oe[pin_idx] <= 1'b1;     end
                 default: ;
               endcase
             end
-            OP_IN: isr <= isr_shifted;
+            OP_IN: begin
+              isr    <= isr_shifted;
+              par_in <= par_in ^ pin_now;
+            end
             OP_JMP: begin
               if (jmp_take) pc <= arg[5:0];
               if (jmp_cnd == 3'd1 && x != 8'd0) x <= x - 1'b1;
             end
             OP_SET: begin
-              if (arg_hi) osr <= arg[7:0];
-              else x <= arg[7:0];
+              if (arg_hi) begin
+                osr     <= arg[7:0];
+                par_out <= 1'b0;
+              end else x <= arg[7:0];
             end
             OP_FIFO: begin
               if (arg_hi) isr <= '0;
-              else osr <= tx_data;
+              else begin
+                osr     <= tx_data;
+                par_out <= 1'b0;
+              end
+            end
+            OP_EXT: begin
+              case (ext_op)
+                E_OSRCRC: begin
+                  osr     <= arg[0] ? crc_value[15:8] : crc_value[7:0];
+                  par_out <= 1'b0;
+                end
+                E_STAT: begin
+                  isr      <= {5'b0, tmo_seen, crc_zero, par_err};
+                  par_in   <= 1'b0;
+                  tmo_seen <= 1'b0;
+                end
+                E_JCRCBAD: if (!crc_zero) pc <= arg[5:0];
+                default: ;
+              endcase
             end
             default: ;
           endcase
+          if (is_out) par_out <= par_out ^ out_bit;
+        end
+
+        // timeout: abandon the blocked instruction and jump to the timeout routine
+        if (tmo_hit) begin
+          pc       <= tmo_pc;
+          blocked  <= 1'b0;
+          dly_cnt  <= '0;
+          tmo_seen <= 1'b1;
         end
       end
     end

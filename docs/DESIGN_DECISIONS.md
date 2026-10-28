@@ -9,8 +9,8 @@ mark the old one **Changed** instead of deleting it.
 
 | Version | Folder | Protocols |
 |---|---|---|
-| v1 | `pbe_v1/` | UART, SPI, I2C, 1-Wire, Modbus RTU |
-| v2 | `pbe_v2/` | v1 plus low-speed USB |
+| v1 | `pbe_v1/` | UART, SPI, I2C, 1-Wire, Modbus RTU; CRC unit, parity bit, WAIT timeout |
+| v2 (retired, D28) | branch `archive/v2-usb` | v1 plus low-speed USB; lessons in `docs/USB_NOTES.md` |
 
 ## Changes forced by new protocols
 
@@ -27,6 +27,8 @@ mark the old one **Changed** instead of deleting it.
 | 1-Wire, Modbus RTU | Nothing: both are programs on the existing instructions | — | D25, D26 |
 | Modbus RTU (its test) | Restart could glitch a high pin low, a false start bit | Restart releases pins but keeps their values | D24, BUG-013 |
 | Two protocols at once (I2C + 1-Wire) | Shared FLAG0/FLAG1: each engine took the other's requests | 8 flags, engine-relative via `FLAG_BASE`; host `FLAG_SET`/`FLAG_CLR` | D11, D27, BUG-017 |
+| USB (v2) | Opcode 111 and a line unit became USB-only: the engine drifted away from general | v2 retired; general features instead | D28 |
+| Modbus RTU, 1-Wire | Host had to compute CRC and parity; 3.5-character silence limited Modbus to 19200 baud | General CRC unit, parity bit, WAIT timeout on opcode 111 / pin action 6 | D6, D26, D29–D31 |
 
 ---
 
@@ -100,7 +102,7 @@ mark the old one **Changed** instead of deleting it.
 | 100 | `SET X/OSR` | Bit counts and constants (USB SYNC) |
 | 101 | `PULL/PUSH` | Bytes to and from the host |
 | 110 | `FLAG` | Coordination between engines and with the host; host interrupt |
-| 111 | v1: reserved, v2: USB sub-ops | Kept free for add-ons; used by USB in v2 (D20) |
+| 111 | `EXT` sub-ops: `CRCRST`, `OSRCRC`, `STAT`, `JCRCBAD` (4 of 8 used) | **Changed:** was reserved; v2 used it for USB (D20, retired). Now general extensions (D29–D31); sub-ops 4–7 stay free |
 
 - **`NOP` — Changed (USB):** The assembler originally emitted opcode 111 with argument 0 for
   `NOP`. That was harmless in v1 but in v2 the same word is `UTX`. `NOP` is now `FLAG` with
@@ -234,7 +236,7 @@ mark the old one **Changed** instead of deleting it.
   - **Changed (review):** SCL is now 4 ticks low and 3 high (it was 3 low, 4 high, which breaks
     the I2C minimum low time), and FLAG1 is cleared after STOP completes (BUG-010, BUG-011).
 
-## D20. USB: a hardware line unit (v2) — **Changed (USB)**
+## D20. USB: a hardware line unit (v2) — **Retired (D28)**
 
 - **Chosen:** A small line unit per engine on opcode 111. It does NRZI, bit stuffing and
   unstuffing, SYNC detection, EOP, CRC5 and CRC16, and re-centres sampling on every D+ edge.
@@ -322,7 +324,15 @@ mark the old one **Changed** instead of deleting it.
 - **Left to the host:** CRC8, and the strong pull-up some parasite-powered devices need
   (`PIN dq, DRV1`). Overdrive speed needs a second program with a finer tick.
 
-## D26. Modbus RTU master (program only)
+## D26. Modbus RTU master — **Changed (CRC, parity, timeout hardware)**
+
+- **Now:** `programs/modbus_rtu.pbe`, 56 words, uses the CRC unit (D29), the parity bit (D30) and
+  the timeout (D31). The host sends only data bytes; the engine adds parity and appends the CRC,
+  checks received parity and CRC, finds start bits with `WAIT FALL` (exact, instead of a 2-tick
+  poll) and ends a frame with the timeout. The 19200-baud limit is gone (tested at 115200).
+  FLAG0 is used inside the program as "in a frame". The text below describes the first version.
+
+### First version (program only)
 
 - **Chosen:** `programs/modbus_rtu.pbe`, 33 words, RS-485 half duplex on one engine: TX, RX and a
   driver-enable pin. Tick = 1/8 bit.
@@ -353,3 +363,74 @@ mark the old one **Changed** instead of deleting it.
   engines at the same time. UART and SPI use no flags and can run next to any of them.
 - **Resolved:** engine-relative flags (D11, BUG-017). The new test runs a 1-Wire Search ROM on
   engine 0 and I2C on engine 1 at the same time.
+
+## D28. Retire v2; keep the engine general
+
+- **Decision:** v2 (low-speed USB) is retired. Its source stays on the GitHub branch
+  `archive/v2-usb`; what it taught is in `docs/USB_NOTES.md`.
+- **Why:** v2 worked, but most of its hardware was USB-only: a line unit with its own fixed
+  CRCs, and all 8 sub-ops of opcode 111 spent on USB. That pulled the engine away from being a
+  general protocol engine, and every fix had to be made in two copies.
+- **Alternatives:** keep both copies (rejected: double work, drift); merge them behind a USB
+  build option (rejected for now: still USB-specific hardware).
+- **Plan for USB later:** bring it back on general features that other protocols also use:
+  the CRC unit (D29), a line coder with NRZI/stuffing/Manchester modes, compare-and-branch on
+  received data, and `MOV X, ISR` (see `docs/USB_NOTES.md`, section 4).
+
+## D29. General CRC unit
+
+- **Chosen:** `src/pbe_crc.sv`, one per engine. A shift-left register with any polynomial up to
+  16 bits and a set width; initial value all zeros or all ones; result read plain or
+  bit-reversed. It is fed by the bits the engine shifts: `OUT`/`OUTOD` and/or `IN`, chosen in
+  `CRC_CFG`; an instruction marked `NOCRC` (e.g. a parity bit or the CRC bytes themselves) is
+  left out. "CRC ok" = register is zero, which holds after a frame plus its own CRC for every
+  CRC without a final inversion (Modbus CRC-16, 1-Wire CRC-8, CAN CRC-15).
+- **Instructions (opcode 111):** `CRCRST`, `OSRCRC LO/HI` (load a CRC byte to send), `JCRCBAD`.
+  The host can also restart the CRC and read "CRC ok" through the engine's `STATUS` register,
+  which is how the unchanged 1-Wire program gets a hardware CRC-8 check.
+- **Alternatives:**
+  1. Host computes CRCs (the first Modbus/1-Wire versions). Works for slow protocols, but the
+     engine cannot act on the result, which USB and CAN need.
+  2. Fixed CRCs, like v2's USB unit. Rejected: a new protocol would need new hardware.
+  3. A final-inversion option. Left out: no current protocol needs it (USB does; see notes).
+- **Verified:** a Python model of the same register gives Modbus `C4 0B` for `01 03 00 00 00 02`,
+  1-Wire CRC-8 `1C` for the DS18B20 scratchpad, and zero after a frame plus its CRC.
+- **Cost:** ~3,600 µm² per engine, plus its registers.
+
+## D30. Parity bit
+
+- **Chosen:** two flip-flops per engine. Send parity: XOR of the bits `OUT`/`OUTOD` shifted since
+  the last OSR load; the new pin action `OUTPAR` (6) drives it, inverted when `LINE_CFG[7]`
+  selects odd parity. Receive parity: XOR of the bits `IN` sampled since the last `STAT`; with the
+  parity bit included it must come out even (or odd), and `STAT` reports an error otherwise.
+- **Why separate from the CRC:** parity is a 1-bit CRC (polynomial x+1), but Modbus needs parity
+  per character and CRC-16 per frame at the same time.
+- **Alternative:** host supplies the parity bit (first Modbus version): costs a FIFO byte per
+  character and host work. Rejected now that the cost is two flip-flops.
+
+## D31. WAIT timeout through a timeout vector
+
+- **Chosen:** per engine, `TIMEOUT` (16 bits, in ticks; 0 = off) and `TIMEOUT_PC` (in
+  `LINE_CFG`). If `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks, the engine abandons
+  it (no side effects), jumps to `TIMEOUT_PC` and sets "timeout happened", which `STAT` and the
+  `STATUS` register report.
+- **Why a vector:** no instruction bits were free: `JMP`'s 8 conditions and `WAIT`'s 9 argument
+  bits are all used, and using the delay field would break existing programs. With a vector,
+  every existing program works unchanged (timeout off by default).
+- **Alternatives:** a `JMP TIMEOUT` condition (would need to drop an existing condition); a
+  timeout field in `WAIT` (no room); a second engine as a timer (wastes an engine).
+- **Uses:** Modbus end of frame and exact start detection at any baud rate (done); I2C stuck-bus
+  recovery, UART idle-line detection and CAN bus-idle detection (later).
+- **Cost:** ~2,800 µm² per engine (counter and limit).
+
+## D32. Register and opcode budget
+
+- **Engine registers:** +0 to +F are now all used (+7 is free only by accident of history:
+  it was v2's `BITDIV`). New per-engine settings will need a second register window.
+- **Opcodes:** opcode 111 has sub-ops 4–7 free. Planned users: compare-and-branch on received data,
+  `MOV X, ISR`, line-coder operations. When those run out: 24-bit instructions (program memory
+  +50 %, ~+25,000 µm²) or a second opcode page.
+- **OSR/ISR stay 8 bits:** byte boundaries cost one `PULL`/`PUSH` tick, which every protocol so far
+  hides in a delay. Needed only for a protocol at one tick per bit with no gap between bytes, and
+  then "auto-pull" is cheaper than wider registers.
+

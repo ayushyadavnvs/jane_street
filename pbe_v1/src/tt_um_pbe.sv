@@ -28,6 +28,13 @@
 //      +2 PIN_BASE[2:0]  +3 JMP_PIN[2:0]  +4 SHIFT [0] OUT msb first, [1] IN msb first
 //      +5 START_PC[5:0]
 //      +8 FLAG_BASE[2:0]  first physical flag this engine sees (reset: 0 for E0, 4 for E1)
+//      +9 CRC_POLY_L, +A CRC_POLY_H   CRC polynomial (top term implied)
+//      +B CRC_CFG    [3:0] width - 1, [4] init all ones, [5] reversed output, [6] feed OUT bits,
+//                    [7] feed IN bits (both 0: CRC off)
+//      +C TIMEOUT_L, +D TIMEOUT_H     ticks a blocked WAIT/PULL/PUSH may wait (0 = forever)
+//      +E LINE_CFG   [5:0] TIMEOUT_PC (where a timeout jumps), [7] odd parity
+//      +F STATUS     R: [0] receive parity error, [1] CRC ok (zero), [2] timeout happened
+//                    W: [0] = 1 restarts the CRC, [1] = 1 clears "timeout happened"
 //      +6 FIFO data: W pushes the TX FIFO, R pops the RX FIFO
 module tt_um_pbe (
     input  wire [7:0] ui_in,
@@ -76,6 +83,9 @@ module tt_um_pbe (
   logic [7:0]  pin_own;
   logic [7:0]  flags;
   logic [5:0]  flag_base;  // 3 bits per engine
+  logic [31:0] crc_poly, timeout;
+  logic [15:0] crc_cfg, line_cfg;
+  logic [5:0]  e_status;   // 3 bits per engine
   logic [31:0] clkdiv;
   logic [5:0]  pin_base, jmp_pin;
   logic [3:0]  shiftcfg;
@@ -108,6 +118,10 @@ module tt_um_pbe (
       pin_own  <= '0;
       flags    <= '0;
       flag_base <= 6'b100_000;  // E1 starts at flag 4, E0 at flag 0
+      crc_poly <= '0;
+      crc_cfg  <= '0;
+      timeout  <= '0;
+      line_cfg <= '0;
       clkdiv   <= '0;
       pin_base <= '0;
       jmp_pin  <= '0;
@@ -139,6 +153,12 @@ module tt_um_pbe (
           4'h4: shiftcfg[1:0] <= wr_data[1:0];
           4'h5: start_pc[5:0]  <= wr_data[5:0];
           4'h8: flag_base[2:0] <= wr_data[2:0];
+          4'h9: crc_poly[7:0]   <= wr_data;
+          4'hA: crc_poly[15:8]  <= wr_data;
+          4'hB: crc_cfg[7:0]    <= wr_data;
+          4'hC: timeout[7:0]    <= wr_data;
+          4'hD: timeout[15:8]   <= wr_data;
+          4'hE: line_cfg[7:0]   <= wr_data;
           default: ;
         endcase
       end
@@ -151,6 +171,12 @@ module tt_um_pbe (
           4'h4: shiftcfg[3:2] <= wr_data[1:0];
           4'h5: start_pc[11:6] <= wr_data[5:0];
           4'h8: flag_base[5:3] <= wr_data[2:0];
+          4'h9: crc_poly[23:16] <= wr_data;
+          4'hA: crc_poly[31:24] <= wr_data;
+          4'hB: crc_cfg[15:8]   <= wr_data;
+          4'hC: timeout[23:16]  <= wr_data;
+          4'hD: timeout[31:24]  <= wr_data;
+          4'hE: line_cfg[15:8]  <= wr_data;
           default: ;
         endcase
       end
@@ -172,6 +198,13 @@ module tt_um_pbe (
       4'h4:    eng_rd = {6'b0, rd_e1 ? shiftcfg[3:2] : shiftcfg[1:0]};
       4'h5:    eng_rd = {2'b0, rd_e1 ? start_pc[11:6] : start_pc[5:0]};
       4'h8:    eng_rd = {5'b0, rd_e1 ? flag_base[5:3] : flag_base[2:0]};
+      4'h9:    eng_rd = rd_e1 ? crc_poly[23:16] : crc_poly[7:0];
+      4'hA:    eng_rd = rd_e1 ? crc_poly[31:24] : crc_poly[15:8];
+      4'hB:    eng_rd = rd_e1 ? crc_cfg[15:8] : crc_cfg[7:0];
+      4'hC:    eng_rd = rd_e1 ? timeout[23:16] : timeout[7:0];
+      4'hD:    eng_rd = rd_e1 ? timeout[31:24] : timeout[15:8];
+      4'hE:    eng_rd = rd_e1 ? line_cfg[15:8] : line_cfg[7:0];
+      4'hF:    eng_rd = {5'b0, rd_e1 ? e_status[5:3] : e_status[2:0]};
       4'h6:    eng_rd = rd_e1 ? rx_dout[15:8] : rx_dout[7:0];
       default: eng_rd = 8'h00;
     endcase
@@ -247,6 +280,13 @@ module tt_um_pbe (
         .out_msb_first(shiftcfg[e*2]),
         .in_msb_first (shiftcfg[e*2+1]),
         .start_pc     (start_pc[e*6+:6]),
+        .crc_poly     (crc_poly[e*16+:16]),
+        .crc_cfg      (crc_cfg[e*8+:8]),
+        .timeout      (timeout[e*16+:16]),
+        .line_cfg     (line_cfg[e*8+:8]),
+        .host_crc_init(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[0]),
+        .host_tmo_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[1]),
+        .status       (e_status[e*3+:3]),
         .pc           (pc[e*6+:6]),
         .instr        (instr[e*16+:16]),
         .pins_in      (pins_s2),

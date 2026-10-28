@@ -1,7 +1,0 @@
-read_verilog -sv src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_usb_line.sv src/pbe_engine.sv src/tt_um_pbe.sv
-synth -top tt_um_pbe -flatten
-dfflibmap -liberty $LIB
-abc -liberty $LIB
-opt_clean -purge
-stat -liberty $LIB
-write_verilog -noattr synth/tt_um_pbe_netlist.v

@@ -7,6 +7,9 @@ Keep this file current: add an entry for every bug, including test and tool bugs
 delete an entry. Where possible, a bug gets a test that fails before the fix and passes
 after it.
 
+v2 (USB) has been retired (design decision D28). Its entries stay here; the v2 code they refer
+to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
+
 | ID | Area | Summary | Found by | Status |
 |---|---|---|---|---|
 | BUG-001 | Testbench | Two host transactions ran at once on the single host port | First UART run | Fixed |

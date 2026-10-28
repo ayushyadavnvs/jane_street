@@ -5,14 +5,15 @@ up to 6×4 tiles, due 18 January 2027).
 
 | Folder | What |
 |---|---|
-| `pbe_v1/` | Programmable Bit Engine: two engines; UART, SPI, I2C, 1-Wire and Modbus RTU programs, all tested |
-| `pbe_v2/` | Version 1 plus a low-speed USB line unit and 16-byte FIFOs, USB packets tested both ways |
+| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity and timeout hardware; UART, SPI, I2C, 1-Wire and Modbus RTU programs, all tested |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
-Each version has its own README with the register map, instruction set and results.
+`pbe_v1/README.md` has the register map, instruction set, host protocols and results.
 Design reasoning is in `docs/DESIGN_DECISIONS.md` and every bug with its fix in `docs/BUG_LOG.md`.
-Tools: `iverilog`, `yosys`, `python3`. In either version folder: `make test`, `make synth`, `make timing`.
+A low-speed USB version (v2) was built and then retired to keep the engine general; its code is
+on the branch `archive/v2-usb` and its lessons are in `docs/USB_NOTES.md`.
+Tools: `iverilog`, `yosys`, `python3`. In `pbe_v1/`: `make test`, `make synth`, `make timing`.
 
 ## Clock frequency
 
@@ -26,10 +27,9 @@ the clock input pad is specified up to about 66 MHz, and the demo board's RP2040
 | Tiny Tapeout limit | ~66 MHz |
 | Planned clock | 48 MHz: USB low speed is exactly 32 clocks per bit, and timing has ~4× margin |
 
-The design works at any clock up to that limit; each engine's `CLKDIV` (and `BITDIV` for USB)
+The design works at any clock up to that limit; each engine's `CLKDIV`
 turns the clock into the bit rate a protocol needs.
 
 | Results | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
 |---|---|---|
-| Version 1 | 143,373 µm² (16%) | 3.97 ns |
-| Version 2 | 192,048 µm² (21%) | 3.93 ns |
+| Version 1 | 164,095 µm² (18%) | 3.80 ns |

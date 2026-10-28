@@ -1,6 +1,6 @@
 # Requires: iverilog, yosys, python3.  IHP_LIB points at an IHP sg13g2 standard-cell liberty file
 # (github.com/IHP-GmbH/IHP-Open-PDK, ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/).
-SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_engine.sv src/tt_um_pbe.sv
+SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_engine.sv src/tt_um_pbe.sv
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
 .PHONY: test synth timing clean

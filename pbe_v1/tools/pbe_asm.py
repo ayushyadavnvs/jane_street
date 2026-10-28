@@ -11,8 +11,8 @@ loaded with $readmemh or written to program memory over SPI.
 Syntax (case-insensitive, ';' starts a comment):
     .equ name value           define a constant (handy for pin names)
     label:
-    PIN  p, DRV0|DRV1|REL|TOG|OUT|OUTOD
-    IN   p
+    PIN  p, DRV0|DRV1|REL|TOG|OUT|OUTOD|OUTPAR   (OUT and OUTOD take an optional ", NOCRC")
+    IN   p [, NOCRC]
     WAIT p, LOW|HIGH|RISE|FALL
     WAIT FLAG n, LOW|HIGH|RISE|FALL
     JMP  [ALWAYS|X--|PIN_HI|PIN_LO|TX_EMPTY|TX_READY|FLAG0|FLAG1,] label
@@ -20,6 +20,7 @@ Syntax (case-insensitive, ';' starts a comment):
     PULL | PUSH
     FLAG n, SET|CLR|IRQ
     NOP
+    CRCRST | OSRCRC LO|HI | STAT | JCRCBAD label     (opcode 111)
 Any instruction may end with [d], d = 0..15 extra ticks of delay.
 """
 import argparse
@@ -29,7 +30,8 @@ import sys
 MEM_WORDS = 64
 
 OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 6}
-PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5}
+PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5, "OUTPAR": 6}
+EXT_OPS = {"CRCRST": 0, "OSRCRC": 1, "STAT": 2, "JCRCBAD": 3}
 WAIT_CND = {"LOW": 0, "HIGH": 1, "RISE": 2, "FALL": 3}
 JMP_CND = {"ALWAYS": 0, "X--": 1, "PIN_HI": 2, "PIN_LO": 3, "TX_EMPTY": 4, "TX_READY": 5, "FLAG0": 6, "FLAG1": 7}
 FLAG_ACT = {"SET": 0, "CLR": 1, "IRQ": 2}
@@ -95,20 +97,38 @@ def assemble(text, base, name="<src>"):
         parts = line.split(None, 1)
         mnem = parts[0].upper()
         args = [a.strip() for a in parts[1].split(",")] if len(parts) > 1 else []
-        if mnem not in OPS:
+        if mnem not in OPS and mnem not in EXT_OPS:
             raise AsmError(f"{name}:{n}: unknown instruction '{parts[0]}'")
-        op = OPS[mnem]
+        op = OPS.get(mnem, 7)
 
         def need(k):
             if len(args) != k:
                 raise AsmError(f"{name}:{n}: {mnem} takes {k} argument(s)")
 
-        if mnem == "PIN":
+        nocrc = len(args) > 0 and args[-1].upper() == "NOCRC"
+        if nocrc:
+            args = args[:-1]
+        if nocrc and not (mnem == "IN" or (mnem == "PIN" and len(args) == 2 and args[1].upper() in ("OUT", "OUTOD"))):
+            raise AsmError(f"{name}:{n}: NOCRC only applies to OUT, OUTOD and IN")
+
+        if mnem in EXT_OPS:
+            sub = EXT_OPS[mnem] << 6
+            if mnem == "OSRCRC":
+                need(1)
+                arg = sub | pick({"LO": 0, "HI": 1}, args[0], n, "CRC byte")
+            elif mnem == "JCRCBAD":
+                need(1)
+                t = args[0].lower()
+                arg = sub | (labels[t] if t in labels else num(args[0], n, 0, MEM_WORDS - 1))
+            else:
+                need(0)
+                arg = sub
+        elif mnem == "PIN":
             need(2)
-            arg = (num(args[0], n, 0, 7) << 6) | (pick(PIN_ACT, args[1], n, "pin action") << 3)
+            arg = (num(args[0], n, 0, 7) << 6) | (pick(PIN_ACT, args[1], n, "pin action") << 3) | int(nocrc)
         elif mnem == "IN":
             need(1)
-            arg = num(args[0], n, 0, 7) << 6
+            arg = (num(args[0], n, 0, 7) << 6) | (int(nocrc) << 5)
         elif mnem == "WAIT":
             need(2)
             src = args[0].split()
