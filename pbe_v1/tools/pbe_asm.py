@@ -4,8 +4,9 @@
 Usage:
     pbe_asm.py -o image.hex prog_a.pbe@0 prog_b.pbe@8
 
-Each source is placed at the given word address (default 0). The output is a
-64-line hex file (one 16-bit word per line, unused words are 0000) that can be
+Each source is placed at the given word address (default 0). Jump targets are relative
+to the program's own start, so the engine running it must have START_PC = that address.
+The output is a 128-line hex file (one 16-bit word per line, unused words are 0000) that can be
 loaded with $readmemh or written to program memory over SPI.
 
 Syntax (case-insensitive, ';' starts a comment):
@@ -27,7 +28,8 @@ import argparse
 import re
 import sys
 
-MEM_WORDS = 64
+MEM_WORDS = 128   # program memory
+PROG_WORDS = 64   # one program: jump targets are 6 bits, relative to its start
 
 OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 6}
 PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5, "OUTPAR": 6}
@@ -46,9 +48,10 @@ def word(op, arg, dly):
 
 
 def assemble(text, base, name="<src>"):
-    """Return (list of words, dict of labels with absolute addresses)."""
+    """Return (list of words, dict of labels). Labels are relative to the program start;
+    base only matters for error messages."""
     equ, labels, lines = {}, {}, []
-    pc = base
+    pc = 0
     # pass 1: labels and constants
     for n, raw in enumerate(text.splitlines(), 1):
         line = raw.split(";", 1)[0].strip()
@@ -119,7 +122,7 @@ def assemble(text, base, name="<src>"):
             elif mnem == "JCRCBAD":
                 need(1)
                 t = args[0].lower()
-                arg = sub | (labels[t] if t in labels else num(args[0], n, 0, MEM_WORDS - 1))
+                arg = sub | (labels[t] if t in labels else num(args[0], n, 0, PROG_WORDS - 1))
             else:
                 need(0)
                 arg = sub
@@ -147,7 +150,7 @@ def assemble(text, base, name="<src>"):
             if t in labels:
                 dest = labels[t]
             else:
-                dest = num(target, n, 0, MEM_WORDS - 1)
+                dest = num(target, n, 0, PROG_WORDS - 1)
             arg = (cnd << 6) | dest
         elif mnem == "SET":
             need(2)
@@ -181,6 +184,8 @@ def main():
             base = int(at, 0) if at else 0
             with open(path) as f:
                 words, labels = assemble(f.read(), base, path)
+            if len(words) > PROG_WORDS:
+                raise AsmError(f"{path}: {len(words)} words; a program can be at most {PROG_WORDS}")
             if base + len(words) > MEM_WORDS:
                 raise AsmError(f"{path}: {len(words)} words at {base} does not fit in {MEM_WORDS}")
             for i, w in enumerate(words):

@@ -91,7 +91,7 @@ tr.added td:first-child { color: var(--new); }
   <header>
     <div class="eyebrow">Jane Street protocol emulator ASIC · pbe_v1</div>
     <h1>Programmable Bit Engine</h1>
-    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI, I2C, 1-Wire and Modbus RTU are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit and a WAIT timeout, and sees its own window of 8 shared flags. This matches the RTL as built: 64-word program memory, 4-byte FIFOs, about 18% of the 6×4 tile area.</p>
+    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI, I2C, 1-Wire and Modbus RTU are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit and a WAIT timeout, and sees its own window of 8 shared flags. This matches the RTL as built: 128-word program memory (each engine jumps within its own 64-word window from its START_PC), 4-byte FIFOs, about 29% of the 6×4 tile area.</p>
   </header>
 
   <section>
@@ -170,7 +170,7 @@ tr.added td:first-child { color: var(--new); }
           <!-- program memory + flags between the engines -->
           <rect class="box" x="510" y="230" width="112" height="72" rx="4"/>
           <text class="t" x="566" y="260" text-anchor="middle">Program</text>
-          <text class="s" x="566" y="280" text-anchor="middle">64 × 16 b</text>
+          <text class="s" x="566" y="280" text-anchor="middle">128 × 16 b</text>
 
           <rect class="nbox" x="632" y="230" width="58" height="72" rx="4"/>
           <text class="t" x="661" y="260" text-anchor="middle">Flags</text>
@@ -279,7 +279,7 @@ tr.added td:first-child { color: var(--new); }
           <!-- row 2 -->
           <rect class="box" x="40" y="130" width="220" height="100" rx="4"/>
           <text class="t" x="150" y="158" text-anchor="middle">PC &amp; branch</text>
-          <text class="s" x="150" y="178" text-anchor="middle">6-bit PC · +1 or jump</text>
+          <text class="s" x="150" y="178" text-anchor="middle">7-bit PC · jumps from START_PC</text>
           <text class="s" x="150" y="196" text-anchor="middle">JMP conditions · JCRCBAD</text>
           <text class="s ln" x="150" y="214" text-anchor="middle">timeout → TIMEOUT_PC</text>
 
@@ -391,15 +391,15 @@ tr.added td:first-child { color: var(--new); }
           <tr><td>+2</td><td>PIN_BASE</td><td>First pin this engine's programs use</td></tr>
           <tr><td>+3</td><td>JMP_PIN</td><td>Pin tested by JMP PIN_HI / PIN_LO</td></tr>
           <tr><td>+4</td><td>SHIFT</td><td>OSR and ISR bit order (LSB or MSB first)</td></tr>
-          <tr><td>+5</td><td>START_PC</td><td>Where the program starts after a restart</td></tr>
+          <tr><td>+5</td><td>START_PC</td><td>The program's first word (0–127); all its jumps are relative to it</td></tr>
           <tr><td>+6</td><td>FIFO data</td><td>Write: TX FIFO; read: RX FIFO</td></tr>
           <tr class="reserved"><td>+7</td><td>—</td><td>Free</td></tr>
           <tr class="added"><td>+8</td><td>FLAG_BASE</td><td>First of the 8 flags this engine sees (reset: 0 for engine 0, 4 for engine 1)</td></tr>
-          <tr class="added"><td>+9, +A</td><td>CRC_POLY</td><td>CRC polynomial, top term implied</td></tr>
+          <tr class="added"><td>+9, +A</td><td>CRC_POLY</td><td>Write: CRC polynomial, top term implied. Read: the CRC's current value (for CRCs sent inverted)</td></tr>
           <tr class="added"><td>+B</td><td>CRC_CFG</td><td>Width − 1, initial value all ones, reversed output, fed by OUT bits, fed by IN bits</td></tr>
           <tr class="added"><td>+C, +D</td><td>TIMEOUT</td><td>Ticks a blocked WAIT / PULL / PUSH may wait; 0 = forever</td></tr>
-          <tr class="added"><td>+E</td><td>LINE_CFG</td><td>TIMEOUT_PC (where a timeout jumps) and odd parity</td></tr>
-          <tr class="added"><td>+F</td><td>STATUS</td><td>Read: parity error, CRC ok, timeout happened. Write: restart the CRC, clear the timeout flag</td></tr>
+          <tr class="added"><td>+E</td><td>LINE_CFG</td><td>TIMEOUT_PC (where a timeout jumps), no parity (8N2), odd parity</td></tr>
+          <tr class="added"><td>+F</td><td>STATUS</td><td>Read: parity error, CRC ok, timeout happened, RX overflow. Write: restart the CRC, clear the timeout or overflow flag</td></tr>
         </tbody>
       </table>
     </div>

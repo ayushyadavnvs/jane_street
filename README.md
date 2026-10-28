@@ -32,4 +32,4 @@ turns the clock into the bit rate a protocol needs.
 
 | Results | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
 |---|---|---|
-| Version 1 | 164,095 µm² (18%) | 3.80 ns |
+| Version 1 | 262,618 µm² (29%) | 3.97 ns |

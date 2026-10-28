@@ -24,7 +24,7 @@ test/modbus_image.hex: programs/modbus_rtu.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/modbus_rtu.pbe@0
 
 test/conc_image.hex: programs/i2c_ctrl.pbe programs/onewire_ctrl.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/i2c_ctrl.pbe@0 programs/onewire_ctrl.pbe@34
+	python3 tools/pbe_asm.py -o $@ programs/i2c_ctrl.pbe@0 programs/onewire_ctrl.pbe@64
 
 test: test/conc_image.hex test/ow_image.hex test/modbus_image.hex test/nop_image.hex test/uart_image.hex test/spi_image.hex test/mixed_image.hex
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp

@@ -29,6 +29,8 @@ mark the old one **Changed** instead of deleting it.
 | Two protocols at once (I2C + 1-Wire) | Shared FLAG0/FLAG1: each engine took the other's requests | 8 flags, engine-relative via `FLAG_BASE`; host `FLAG_SET`/`FLAG_CLR` | D11, D27, BUG-017 |
 | USB (v2) | Opcode 111 and a line unit became USB-only: the engine drifted away from general | v2 retired; general features instead | D28 |
 | Modbus RTU, 1-Wire | Host had to compute CRC and parity; 3.5-character silence limited Modbus to 19200 baud | General CRC unit, parity bit, WAIT timeout on opcode 111 / pin action 6 | D6, D26, D29–D31 |
+| 1-Wire (strong pull-up) + I2C at once | 35 + 34 words did not fit the shared 64-word memory; Modbus alone is 56 | 128-word memory, jumps relative to `START_PC` | D4, D13 |
+| Modbus 8N2, 1-Wire inverted CRC-16 | `OUTPAR` always sent parity; "CRC ok = zero" cannot check inverted CRCs | No-parity bit in `LINE_CFG`; CRC value readable by the host | D29, D30 |
 
 ---
 
@@ -68,7 +70,7 @@ mark the old one **Changed** instead of deleting it.
   either. Four would multiply area for a benefit no protocol so far needs; with area use at
   15–21 %, adding engines later remains possible.
 
-## D4. Shared program memory, 32 → 64 words — **Changed (I2C)**
+## D4. Shared program memory, 32 → 64 → 128 words — **Changed (I2C, then two protocols at once)**
 
 - **Chosen originally:** 32 × 16-bit words shared by both engines, flip-flop based,
   each engine with its own start address (`START_PC`).
@@ -82,6 +84,23 @@ mark the old one **Changed** instead of deleting it.
   spare bit, so the instruction format did not change. 64 words also let UART TX + I2C, or
   USB TX + USB RX, sit in memory together.
 - **Cost:** v1 area 91,779 → 141,141 µm². Timing barely moved (3.56 → 3.61 ns).
+- **Changed again (1-Wire strong pull-up made it 35 words):** 1-Wire + I2C (69 words) no longer
+  fit, and Modbus (56) could not run beside anything but UART TX.
+- **Chosen now (decided with you):** 128 words, and every jump (`JMP`, `JCRCBAD`, the timeout) is
+  relative to the engine's `START_PC`. Each engine works in its own 64-word window, any two
+  programs of up to 64 words can run together, and programs load anywhere (the assembler labels
+  each program from 0). The PC stays an absolute 7-bit address, so the add happens on the jump
+  path, not the instruction-fetch path. Same idea as `PIN_BASE` and `FLAG_BASE`.
+- **Alternatives:** two separate 64-word memories (same area, but loaded separately and no
+  shared code); squeezing programs onto a 2 µs 1-Wire tick to fit 64 words (fragile, and Modbus
+  still could not share).
+- **Cost:** 164,095 → 262,618 µm² (18 % → 29 % of 6×4). I estimated +49,000 µm² beforehand; the
+  real cost is about twice that, because doubling the words also doubles both engines'
+  128-way read multiplexers. Worst logic path 3.97 ns.
+- **Next option:** latches instead of flip-flops for program memory (31 µm² per bit instead of
+  ~67 µm² for a flip-flop with its write multiplexer) could save about 70,000 µm². Program memory
+  is written rarely by the host, which suits latches, but latch timing in the Tiny Tapeout flow
+  needs checking first.
 
 ## D5. Instruction format
 
@@ -185,7 +204,7 @@ mark the old one **Changed** instead of deleting it.
   2 bytes).
 - **Changed:** 64 words need 128 bytes, more than the 7-bit address space has left.
 - **Chosen now:** `PM_ADDR` (0x06) holds a byte pointer, `PM_DATA` (0x07) writes a byte and
-  advances it. A program loads in one SPI burst.
+  advances it. A program loads in one SPI burst. With 128 words (D4) the pointer uses all 8 bits.
 - **Alternative:** An 8-bit address command. Rejected: changes the host protocol for every
   register.
 
@@ -273,6 +292,7 @@ mark the old one **Changed** instead of deleting it.
 - **Two host processes** (for protocols running at once) share the host port through a fair
   ticket lock (BUG-018), and the tests change flags through `flag_set` / `flag_clear` /
   `flag_get` helpers that know each engine's flag window.
+- **Testbench clock = planned clock (48 MHz)** since BUG-020; it had been 50 MHz.
 - **Planned:** third-party protocol decoders (sigrok), a Python golden model with random
   programs, formal properties (SymbiYosys), mutation score (MCY).
 
@@ -308,7 +328,19 @@ mark the old one **Changed** instead of deleting it.
   their values, so released lines float to their pull-ups cleanly. Programs set a value before
   toggling a pin, so the stale value is harmless.
 
-## D25. 1-Wire controller (program only)
+## D25. 1-Wire controller (program only) — **Changed (strong pull-up)**
+
+- **Now 35 words.** FLAG0 has two meanings: with nothing queued it requests a reset; set *after*
+  a byte is queued it requests a strong pull-up after that byte (DQ driven hard high from 7 µs
+  after the last slot until the host clears FLAG0), which parasite-powered devices need during
+  CONVERT T. The idle loop therefore checks for queued bytes before FLAG0.
+  - **Alternative:** a separate flag for the pull-up. Rejected: `JMP` can only test FLAG0 and
+    FLAG1, and FLAG1 is single-slot mode.
+- **CRCs** are checked with the CRC unit through the host registers (D29): CRC-8 by "CRC ok",
+  inverted CRC-16 by reading the CRC value.
+- The text below describes the first version.
+
+### First version
 
 - **Chosen:** `programs/onewire_ctrl.pbe`, 30 words, tick = 1 µs. A write-1 slot and a read slot
   are identical on the wire (6 µs low, then released), so one slot routine does both, like the
@@ -388,6 +420,12 @@ mark the old one **Changed** instead of deleting it.
 - **Instructions (opcode 111):** `CRCRST`, `OSRCRC LO/HI` (load a CRC byte to send), `JCRCBAD`.
   The host can also restart the CRC and read "CRC ok" through the engine's `STATUS` register,
   which is how the unchanged 1-Wire program gets a hardware CRC-8 check.
+- **Changed (1-Wire inverted CRC-16):** reading +9/+A now returns the CRC's current value instead
+  of the polynomial. Devices such as the DS2408 and DS2431 send their CRC-16 inverted, where
+  "zero" is never the result; the host reads the value and compares it with the received bytes.
+  Polynomial read-back is lost, which only a debugging host would miss.
+  - **Alternatives:** a residual-compare register (no register slot free); a final-inversion
+    option (engine-side checks for inverted CRCs would still need a residual).
 - **Alternatives:**
   1. Host computes CRCs (the first Modbus/1-Wire versions). Works for slow protocols, but the
      engine cannot act on the result, which USB and CAN need.
@@ -407,6 +445,10 @@ mark the old one **Changed** instead of deleting it.
   per character and CRC-16 per frame at the same time.
 - **Alternative:** host supplies the parity bit (first Modbus version): costs a FIFO byte per
   character and host work. Rejected now that the cost is two flip-flops.
+- **Changed (Modbus 8N2, BUG-019):** `LINE_CFG[6]` = no parity: `OUTPAR` sends 1 (the second stop
+  bit) and no receive parity error is reported. The same Modbus program then does 8E1, 8O1 and
+  8N2.
+
 
 ## D31. WAIT timeout through a timeout vector
 
@@ -427,6 +469,8 @@ mark the old one **Changed** instead of deleting it.
 
 - **Engine registers:** +0 to +F are now all used (+7 is free only by accident of history:
   it was v2's `BITDIV`). New per-engine settings will need a second register window.
+  `LINE_CFG` is full too ([5:0] timeout PC, [6] no parity, [7] odd parity), and `STATUS` uses 4
+  of 8 bits.
 - **Opcodes:** opcode 111 has sub-ops 4–7 free. Planned users: compare-and-branch on received data,
   `MOV X, ISR`, line-coder operations. When those run out: 24-bit instructions (program memory
   +50 %, ~+25,000 µm²) or a second opcode page.
@@ -434,3 +478,11 @@ mark the old one **Changed** instead of deleting it.
   hides in a delay. Needed only for a protocol at one tick per bit with no gap between bytes, and
   then "auto-pull" is cheaper than wider registers.
 
+## D33. RX overflow is reported, not silent
+
+- **Chosen:** a `PUSH` that finds the RX FIFO full sets a sticky `STATUS[3]` bit (also in `STAT`)
+  and raises IRQ once. The engine still waits for room, as before.
+- **Why:** with 4-byte FIFOs a slow host can fall behind (at 115200 baud it has ~95 µs per
+  character). The data is then damaged either way; the point is that the host finds out.
+- **Alternatives:** drop the byte and keep going (keeps timing, loses data silently); deeper
+  FIFOs (area; v2 needed 16 bytes for USB and paid ~32,800 µm²).

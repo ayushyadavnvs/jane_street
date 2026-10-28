@@ -7,7 +7,7 @@
 //
 // Every pin has a pull-up and lines are wired-AND, like a real open-drain bus.
 module tb_pbe;
-  localparam int CLK_NS = 20;  // 50 MHz
+  localparam real CLK_NS = 20.8333;  // 48 MHz, the planned clock
   localparam int HOST_HALF = 8;  // host SCK half period in clocks (SCK = clk / 16)
   localparam int UART_BIT = 100;  // clocks per UART bit (500 kbaud at 50 MHz)
 
@@ -81,13 +81,13 @@ module tb_pbe;
   endtask
 
   task automatic load_program(input string file);
-    logic [15:0] img[64];
+    logic [15:0] img[128];
     logic [7:0] d;
     $readmemh(file, img);
     reg_write(7'h06, 0);         // program memory pointer = word 0, high byte
     cs(0);
     spi_byte({1'b1, 7'h07}, d);  // burst into PM_DATA; the pointer advances per byte
-    for (int w = 0; w < 64; w++) begin
+    for (int w = 0; w < 128; w++) begin
       spi_byte(img[w][15:8], d);
       spi_byte(img[w][7:0], d);
     end
@@ -308,8 +308,13 @@ module tb_pbe;
   localparam logic [71:0] OW_SP = 72'h1C100CFF7F464B0550;  // DS18B20 power-up scratchpad, CRC 1C
   bit ow_en_a = 0, ow_en_b = 0, ow_mon = 0;
   wire ow_pull_a, ow_pull_b;
-  ow_device #(.ROM(ROM_A), .SP(OW_SP)) u_ow_a (.dq(bus[OW]), .enable(ow_en_a), .pull(ow_pull_a));
-  ow_device #(.ROM(ROM_B), .SP(OW_SP)) u_ow_b (.dq(bus[OW]), .enable(ow_en_b), .pull(ow_pull_b));
+  localparam logic [71:0] OW_SP_25C = 72'h70100CFF7F464B0191;  // after CONVERT T: 25.0625 C, CRC 70
+  localparam logic [79:0] OW_BLK = 80'hB41E8877665544332211;   // 8 bytes + inverted CRC-16 (1E B4)
+  wire ow_strong = uio_oe[OW] && uio_out[OW];                   // chip drives DQ hard high
+  ow_device #(.ROM(ROM_A), .SP(OW_SP), .SP_CONV(OW_SP_25C), .BLK(OW_BLK)) u_ow_a
+      (.dq(bus[OW]), .enable(ow_en_a), .hard_hi(ow_strong), .pull(ow_pull_a));
+  ow_device #(.ROM(ROM_B), .SP(OW_SP), .SP_CONV(OW_SP_25C), .BLK(OW_BLK)) u_ow_b
+      (.dq(bus[OW]), .enable(ow_en_b), .hard_hi(ow_strong), .pull(ow_pull_b));
   wire ow_pull_any = ow_pull_a | ow_pull_b;
 
   // Slot timing: every low pulse the controller makes on its own must be a write-1/read pulse
@@ -429,6 +434,7 @@ module tb_pbe;
   // characters, then answers with mb_resp (parity flipped on byte mb_bad, if set).
   real MB_BIT = 1.0e9 / 19200.0;  // ns
   bit mb_en = 0;
+  bit mb_npar = 0;  // 8N2: no parity bit, a second stop bit instead
   int mb_bad = -1, mb_frames = 0, mb_par_err = 0, mb_stop_err = 0, mb_de_err = 0, mb_k, mb_m;
   real mb_max_gap = 0;
   realtime mb_t_end;
@@ -453,7 +459,7 @@ module tb_pbe;
       mb_p = bus[0];
       #(MB_BIT);
       mb_s = bus[0];
-      if (^{mb_c, mb_p}) mb_par_err++;
+      if (mb_npar ? !mb_p : ^{mb_c, mb_p}) mb_par_err++;
       if (!mb_s) mb_stop_err++;
       mb_req_got.push_back(mb_c);
       mb_t_end = $realtime + MB_BIT / 2;
@@ -475,7 +481,7 @@ module tb_pbe;
         ext_val[1] = mb_o[mb_k];
         #(MB_BIT);
       end
-      ext_val[1] = ^mb_o ^ (mb_m == mb_bad);  // even parity, optionally wrong
+      ext_val[1] = mb_npar ? 1'b1 : ^mb_o ^ (mb_m == mb_bad);  // even parity (optionally wrong) or stop
       #(MB_BIT);
       ext_val[1] = 1;  // stop
       #(MB_BIT);
@@ -801,8 +807,62 @@ module tb_pbe;
     ow_mon = 0;
     check(ow_bad == 0 && ow_short > 0 && ow_long > 0 && ow_resets >= 5,
           $sformatf("1-Wire timing: %0d bad, %0d short, %0d long, %0d resets", ow_bad, ow_short, ow_long, ow_resets));
-    reg_write(7'h2B, 8'h00);             // CRC off again
     $display("  hardware CRC-8 checked the ROM ID and the scratchpad");
+
+    // CONVERT T on parasite-powered device A: strong pull-up right after the command byte
+    ow_reset;
+    ow_tx = 8'h55; ow_xbyte;
+    for (ow_j = 0; ow_j < 8; ow_j++) begin
+      ow_tx = ROM_A[8*ow_j+:8];
+      ow_xbyte;
+    end
+    fifo_send(ow_e, 8'h44);              // CONVERT T, queued first...
+    flag_set(ow_e, 0);                   // ...then FLAG0: strong pull-up after this byte
+    fifo_recv(ow_e, ow_r);
+    #(50us);
+    check(ow_strong, "1-Wire: DQ not driven high after CONVERT T");
+    #(1200us);
+    flag_clear(ow_e, 0);                 // conversion time over: pull-up off
+    #(20us);
+    check(!uio_oe[OW], "1-Wire: DQ still driven after the strong pull-up ended");
+    check(u_ow_a.conversions == 1 && u_ow_a.conv_fails == 0,
+          $sformatf("1-Wire: %0d conversions, %0d failed", u_ow_a.conversions, u_ow_a.conv_fails));
+    ow_reset;                            // read the new temperature
+    ow_tx = 8'h55; ow_xbyte;
+    for (ow_j = 0; ow_j < 8; ow_j++) begin
+      ow_tx = ROM_A[8*ow_j+:8];
+      ow_xbyte;
+    end
+    ow_tx = 8'hBE; ow_xbyte;
+    ow_i = 9; ow_read_bytes;
+    for (ow_i = 0; ow_i < 9; ow_i++)
+      check(ow_buf[ow_i] === OW_SP_25C[8*ow_i+:8], $sformatf("1-Wire converted scratchpad byte %0d: %02x", ow_i, ow_buf[ow_i]));
+    $display("  CONVERT T with strong pull-up: device read 25.0625 C");
+
+    // Inverted CRC-16 (DS2408/DS2431 style): the host reads the CRC unit's value and compares
+    ow_reset;
+    ow_tx = 8'h55; ow_xbyte;
+    for (ow_j = 0; ow_j < 8; ow_j++) begin
+      ow_tx = ROM_B[8*ow_j+:8];
+      ow_xbyte;
+    end
+    ow_tx = 8'hAA; ow_xbyte;
+    reg_write(7'h29, 8'h05);             // CRC-16, poly 0x8005, init 0, reversed, fed by IN
+    reg_write(7'h2A, 8'h80);
+    reg_write(7'h2B, 8'hAF);
+    reg_write(7'h2F, 8'h01);             // restart it after the command byte
+    ow_i = 8; ow_read_bytes;
+    for (ow_i = 0; ow_i < 8; ow_i++)
+      check(ow_buf[ow_i] === OW_BLK[8*ow_i+:8], $sformatf("1-Wire block byte %0d: %02x", ow_i, ow_buf[ow_i]));
+    reg_read(7'h29, ow_crc);             // the live CRC value (low byte)...
+    reg_read(7'h2A, ow_byte);            // ...and high byte
+    ow_tx = 8'hFF; ow_xbyte; ow_f = ow_r;
+    ow_tx = 8'hFF; ow_xbyte;
+    check({ow_byte, ow_crc} == 16'h4BE1, $sformatf("1-Wire: CRC unit value %04x, expected 4be1", {ow_byte, ow_crc}));
+    check(ow_f === ~ow_crc && ow_r === ~ow_byte,
+          $sformatf("1-Wire: device sent CRC %02x %02x, inverted CRC unit value %02x %02x", ow_f, ow_r, ~ow_crc, ~ow_byte));
+    reg_write(7'h2B, 8'h00);             // CRC off again
+    $display("  inverted CRC-16 checked by the host against the CRC unit's value");
     $display("  MATCH ROM + READ SCRATCHPAD ok; timing checked on %0d short, %0d long pulses and %0d resets",
              ow_short, ow_long, ow_resets);
     ow_en_a = 0;
@@ -825,10 +885,13 @@ module tb_pbe;
     reg_write(7'h1E, 8'h01);             // LINE_CFG: timeout jumps to word 1, even parity
     mb_en = 1;
 
-    // round 0: normal; 1: response parity error; 2: response CRC corrupted; 3: normal at 115200
-    for (int round = 0; round < 4; round++) begin
+    // round 0: normal; 1: response parity error; 2: response CRC corrupted; 3: normal at 115200;
+    // 4: 8N2 at 19200
+    for (int round = 0; round < 5; round++) begin
       mb_baud = (round == 3) ? 115200.0 : 19200.0;
-      if (round == 0 || round == 3) mb_config;
+      mb_npar = (round == 4);
+      if (round == 4) reg_write(7'h1E, 8'h41);  // LINE_CFG: no parity (second stop bit instead)
+      if (round == 0 || round == 3 || round == 4) mb_config;
       mb_bad = (round == 1) ? 3 : -1;
       mb_resp = '{8'h01, 8'h03, 8'h04, 8'h12, 8'h34, 8'h56, 8'h78, 8'h81, 8'h07};
       if (round == 2) mb_resp[8] = 8'h06;  // wrong CRC high byte
@@ -854,9 +917,33 @@ module tb_pbe;
       mb_x = mb_par[mb_par.size() - 1];  // status after the last character: CRC ok?
       check(mb_x[1] == (round != 2), $sformatf("Modbus round %0d: CRC ok = %b", round, mb_x[1]));
       check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus round %0d: %0.0f ns gap inside a request", round, mb_max_gap));
-      $display("  round %0d at %0.0f baud: request with hardware CRC ok; response %0d parity error(s), CRC ok = %b",
-               round, mb_baud, mb_perr, mb_x[1]);
+      $display("  round %0d at %0.0f baud %s: request with hardware CRC ok; response %0d parity error(s), CRC ok = %b",
+               round, mb_baud, mb_npar ? "8N2" : "8E1", mb_perr, mb_x[1]);
     end
+    mb_npar = 0;
+
+    // RX overflow: the host does not read during the response; the engine must report it
+    reg_write(7'h1E, 8'h01);             // back to 8E1
+    mb_baud = 115200.0;
+    mb_config;
+    mb_bad = -1;
+    mb_resp = '{8'h01, 8'h03, 8'h04, 8'h12, 8'h34, 8'h56, 8'h78, 8'h81, 8'h07};
+    mb_send;
+    do flag_get(0, 2, mb_fdone); while (!mb_fdone);  // wait for the frame end, reading nothing
+    reg_read(7'h1F, mb_st);
+    check(mb_st[3], "Modbus: RX overflow not reported in STATUS");
+    check(uo_out[1], "Modbus: no IRQ for the RX overflow");
+    reg_read(7'h01, mb_st);
+    while (!mb_st[0]) begin               // drain whatever arrived
+      reg_read(7'h16, mb_d);
+      reg_read(7'h01, mb_st);
+    end
+    reg_write(7'h1F, 8'h04);             // clear the overflow
+    reg_read(7'h1F, mb_st);
+    check(!mb_st[3], "Modbus: RX overflow did not clear");
+    flag_clear(0, 2);
+    reg_write(7'h02, 8'h03);
+    $display("  RX overflow (host not reading) reported in STATUS and by IRQ");
     check(mb_par_err == 0 && mb_stop_err == 0 && mb_de_err == 0,
           $sformatf("Modbus: device saw %0d parity, %0d stop, %0d DE errors", mb_par_err, mb_stop_err, mb_de_err));
     check(mb_glitches == 0, $sformatf("Modbus: %0d glitches on the TX line", mb_glitches));
@@ -872,13 +959,13 @@ module tb_pbe;
     mb_en = 0;
     reg_write(7'h04, 8'h00);
     reg_write(7'h02, 8'h03);
-    load_program("conc_image.hex");      // i2c_ctrl at word 0, onewire_ctrl at word 34
+    load_program("conc_image.hex");      // i2c_ctrl at word 0, onewire_ctrl at word 64
     reg_write(7'h03, 8'b0011_0000);      // pins 4, 5 to E1; pin 6 to E0
     reg_write(7'h10, 8'($rtoi(1000.0 / CLK_NS + 0.5) - 1));  // E0: 1-Wire, tick = 1 us
     reg_write(7'h11, 0);
     reg_write(7'h12, OW);
     reg_write(7'h14, 2'b00);
-    reg_write(7'h15, 34);
+    reg_write(7'h15, 64);
     reg_write(7'h20, 17);                // E1: I2C fast mode
     reg_write(7'h21, 0);
     reg_write(7'h22, 4);
@@ -947,7 +1034,7 @@ module tb_pbe;
   end
 
   initial begin
-    #200ms;
+    #400ms;
     $fatal(1, "FAILED: timeout");
   end
 endmodule
@@ -957,14 +1044,40 @@ endmodule
 // the line low for 30 us to send a 0. Written independently of the RTL.
 module ow_device #(
     parameter logic [63:0] ROM = 64'h0,
-    parameter logic [71:0] SP  = 72'h0
+    parameter logic [71:0] SP  = 72'h0,
+    parameter logic [71:0] SP_CONV = 72'h0,  // scratchpad after a successful CONVERT T
+    parameter logic [79:0] BLK = 80'h0       // sent by function AA: data + inverted CRC-16
 ) (
     input  wire  dq,
     input  wire  enable,
+    input  wire  hard_hi, // DQ actively driven high (strong pull-up)
     output logic pull
 );
-  localparam int S_IDLE = 0, S_CMD = 1, S_ROMTX = 2, S_SRCH = 3, S_MATCH = 4, S_FUNC = 5, S_SPTX = 6;
-  int st = S_IDLE, n = 0, sub = 0;
+  localparam int S_IDLE = 0, S_CMD = 1, S_ROMTX = 2, S_SRCH = 3, S_MATCH = 4, S_FUNC = 5, S_SPTX = 6,
+                 S_BLKTX = 7;
+  localparam realtime CONV_NS = 1000000;  // conversion time (1 ms here; 750 ms in a real DS18B20)
+  int st = S_IDLE, n = 0, sub = 0, conversions = 0, conv_fails = 0;
+  logic [71:0] sp = SP;
+  event conv_go;
+  // Parasite power: the conversion needs DQ driven hard high within 10 us and for CONV_NS.
+  initial forever begin
+    @(conv_go);
+    #10000;
+    begin : conv
+      realtime t;
+      bit ok;
+      ok = 1;
+      t = $realtime;
+      while ($realtime - t < CONV_NS) begin
+        if (!hard_hi) ok = 0;
+        #1000;
+      end
+      if (ok) begin
+        sp = SP_CONV;
+        conversions++;
+      end else conv_fails++;
+    end
+  end
   logic [63:0] sh;
   bit tx_mode, tx_bit, b;
   realtime t0;
@@ -977,7 +1090,8 @@ module ow_device #(
         tx_bit = 1;
         if (st == S_ROMTX) begin tx_mode = 1; tx_bit = ROM[n]; end
         if (st == S_SRCH && sub < 2) begin tx_mode = 1; tx_bit = sub ? !ROM[n] : ROM[n]; end
-        if (st == S_SPTX) begin tx_mode = 1; tx_bit = SP[n]; end
+        if (st == S_SPTX) begin tx_mode = 1; tx_bit = sp[n]; end
+        if (st == S_BLKTX) begin tx_mode = 1; tx_bit = BLK[n]; end
         t0 = $realtime;
         if (tx_mode && !tx_bit) pull = 1;
         #30000;
@@ -1035,11 +1149,20 @@ module ow_device #(
               sh[n] = b;
               n++;
               if (n == 8) begin
-                st = (sh[7:0] == 8'hBE) ? S_SPTX : S_IDLE;
+                case (sh[7:0])
+                  8'hBE: st = S_SPTX;   // READ SCRATCHPAD
+                  8'hAA: st = S_BLKTX;  // block with an inverted CRC-16
+                  8'h44: begin          // CONVERT T, parasite powered
+                    st = S_IDLE;
+                    -> conv_go;
+                  end
+                  default: st = S_IDLE;
+                endcase
                 n = 0;
               end
             end
             S_SPTX: begin n++; if (n == 72) st = S_IDLE; end
+            S_BLKTX: begin n++; if (n == 80) st = S_IDLE; end
             default: ;
           endcase
         end

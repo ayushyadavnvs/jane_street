@@ -21,20 +21,23 @@
 //   0x08 FLAG_SET W  write 1s to set flags
 //   0x09 FLAG_CLR W  write 1s to clear flags (use these two so the other engine's flags are untouched)
 //   0x05 PINS     R  synchronized pin levels
-//   0x06 PM_ADDR  RW program memory byte pointer [6:0]: word = [6:1], [0] = 0 high byte, 1 low byte
+//   0x06 PM_ADDR  RW program memory byte pointer [7:0]: word = [7:1], [0] = 0 high byte, 1 low byte
+//                    (128 words; each engine runs the program that starts at its START_PC)
 //   0x07 PM_DATA  W  write the byte at PM_ADDR, then PM_ADDR += 1 (program memory is write only)
 //   0x10+0x10*e   engine e (e = 0, 1):
 //      +0 CLKDIV_L, +1 CLKDIV_H   tick every (CLKDIV + 1) clocks
 //      +2 PIN_BASE[2:0]  +3 JMP_PIN[2:0]  +4 SHIFT [0] OUT msb first, [1] IN msb first
-//      +5 START_PC[5:0]
+//      +5 START_PC[6:0]   the program's first word; its jumps are relative to it (64-word window)
 //      +8 FLAG_BASE[2:0]  first physical flag this engine sees (reset: 0 for E0, 4 for E1)
-//      +9 CRC_POLY_L, +A CRC_POLY_H   CRC polynomial (top term implied)
+//      +9 CRC_POLY_L, +A CRC_POLY_H   W: CRC polynomial (top term implied); R: the CRC's current value
 //      +B CRC_CFG    [3:0] width - 1, [4] init all ones, [5] reversed output, [6] feed OUT bits,
 //                    [7] feed IN bits (both 0: CRC off)
 //      +C TIMEOUT_L, +D TIMEOUT_H     ticks a blocked WAIT/PULL/PUSH may wait (0 = forever)
-//      +E LINE_CFG   [5:0] TIMEOUT_PC (where a timeout jumps), [7] odd parity
-//      +F STATUS     R: [0] receive parity error, [1] CRC ok (zero), [2] timeout happened
-//                    W: [0] = 1 restarts the CRC, [1] = 1 clears "timeout happened"
+//      +E LINE_CFG   [5:0] TIMEOUT_PC (where a timeout jumps), [6] no parity, [7] odd parity
+//      +F STATUS     R: [0] receive parity error, [1] CRC ok (zero), [2] timeout happened,
+//                       [3] RX overflow (a PUSH found the RX FIFO full; also raises IRQ)
+//                    W: [0] = 1 restarts the CRC, [1] = 1 clears "timeout happened",
+//                       [2] = 1 clears "RX overflow"
 //      +6 FIFO data: W pushes the TX FIFO, R pops the RX FIFO
 module tt_um_pbe (
     input  wire [7:0] ui_in,
@@ -85,18 +88,19 @@ module tt_um_pbe (
   logic [5:0]  flag_base;  // 3 bits per engine
   logic [31:0] crc_poly, timeout;
   logic [15:0] crc_cfg, line_cfg;
-  logic [5:0]  e_status;   // 3 bits per engine
+  logic [7:0]  e_status;   // 4 bits per engine
+  logic [31:0] e_crc;      // each engine's current CRC value
   logic [31:0] clkdiv;
   logic [5:0]  pin_base, jmp_pin;
   logic [3:0]  shiftcfg;
-  logic [11:0] start_pc;
-  logic [6:0]  pm_ptr;
+  logic [13:0] start_pc;  // 7 bits per engine
+  logic [7:0]  pm_ptr;
 
   wire [1:0] restart = (wr_en && wr_addr == 7'h00) ? wr_data[5:4] : 2'b00;
   wire [1:0] flush   = (wr_en && wr_addr == 7'h00) ? wr_data[7:6] : 2'b00;
 
   // engine-facing signals
-  logic [11:0] pc;
+  logic [13:0] pc;  // 7 bits per engine
   logic [31:0] instr;
   logic [15:0] e_out, e_oe, tx_data, rx_din, rx_dout;
   logic [1:0]  tx_empty, tx_full, tx_pop, rx_empty, rx_full, rx_push, e_irq;
@@ -139,7 +143,7 @@ module tt_um_pbe (
           7'h02: irq_pend <= (irq_pend | e_irq) & ~wr_data[1:0];
           7'h03: pin_own <= wr_data;
           7'h04: flags <= wr_data;
-          7'h06: pm_ptr <= wr_data[6:0];
+          7'h06: pm_ptr <= wr_data;
           7'h07: pm_ptr <= pm_ptr + 1'b1;
           default: ;
         endcase
@@ -151,7 +155,7 @@ module tt_um_pbe (
           4'h2: pin_base[2:0] <= wr_data[2:0];
           4'h3: jmp_pin[2:0]  <= wr_data[2:0];
           4'h4: shiftcfg[1:0] <= wr_data[1:0];
-          4'h5: start_pc[5:0]  <= wr_data[5:0];
+          4'h5: start_pc[6:0]  <= wr_data[6:0];
           4'h8: flag_base[2:0] <= wr_data[2:0];
           4'h9: crc_poly[7:0]   <= wr_data;
           4'hA: crc_poly[15:8]  <= wr_data;
@@ -169,7 +173,7 @@ module tt_um_pbe (
           4'h2: pin_base[5:3] <= wr_data[2:0];
           4'h3: jmp_pin[5:3]  <= wr_data[2:0];
           4'h4: shiftcfg[3:2] <= wr_data[1:0];
-          4'h5: start_pc[11:6] <= wr_data[5:0];
+          4'h5: start_pc[13:7] <= wr_data[6:0];
           4'h8: flag_base[5:3] <= wr_data[2:0];
           4'h9: crc_poly[23:16] <= wr_data;
           4'hA: crc_poly[31:24] <= wr_data;
@@ -196,15 +200,15 @@ module tt_um_pbe (
       4'h2:    eng_rd = {5'b0, rd_e1 ? pin_base[5:3] : pin_base[2:0]};
       4'h3:    eng_rd = {5'b0, rd_e1 ? jmp_pin[5:3] : jmp_pin[2:0]};
       4'h4:    eng_rd = {6'b0, rd_e1 ? shiftcfg[3:2] : shiftcfg[1:0]};
-      4'h5:    eng_rd = {2'b0, rd_e1 ? start_pc[11:6] : start_pc[5:0]};
+      4'h5:    eng_rd = {1'b0, rd_e1 ? start_pc[13:7] : start_pc[6:0]};
       4'h8:    eng_rd = {5'b0, rd_e1 ? flag_base[5:3] : flag_base[2:0]};
-      4'h9:    eng_rd = rd_e1 ? crc_poly[23:16] : crc_poly[7:0];
-      4'hA:    eng_rd = rd_e1 ? crc_poly[31:24] : crc_poly[15:8];
+      4'h9:    eng_rd = rd_e1 ? e_crc[23:16] : e_crc[7:0];   // reads give the CRC value
+      4'hA:    eng_rd = rd_e1 ? e_crc[31:24] : e_crc[15:8];
       4'hB:    eng_rd = rd_e1 ? crc_cfg[15:8] : crc_cfg[7:0];
       4'hC:    eng_rd = rd_e1 ? timeout[23:16] : timeout[7:0];
       4'hD:    eng_rd = rd_e1 ? timeout[31:24] : timeout[15:8];
       4'hE:    eng_rd = rd_e1 ? line_cfg[15:8] : line_cfg[7:0];
-      4'hF:    eng_rd = {5'b0, rd_e1 ? e_status[5:3] : e_status[2:0]};
+      4'hF:    eng_rd = {4'b0, rd_e1 ? e_status[7:4] : e_status[3:0]};
       4'h6:    eng_rd = rd_e1 ? rx_dout[15:8] : rx_dout[7:0];
       default: eng_rd = 8'h00;
     endcase
@@ -219,21 +223,21 @@ module tt_um_pbe (
       7'h03:   rd_data = pin_own;
       7'h04:   rd_data = flags;
       7'h05:   rd_data = pins_s2;
-      7'h06:   rd_data = {1'b0, pm_ptr};
+      7'h06:   rd_data = pm_ptr;
       default: rd_data = rd_eng ? eng_rd : 8'h00;
     endcase
   end
 
   // ---- program memory: 64 x 16, written by the host, read by both engines ----
-  logic [15:0] pmem[64];
+  logic [15:0] pmem[128];
   always_ff @(posedge clk) begin
     if (wr_en && wr_addr == 7'h07) begin
-      if (pm_ptr[0]) pmem[pm_ptr[6:1]][7:0] <= wr_data;
-      else pmem[pm_ptr[6:1]][15:8] <= wr_data;
+      if (pm_ptr[0]) pmem[pm_ptr[7:1]][7:0] <= wr_data;
+      else pmem[pm_ptr[7:1]][15:8] <= wr_data;
     end
   end
-  assign instr[15:0]  = pmem[pc[5:0]];
-  assign instr[31:16] = pmem[pc[11:6]];
+  assign instr[15:0]  = pmem[pc[6:0]];
+  assign instr[31:16] = pmem[pc[13:7]];
 
   // ---- engines and their FIFOs ----
   for (genvar e = 0; e < 2; e++) begin : g_eng
@@ -279,15 +283,17 @@ module tt_um_pbe (
         .jmp_pin      (jmp_pin[e*3+:3]),
         .out_msb_first(shiftcfg[e*2]),
         .in_msb_first (shiftcfg[e*2+1]),
-        .start_pc     (start_pc[e*6+:6]),
+        .start_pc     (start_pc[e*7+:7]),
         .crc_poly     (crc_poly[e*16+:16]),
         .crc_cfg      (crc_cfg[e*8+:8]),
         .timeout      (timeout[e*16+:16]),
         .line_cfg     (line_cfg[e*8+:8]),
         .host_crc_init(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[0]),
         .host_tmo_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[1]),
-        .status       (e_status[e*3+:3]),
-        .pc           (pc[e*6+:6]),
+        .host_ovf_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[2]),
+        .status       (e_status[e*4+:4]),
+        .crc_now      (e_crc[e*16+:16]),
+        .pc           (pc[e*7+:7]),
         .instr        (instr[e*16+:16]),
         .pins_in      (pins_s2),
         .pins_out     (e_out[e*8+:8]),

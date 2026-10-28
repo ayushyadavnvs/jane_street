@@ -13,7 +13,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_crc.sv` | General CRC unit (one per engine) |
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 4 × 8-bit FIFO |
-| `tools/pbe_asm.py` | Assembler: `.pbe` text → 64-word hex image |
+| `tools/pbe_asm.py` | Assembler: `.pbe` text → 128-word hex image; labels relative to each program's start |
 | `programs/*.pbe` | UART TX, UART RX, SPI controller, I2C controller, 1-Wire controller, Modbus RTU master |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
@@ -39,7 +39,9 @@ make timing                                # critical path, slow corner
 
 The full register map is in the header comment of `src/tt_um_pbe.sv`. Programs are loaded by
 writing a byte pointer to `PM_ADDR` (0x06) and then streaming bytes into `PM_DATA` (0x07).
-Program memory holds 64 words shared by both engines; each engine has its own start address.
+Program memory holds 128 words shared by both engines. An engine runs the program that starts at
+its `START_PC`, and all its jumps are relative to that address, so each engine has its own
+64-word window and a program can be loaded anywhere.
 
 ## Instruction set
 
@@ -62,7 +64,14 @@ idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per e
 
 **CRC unit:** polynomial (+9/+A), and `CRC_CFG` (+B): width − 1, initial value all ones,
 reversed output, fed by `OUT` bits, fed by `IN` bits. "CRC ok" means the register is zero. The
-host can restart it and read the status through `STATUS` (+F).
+host can restart it and read the status through `STATUS` (+F), and **reading +9/+A returns the
+CRC's current value**, which is how the host checks CRCs that are sent inverted.
+
+**Parity:** `LINE_CFG[7]` selects odd parity; `LINE_CFG[6]` means no parity: `OUTPAR` then sends 1
+(a second stop bit, for 8N2) and no receive parity error is reported.
+
+**RX overflow:** a `PUSH` that finds the RX FIFO full sets `STATUS[3]` and raises IRQ, so a host
+that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
 
 ## Flags
 
@@ -97,15 +106,21 @@ Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pu
 - **Bytes:** each TX byte becomes 8 slots; the byte seen on DQ comes back. Send `0xFF` to read.
 - **Single slots** (Search ROM): set FLAG1 with the TX FIFO empty. Each TX byte is then one slot
   (bit 0), and the bit seen comes back in bit 7.
+- **Strong pull-up** (parasite-powered devices, e.g. a DS18B20 during CONVERT T): queue the
+  byte first, then set FLAG0. 7 µs after the byte's last slot the engine drives DQ hard high,
+  until the host clears FLAG0.
 - Slots are 65 µs: 6 µs low for a 1 or a read, 60 µs low for a 0, sample at 13 µs.
+- CRCs: set the CRC unit up for the device's CRC (CRC-8: poly 0x31, `CRC_CFG` 0xA7; CRC-16:
+  poly 0x8005, `CRC_CFG` 0xAF), restart it after the command byte, and read "CRC ok" from
+  `STATUS`, or the value from +9/+A for CRCs sent inverted.
 
 ## Modbus RTU host protocol (`programs/modbus_rtu.pbe`)
 
 RS-485 half duplex, 8E1 (or 8O1), any baud rate. Tick = 1/8 bit, LSB first, `JMP_PIN` = 1.
 Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
-Engine settings: `CRC_POLY` = 0x8005, `CRC_CFG` = 0xFF, `LINE_CFG` = 0x01 (0x81 for odd
-parity), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up to 19200 baud,
-1.75 ms above). The program must be loaded at word 0 (its timeout routine is word 1).
+Engine settings: `CRC_POLY` = 0x8005, `CRC_CFG` = 0xFF, `LINE_CFG` = 0x01 (0x81 for 8O1, 0x41
+for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up to 19200 baud,
+1.75 ms above). `TIMEOUT_PC` = 1: the timeout routine is the program's word 1.
 
 - **Send:** queue only the data bytes. When the request is queued and the TX FIFO is empty, set
   FLAG1; the engine adds the parity bits, appends the CRC, turns the driver off after the last
@@ -128,22 +143,27 @@ parity), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up 
      and that the STOP flag clears only after the STOP.
   4. 1-Wire with two DS18B20-style device models: presence and absence, READ ROM, Search ROM
      finding both devices, MATCH ROM + READ SCRATCHPAD, CRC-8 checked both by the host and by the
-     engine's CRC unit (through `STATUS`), and the timing of every low pulse.
+     engine's CRC unit (through `STATUS`), CONVERT T on a parasite-powered device with the strong
+     pull-up (the device model fails the conversion if DQ is not held high), a block with an
+     inverted CRC-16 checked through the CRC value read-out, and the timing of every low pulse.
   5. Modbus RTU master against an RS-485 device model, using the CRC unit, parity bit and
      timeout: a normal exchange, a response with a parity error, a response with a corrupted CRC
-     (both reported by the engine), and an exchange at 115200 baud. The device checks the
-     engine-appended CRC, parity, stop bits, driver enable and glitches on the TX line.
+     (both reported by the engine), an exchange at 115200 baud, one in 8N2, and an RX overflow
+     (the host deliberately not reading) reported in `STATUS` and by IRQ. The device checks the
+     engine-appended CRC, parity or second stop bit, driver enable and glitches on the TX line.
   6. Two flag-using protocols at once: a 1-Wire Search ROM on engine 0 while engine 1 runs I2C
-     write/read rounds, from two host processes sharing the host port.
+     write/read rounds, from two host processes sharing the host port. The 1-Wire program sits
+     at word 64, so this also checks jumps relative to `START_PC`.
+  - The testbench runs at 48 MHz, the planned clock.
   - Unit test: a restart in the same cycle as an instruction cancels its side effects.
   - Shortening the 1-Wire write-0 pulse, never turning the RS-485 driver off, a dead `OUTPAR`,
     a CRC check that always passes, or a timeout that never fires each make the tests fail.
-- Area, Yosys with the IHP sg13g2 typical library: 164,095 µm² of cell area. 6×4 tiles are
-  1289.28 × 710.64 µm = 916,229 µm², so cells fill about 18%. The CRC unit, parity bit and
-  timeout add about 20,700 µm² for both engines.
-- Timing, ABC with the slow library (1.08 V, 125 °C): 3.80 ns of logic on the worst path
+- Area, Yosys with the IHP sg13g2 typical library: 262,618 µm² of cell area. 6×4 tiles are
+  1289.28 × 710.64 µm = 916,229 µm², so cells fill about 29%. The 128-word program memory
+  (flip-flops) is most of it; a latch-based memory could save roughly 70,000 µm².
+- Timing, ABC with the slow library (1.08 V, 125 °C): 3.97 ns of logic on the worst path
   (engine PC → program memory read → decode → pin select → next state). With flip-flop
-  clock-to-Q and setup, about 4.7 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
+  clock-to-Q and setup, about 4.9 ns, against 20.8 ns at a 48 MHz clock. This leaves out wire
   delay and clock skew, so the real place-and-route timing report is still needed.
 - Not done yet: the input glitch filter, Tiny Tapeout `info.yaml` and docs, USB (see
   `../docs/USB_NOTES.md`).

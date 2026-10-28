@@ -30,6 +30,9 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-016 | Testbench | A counter shared with a static task was overwritten | Modbus test bring-up | Fixed |
 | BUG-017 | RTL (top) | Shared flags: two flag-using protocols on the two engines consumed each other's flags | Design review (D27) | Fixed |
 | BUG-018 | Testbench | Host-port lock was unfair; one host process starved the other | Two-protocol test bring-up | Fixed |
+| BUG-019 | Program (Modbus) / RTL | Rewriting Modbus for `OUTPAR` dropped 8N2 support | Completeness review | Fixed |
+| BUG-020 | Testbench | Tests ran at 50 MHz, not the planned 48 MHz | Completeness review | Fixed |
+| BUG-021 | Testbench | `strong` is a reserved word; the 200 ms time limit looked like a hang | Bring-up of this round | Fixed |
 
 ---
 
@@ -524,4 +527,54 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   if (level) host_serving++;
   ```
 - **Lesson:** a shared resource in a testbench needs a fair lock, just as in software.
+
+## BUG-019 — Modbus 8N2 lost when the program moved to `OUTPAR`
+
+- **Where:** `programs/modbus_rtu.pbe` and the parity logic in `src/pbe_engine.sv`.
+- **Found by:** reviewing what was still missing after the CRC/parity/timeout round.
+- **Cause:** the first Modbus program sent whatever bit the host put in a "parity byte", so the
+  host could send 1 for 8N2 (no parity, two stop bits). The rewrite generates parity in hardware
+  with `OUTPAR`, which always sent a parity bit, and the receiver always checked one. A
+  regression: no test covered 8N2.
+- **Before:**
+  ```systemverilog
+  wire par_err = par_in ^ odd;
+  3'd6: begin pins_out[pin_idx] <= par_out ^ odd; pins_oe[pin_idx] <= 1'b1; end   // OUTPAR
+  ```
+- **After:** `LINE_CFG[6]` = no parity: `OUTPAR` sends 1 and receive parity errors are masked.
+  The Modbus program is unchanged; the host sets `LINE_CFG` = 0x41.
+  ```systemverilog
+  wire no_par  = line_cfg[6];
+  wire par_err = !no_par && (par_in ^ odd);
+  wire par_bit = no_par || (par_out ^ odd);  // what OUTPAR sends
+  3'd6: begin pins_out[pin_idx] <= par_bit; pins_oe[pin_idx] <= 1'b1; end
+  ```
+- **Test:** a new Modbus round in 8N2; the device model expects a second stop bit and sends one.
+  - Before: `FAIL: Modbus round 4: engine reported 5 parity errors`, and the device saw 4 wrong
+    "second stop bits" (the parity bits of characters with odd parity).
+  - After: the 8N2 round passes with no parity errors and a good CRC.
+- **Lesson:** when a feature moves from software to hardware, test every mode the old version
+  supported.
+
+## BUG-020 — Tests ran at 50 MHz, not the planned 48 MHz
+
+- **Where:** `test/tb_pbe.sv`.
+- **Cause:** v1's testbench kept the 50 MHz clock from the first version after the plan moved
+  to 48 MHz (D18). Programs compute their settings from the clock, so nothing failed, but the
+  planned frequency itself was never simulated.
+- **Before:** `localparam int CLK_NS = 20;  // 50 MHz`
+- **After:** `localparam real CLK_NS = 20.8333;  // 48 MHz, the planned clock`
+- **Test:** the whole suite. Before: passed at 50 MHz. After: passes at 48 MHz (I2C fast mode
+  measures 1.5 µs low / 0.8 µs high at this clock).
+
+## BUG-021 — Reserved word `strong`; a time limit that looked like a hang
+
+- **Where:** `test/tb_pbe.sv`.
+- **Symptoms and fixes:**
+
+  | Problem | Fix |
+  |---|---|
+  | The 1-Wire device model's new port `strong` broke compilation: it is a SystemVerilog keyword (as `pulldown` and `before` were in BUG-006) | Renamed `hard_hi` |
+  | The two-protocol test timed out. A progress probe showed it was running normally; the new 1-Wire and Modbus checks had pushed it past the 200 ms simulated-time limit (it started at 168.6 ms) | Limit raised to 400 ms |
+- **Lesson:** before treating a timeout as a hang, check whether the test is still making progress.
 

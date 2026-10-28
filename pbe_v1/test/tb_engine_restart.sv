@@ -5,7 +5,7 @@ module tb_engine_restart;
   logic clk = 0, rst_n = 0, restart = 0;
   always #5 clk = ~clk;
   logic [15:0] instr;
-  logic [5:0]  pc;
+  logic [6:0]  pc;
   logic [7:0]  pins_out, pins_oe, rx_data;
   logic [3:0]  flag_set, flag_clr;
   logic        tx_pop, rx_push, irq;
@@ -15,9 +15,9 @@ module tb_engine_restart;
       .clk, .rst_n,
       .run(1'b1), .restart,
       .clkdiv(16'd0), .pin_base(3'd0), .jmp_pin(3'd0),
-      .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(6'd0),
+      .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(7'd0),
       .crc_poly(16'h0), .crc_cfg(8'h0), .timeout(16'h0), .line_cfg(8'h0),
-      .host_crc_init(1'b0), .host_tmo_clr(1'b0), .status(),
+      .host_crc_init(1'b0), .host_tmo_clr(1'b0), .host_ovf_clr(1'b0), .status(), .crc_now(),
 
       .pc, .instr,
       .pins_in(8'h00), .pins_out, .pins_oe,

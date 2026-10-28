@@ -17,7 +17,7 @@
 //  111  EXT         [8:6] sub-op, [5:0] param
 //                   0 CRCRST      load the CRC's initial value
 //                   1 OSRCRC      OSR <= CRC byte (param[0]: 0 low, 1 high)
-//                   2 STAT        ISR <= {5'b0, timeout happened, CRC ok, parity error};
+//                   2 STAT        ISR <= {4'b0, RX overflow, timeout happened, CRC ok, parity error};
 //                                 then clears the receive parity and the timeout flag
 //                   3 JCRCBAD a   jump to a if the CRC is not zero
 //                   4-7           reserved, execute as nothing
@@ -25,6 +25,8 @@
 // Parity: OUT/OUTOD bits since the last OSR load make the send parity; OUTPAR drives it
 // (inverted for odd parity). IN bits since the last STAT make the receive parity; with the
 // parity bit included it must come out 0 (even) or 1 (odd), otherwise STAT reports an error.
+// With line_cfg[6] (no parity) OUTPAR sends 1 (a second stop bit) and no parity error is reported.
+// RX overflow: a PUSH that finds the RX FIFO full sets a sticky status bit and raises IRQ.
 // CRC: OUT/OUTOD and IN bits feed the CRC unit when enabled in crc_cfg, unless marked NOCRC.
 // Timeout: if WAIT, PULL or PUSH stays blocked for timeout ticks (0 = never), the engine
 // abandons it, jumps to timeout_pc and sets the "timeout happened" status bit.
@@ -34,6 +36,9 @@
 // following instructions are timed from the moment the condition was met.
 //
 // Pin numbers are relative to pin_base (mod 8); the JMP pin is jmp_pin + pin_base.
+// Program addresses are relative to start_pc: a program starts at its own word 0, and every
+// jump (JMP, JCRCBAD, the timeout) goes to start_pc + target, so each engine works in its own
+// 64-word window of the 128-word program memory.
 module pbe_engine (
     input  logic        clk,
     input  logic        rst_n,
@@ -45,16 +50,18 @@ module pbe_engine (
     input  logic [2:0]  jmp_pin,
     input  logic        out_msb_first,
     input  logic        in_msb_first,
-    input  logic [5:0]  start_pc,
+    input  logic [6:0]  start_pc,     // where this engine's program starts (its word 0)
     input  logic [15:0] crc_poly,
     input  logic [7:0]  crc_cfg,      // [3:0] width-1, [4] init ones, [5] reversed, [6] feed OUT, [7] feed IN
     input  logic [15:0] timeout,      // ticks a blocked instruction may wait (0 = forever)
-    input  logic [7:0]  line_cfg,     // [5:0] timeout_pc, [7] odd parity
+    input  logic [7:0]  line_cfg,     // [5:0] timeout_pc, [6] no parity, [7] odd parity
     input  logic        host_crc_init,
     input  logic        host_tmo_clr,
-    output logic [2:0]  status,       // {timeout happened, CRC ok, parity error}
+    input  logic        host_ovf_clr,
+    output logic [3:0]  status,       // {RX overflow, timeout happened, CRC ok, parity error}
+    output logic [15:0] crc_now,      // the CRC unit's current value, for the host
     // program memory
-    output logic [5:0]  pc,
+    output logic [6:0]  pc,           // absolute program memory address
     input  logic [15:0] instr,
     // pins
     input  logic [7:0]  pins_in,  // synchronized
@@ -84,7 +91,7 @@ module pbe_engine (
   logic [7:0]  x, osr, isr;
   logic [7:0]  pins_prev;
   logic [3:0]  flags_prev;
-  logic        par_out, par_in, tmo_seen;
+  logic        par_out, par_in, tmo_seen, rx_ovf;
   logic [15:0] tmo_cnt;
 
   // ---- decode ----
@@ -110,8 +117,10 @@ module pbe_engine (
 
   wire [2:0] ext_op   = arg[8:6];
   wire       odd      = line_cfg[7];
+  wire       no_par   = line_cfg[6];
   wire [5:0] tmo_pc   = line_cfg[5:0];
-  wire       par_err  = par_in ^ odd;
+  wire       par_err  = !no_par && (par_in ^ odd);
+  wire       par_bit  = no_par || (par_out ^ odd);  // what OUTPAR sends
 
   // ---- issue and readiness ----
   wire tick  = (div_cnt >= clkdiv);
@@ -164,7 +173,11 @@ module pbe_engine (
       .zero     (crc_zero)
   );
 
-  assign status = {tmo_seen, crc_zero, par_err};
+  assign status  = {rx_ovf, tmo_seen, crc_zero, par_err};
+  assign crc_now = crc_value;
+
+  // A PUSH that finds the RX FIFO full: the host is not keeping up.
+  wire ovf_now = run && !restart && issue && op == OP_FIFO && arg_hi && rx_full;
 
   logic jmp_take;
   always_comb begin
@@ -186,7 +199,7 @@ module pbe_engine (
   assign rx_data  = isr;
   assign flag_set = (exec && op == OP_FLAG && flag_act == 2'd0) ? (4'b0001 << arg[1:0]) : 4'b0000;
   assign flag_clr = (exec && op == OP_FLAG && flag_act == 2'd1) ? (4'b0001 << arg[1:0]) : 4'b0000;
-  assign irq      = exec && op == OP_FLAG && flag_act == 2'd2;
+  assign irq      = (exec && op == OP_FLAG && flag_act == 2'd2) || (ovf_now && !rx_ovf);
 
   // ---- state ----
   always_ff @(posedge clk or negedge rst_n) begin
@@ -206,6 +219,7 @@ module pbe_engine (
       par_in     <= 1'b0;
       tmo_seen   <= 1'b0;
       tmo_cnt    <= '0;
+      rx_ovf     <= 1'b0;
     end else if (restart) begin
       pc       <= start_pc;
       div_cnt  <= '0;
@@ -219,10 +233,13 @@ module pbe_engine (
       par_in   <= 1'b0;
       tmo_seen <= 1'b0;
       tmo_cnt  <= '0;
+      rx_ovf   <= 1'b0;
     end else begin
       pins_prev  <= pins_in;
       flags_prev <= flags;
       if (host_tmo_clr) tmo_seen <= 1'b0;
+      if (host_ovf_clr) rx_ovf <= 1'b0;
+      else if (ovf_now) rx_ovf <= 1'b1;
 
       if (run) begin
         // tick divider; restarts when a blocked instruction completes
@@ -254,7 +271,7 @@ module pbe_engine (
                             osr <= osr_shifted;                                                      end
                 3'd5: begin pins_out[pin_idx] <= 1'b0;                 pins_oe[pin_idx] <= !out_bit;
                             osr <= osr_shifted;                                                      end
-                3'd6: begin pins_out[pin_idx] <= par_out ^ odd;        pins_oe[pin_idx] <= 1'b1;     end
+                3'd6: begin pins_out[pin_idx] <= par_bit;              pins_oe[pin_idx] <= 1'b1;     end
                 default: ;
               endcase
             end
@@ -263,7 +280,7 @@ module pbe_engine (
               par_in <= par_in ^ pin_now;
             end
             OP_JMP: begin
-              if (jmp_take) pc <= arg[5:0];
+              if (jmp_take) pc <= start_pc + {1'b0, arg[5:0]};
               if (jmp_cnd == 3'd1 && x != 8'd0) x <= x - 1'b1;
             end
             OP_SET: begin
@@ -286,11 +303,11 @@ module pbe_engine (
                   par_out <= 1'b0;
                 end
                 E_STAT: begin
-                  isr      <= {5'b0, tmo_seen, crc_zero, par_err};
+                  isr      <= {4'b0, rx_ovf, tmo_seen, crc_zero, par_err};
                   par_in   <= 1'b0;
                   tmo_seen <= 1'b0;
                 end
-                E_JCRCBAD: if (!crc_zero) pc <= arg[5:0];
+                E_JCRCBAD: if (!crc_zero) pc <= start_pc + {1'b0, arg[5:0]};
                 default: ;
               endcase
             end
@@ -301,7 +318,7 @@ module pbe_engine (
 
         // timeout: abandon the blocked instruction and jump to the timeout routine
         if (tmo_hit) begin
-          pc       <= tmo_pc;
+          pc       <= start_pc + {1'b0, tmo_pc};
           blocked  <= 1'b0;
           dly_cnt  <= '0;
           tmo_seen <= 1'b1;
