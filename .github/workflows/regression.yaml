@@ -1,0 +1,20 @@
+name: regression
+# The design's own test suite (pbe_v1/Makefile): unit tests and the end-to-end testbenches
+# through the chip's pins. `make test` exits non-zero on any failure.
+on: [push, workflow_dispatch]
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+      - name: Install iverilog, verilator and yosys
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y iverilog verilator yosys
+      - name: Lint (Verilator, all warnings)
+        run: |
+          cd src
+          verilator --lint-only -Wall -Wno-DECLFILENAME --top-module tt_um_ayushyadavnvs_pbe \
+            pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_engine.sv tt_um_pbe.sv
+      - name: Run the test suite
+        run: cd pbe_v1 && make test

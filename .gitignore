@@ -5,3 +5,16 @@ synth/*.log
 synth/*_netlist.v
 test/dbg.*
 __pycache__/
+# Tiny Tapeout flow
+.DS_Store
+.idea
+*.fst
+*.fst.hier
+/runs
+/tt_submission
+/src/user_config.json
+/src/config_merged.json
+/test/sim_build
+/test/__pycache__/
+/test/results.xml
+/test/gate_level_netlist.v

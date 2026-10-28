@@ -50,7 +50,7 @@
 //                    (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5 equal), [4] pair, [5] bytes
 //      +1 SYNC       frame start pattern (0 = none)
 //      +2 CRC_GOOD_L, +3 CRC_GOOD_H   the CRC value that means "ok" (0 unless the CRC is sent inverted)
-module tt_um_pbe (
+module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the name
     input  wire [7:0] ui_in,
     output wire [7:0] uo_out,
     input  wire [7:0] uio_in,
@@ -318,7 +318,7 @@ module tt_um_pbe (
     wire [15:0] fl2   = {flags, flags};
     wire [15:0] set2  = {12'b0, f_set[e*4+:4]} << fbase;
     wire [15:0] clr2  = {12'b0, f_clr[e*4+:4]} << fbase;
-    assign e_flags[e*4+:4] = fl2[fbase+:4];
+    assign e_flags[e*4+:4] = fl2[{1'b0, fbase}+:4];
     assign p_set[e*8+:8]   = set2[7:0] | set2[15:8];
     assign p_clr[e*8+:8]   = clr2[7:0] | clr2[15:8];
 

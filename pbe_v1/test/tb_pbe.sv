@@ -24,7 +24,7 @@ module tb_pbe;
   wire  [7:0] dev_pull;                       // 1-Wire device models pulling low
   wire  [7:0] bus      = chip_lvl & ext_lvl & ~dev_pull & (loop01 ? {6'h3f, chip_lvl[0], 1'b1} : 8'hff);
 
-  tt_um_pbe dut (
+  tt_um_ayushyadavnvs_pbe dut (
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 

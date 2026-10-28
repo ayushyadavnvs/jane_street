@@ -790,3 +790,32 @@ Breakdown of the +71,223 µm²:
 My estimate was about +50k µm²: 40 % low, as with the 128-word memory (D4). The coder was the
 part I under-estimated most.
 
+## D46. Tiny Tapeout packaging
+
+- **Chosen:** the repository root is the Tiny Tapeout project, built from the IHP template
+  (`ttihp-verilog-template`, actions `ttihp27a`, PDK `ihp-sg13cmos5l`):
+  - `info.yaml`: 6×4 tiles, 48 MHz, language SystemVerilog, the pinout;
+  - `src/`: the RTL and `config.json`, the template's file with `CLOCK_PERIOD` 20.833 ns;
+  - `docs/info.md`: the datasheet page;
+  - `test/`: a cocotb test;
+  - `.github/workflows`: `gds`, `test`, `docs`, plus our `regression`.
+- **Top module:** renamed `tt_um_ayushyadavnvs_pbe`, because Tiny Tapeout requires the GitHub
+  user in the name. The file stays `src/tt_um_pbe.sv`.
+- **Layout:** the RTL moved from `pbe_v1/src` to `src/`, because Tiny Tapeout requires the
+  sources in `./src`. `pbe_v1/src` is now a link to `../src`, so `pbe_v1` (Makefile,
+  testbenches, synthesis) is unchanged and stays the design's home. Alternatives:
+  - a separate Tiny Tapeout repository: two copies of the RTL would drift, as v2 did (D28);
+  - moving all of `pbe_v1` to the root: a large, noisy move for no gain.
+- **Where the flow runs:** on GitHub Actions, as Tiny Tapeout intends. A local run needs
+  LibreLane's tool set (OpenROAD, Magic, KLayout, Netgen) through Nix or Docker; Docker is not
+  available in this workspace, and fetching LibreLane's Nix environment was not permitted here.
+- **The cocotb test** (`test/test.py`) is small on purpose, because the `gl_test` job runs it on
+  the routed netlist. It checks a register write and read-back, then loads the UART programs
+  and loops a byte stream from engine 0 to engine 1 through `uio[0]` → `uio[1]`. Without the
+  loopback it fails ("received []"). The full suite stays in `pbe_v1/test`, on the RTL.
+- **Lint:** Verilator with all warnings showed three, now fixed: a 3-bit index on a 16-bit
+  vector (same behaviour, now written as 4 bits) and two deliberately unused bits. The
+  `regression` workflow lints with `-Wall` on every push.
+- **Clock period:** 20.833 ns (48 MHz), not the template's 20 ns. The cocotb test runs at
+  20.834 ns, because cocotb needs an even number of picoseconds.
+

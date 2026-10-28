@@ -35,6 +35,7 @@ module pbe_host_spi (
   wire        no_incr = (addr == 7'h07) || (addr == 7'h16) || (addr == 7'h26);  // streaming registers
 
   assign miso = tx_sh[7];
+  wire   _unused = rx_sh[7];  // the 8th bit of a byte comes straight from mosi
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

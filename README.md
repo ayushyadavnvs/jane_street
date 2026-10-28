@@ -5,6 +5,9 @@ up to 6×4 tiles, due 18 January 2027).
 
 | Folder | What |
 |---|---|
+| `src/` | The RTL (SystemVerilog) and the Tiny Tapeout flow configuration `config.json`; `pbe_v1/src` links here |
+| `info.yaml`, `docs/info.md`, `test/` | Tiny Tapeout project description, datasheet page, and the cocotb test that also runs on the gate-level netlist |
+| `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test` and a Verilator lint) |
 | `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812 and a USB low-speed device, all tested |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
@@ -14,6 +17,14 @@ Design reasoning is in `docs/DESIGN_DECISIONS.md` and every bug with its fix in 
 A low-speed USB version (v2) was built and then retired to keep the engine general; its code is
 on the branch `archive/v2-usb` and its lessons are in `docs/USB_NOTES.md`.
 Tools: `iverilog`, `yosys`, `python3`. In `pbe_v1/`: `make test`, `make synth`, `make timing`.
+In `test/`: `make` runs the Tiny Tapeout cocotb test (needs `cocotb`).
+
+## Tiny Tapeout
+
+The top module is `tt_um_ayushyadavnvs_pbe` (6×4 tiles, 48 MHz, `CLOCK_PERIOD` 20.833 ns). Every
+push runs the Tiny Tapeout flow on GitHub Actions (`gds` workflow): LibreLane synthesis, place
+and route, timing and DRC for IHP `sg13cmos5l`, the Tiny Tapeout precheck, and the cocotb
+test on the routed netlist.
 
 ## Clock frequency
 
@@ -30,6 +41,6 @@ the clock input pad is specified up to about 66 MHz, and the demo board's RP2040
 The design works at any clock up to that limit; each engine's `CLKDIV`
 turns the clock into the bit rate a protocol needs.
 
-| Results | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
+| Results (Yosys + ABC estimate, before place and route) | Area (6×4 = 916,229 µm²) | Worst logic path, slow corner |
 |---|---|---|
-| Version 1 | 333,841 µm² (36%) | 4.33 ns |
+| Version 1 | 333,913 µm² (36%) | 4.33 ns |

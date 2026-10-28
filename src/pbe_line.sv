@@ -47,6 +47,7 @@ module pbe_line (
     output logic        err          // pulse: stuff error, receive overrun or transmit underrun
 );
   wire       nrzi  = cfg[1:0] == 2'd2;
+  wire       _unused = &{cfg[7:6], 1'b0};  // reserved
   wire [1:0] st    = cfg[3:2];
   wire       pair  = cfg[4];
   wire       bytes = cfg[5];

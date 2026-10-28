@@ -28,7 +28,7 @@ module tb_usb;
   localparam logic [7:0] PULL = 8'b1111_1101;
   wire  [7:0] bus = (uio_oe & uio_out) | (~uio_oe & ext_drive & ext_val) | (~uio_oe & ~ext_drive & PULL);
 
-  tt_um_pbe dut (
+  tt_um_ayushyadavnvs_pbe dut (
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 

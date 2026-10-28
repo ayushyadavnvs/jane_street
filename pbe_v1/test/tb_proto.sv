@@ -22,7 +22,7 @@ module tb_proto;
   wire  [7:0] ext_lvl  = ~ext_drive | ext_val;
   wire  [7:0] bus      = chip_lvl & ext_lvl;
 
-  tt_um_pbe dut (
+  tt_um_ayushyadavnvs_pbe dut (
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 

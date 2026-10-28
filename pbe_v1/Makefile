@@ -81,7 +81,7 @@ clean:
 IHP_SLOW ?= ../ihp_lib/sg13g2_stdcell_slow_1p08V_125C.lib
 timing:
 	mkdir -p synth
-	yosys -q -l synth/timing.log -p "read_verilog -sv $(SRC); synth -top tt_um_pbe -flatten; \
+	yosys -q -l synth/timing.log -p "read_verilog -sv $(SRC); synth -top tt_um_ayushyadavnvs_pbe -flatten; \
 	  dfflibmap -liberty $(IHP_SLOW); \
 	  abc -liberty $(IHP_SLOW) -script +strash;dch,-f;map,-B,0.9;topo;buffer,-p;upsize;dnsize;stime,-p" >/dev/null
 	@grep -o 'Delay = *[0-9.]* ps' synth/timing.log | tail -1
