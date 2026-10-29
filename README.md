@@ -19,6 +19,15 @@ on the branch `archive/v2-usb` and its lessons are in `docs/USB_NOTES.md`.
 Tools: `iverilog`, `yosys`, `python3`. In `pbe_v1/`: `make test`, `make synth`, `make timing`.
 In `test/`: `make` runs the Tiny Tapeout cocotb test (needs `cocotb`).
 
+## Write-ups
+
+- [`docs/AI_ASSISTED_DESIGN.md`](docs/AI_ASSISTED_DESIGN.md): how the design was built and
+  verified with AI agents: the workflow, the rules that keep it honest, the bug log in numbers,
+  the verification layers, and where the AI went wrong.
+- [`docs/PIO_PRU_COMPARISON.md`](docs/PIO_PRU_COMPARISON.md): what the PBE does differently from
+  the RP2040 PIO and TI's PRU-ICSS, what they do better, and what our architecture makes
+  possible.
+
 ## Tiny Tapeout
 
 The top module is `tt_um_ayushyadavnvs_pbe` (6×4 tiles, 48 MHz, `CLOCK_PERIOD` 20.833 ns). The
