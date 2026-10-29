@@ -15,8 +15,9 @@
 ; IN packet in the TX FIFO: [DATA0 or DATA1 PID] [0..8 data bytes]; the engine adds the CRC.
 ; Records in the RX FIFO, each ends with FLAG2 (set by the engine, with IRQ):
 ;   [0x2D or 0xE1] [DATA PID] [n bytes: data, CRC low, CRC high] [255 - n] [status]
-;       SETUP or OUT data; ACKed only if status bit 1 (CRC ok) is set, otherwise the host will
-;       send it again. The status byte is below 0x20.
+;       SETUP or OUT data; ACKed only if status bit 1 (CRC ok) is set and bit 4 (line error:
+;       a stuffing error or a missed byte) is clear, otherwise the host will send it again.
+;       The status byte is below 0x20.
 ;   [0xD2]                     the host ACKed our IN data
 ; Records can pile up in the RX FIFO before the host reads it: parse them from the end.
 .equ dm 0
@@ -41,10 +42,10 @@ e:      MOV  ISR, X
         JEQ  dat
         SET  OSR, 0xE1       ; OUT
         JNE  idle
-dat:    PUSH                 ; record: the token PID
+dat:    CRCRST               ; a checked packet starts: CRC and line error cleared
+        PUSH                 ; record: the token PID
         IN   dm, NOCRC       ; the DATA0/DATA1 PID
         PUSH
-        CRCRST
         SET  X, 255          ; counts the bytes down
 db:     IN   dm              ; data, then the CRC16: all of it feeds the CRC
         JLINE deop
@@ -53,7 +54,7 @@ db:     IN   dm              ; data, then the CRC16: all of it feeds the CRC
 deop:   MOV  ISR, X
         PUSH                 ; 255 - number of bytes
         STAT
-        JCRCBAD ack          ; a bad packet gets no ACK
+        JCRCBAD ack          ; a bad packet (CRC or line error, e.g. stuffing) gets no ACK
         SET  OSR, 0xD2       ; ACK (ISR still holds the status)
         PIN  dm, OUT, NOCRC
         PIN  dm, END

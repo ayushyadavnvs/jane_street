@@ -8,11 +8,13 @@
 //    device must never drive the bus at the same time.
 //  - A device firmware model on the host port answers the records the engine reports
 //    (IRQ-driven): descriptors, SET_ADDRESS (it rewrites the address in the program), a
-//    vendor write and read, and STALL for what it does not support.
+//    vendor write and read, and STALL for what it does not support. On a timer it queues an
+//    IN packet again when its ACK does not come, and handles a bus reset (SE0 >= 2.5 us).
 //  - The host enumerates the device: GET_DESCRIPTOR (device, configuration), SET_ADDRESS,
 //    SET_CONFIGURATION, an unsupported request, vendor requests; and checks that the device
 //    ignores a corrupted SETUP, a packet with a stuffing error, tokens for another address and a
-//    token with a bad CRC5, and keep-alive EOPs.
+//    token with a bad CRC5, and keep-alive EOPs. Then a lost ACK (the device must resend the
+//    same DATA1 packet) and a 10 ms bus reset (the device must answer at address 0 again).
 module tb_usb;
   localparam real CLK_NS = 20.8333;  // 48 MHz: a USB low-speed bit is 32 clocks
   localparam int HOST_HALF = 8;
@@ -65,7 +67,7 @@ module tb_usb;
   // ---------------- USB host model: send ----------------
   logic [7:0] h_pkt[$];   // PID and the rest, without SYNC
   real h_pct = 0;         // bit rate error in percent
-  bit  h_bad_stuff = 0;   // leave out the first stuffed bit
+  int  h_bad_stuff = 0;   // the first stuffed bit: 1 leave it out, 2 send it as a 1 (wrong value)
   realtime t_host_j;      // when the host's last EOP turned to J
   task automatic hs_line(input int st);  // 0 SE0, 1 J, 2 K
     ext_drive[1:0] = 2'b11;
@@ -87,8 +89,8 @@ module tb_usb;
         #(tb);
         ones = cur[b] ? ones + 1 : 0;
         if (ones == 6) begin
-          if (!h_bad_stuff) begin
-            k = 3 - k;
+          if (h_bad_stuff != 1) begin
+            if (h_bad_stuff != 2) k = 3 - k;  // a stuffed 0 changes the level, a wrong 1 keeps it
             hs_line(k);
             #(tb);
           end
@@ -235,6 +237,7 @@ module tb_usb;
   logic [7:0] in_pkt[$];
   int in_res;
   logic [7:0] in_pid;
+  bit h_lose_ack = 0;  // the next IN data packet gets no ACK (as if the ACK were lost)
   task automatic hs_in;
     int tries;
     logic [15:0] c, got;
@@ -261,8 +264,11 @@ module tb_usb;
     in_pkt.delete();
     foreach (u_data[i]) in_pkt.push_back(u_data[i]);
     in_res = 0;
-    h_pkt = '{8'hD2};  // ACK
-    hs_send;
+    if (h_lose_ack) h_lose_ack = 0;
+    else begin
+      h_pkt = '{8'hD2};  // ACK
+      hs_send;
+    end
     gap;
     end
   endtask
@@ -328,6 +334,7 @@ module tb_usb;
   logic [6:0] fw_addr_pending = 0;
   bit  fw_set_addr = 0;
   int  fw_vlen;
+  int  fw_resends = 0, fw_resets = 0;  // IN packets queued again (BUG-041), bus resets seen (BUG-042)
 
   task automatic pm_write_word(input int a, input logic [15:0] w);
     logic [7:0] d;
@@ -338,22 +345,31 @@ module tb_usb;
     spi_byte(w[7:0], d);
     cs(1);
   endtask
-  task automatic fw_queue;  // the next IN packet of the reply
+  // The IN packet in the TX FIFO, kept until the host ACKs it: if the ACK does not come, the
+  // firmware queues it again, same DATA PID (BUG-041)
+  logic [7:0] fw_last[$];
+  bit  fw_unacked = 0;
+  realtime fw_drained_at = 0;  // when the TX FIFO was first seen empty with fw_unacked (0: not yet)
+  task automatic fw_put;  // fw_last into the TX FIFO, then FLAG0
     logic [7:0] d;
-    int n;
-    n = fw_tx.size() < 8 ? fw_tx.size() : 8;
     cs(0);
     spi_byte({1'b1, 7'h16}, d);
-    spi_byte(fw_toggle ? 8'h4B : 8'hC3, d);
-    for (int i = 0; i < n; i++) begin
-      d = fw_tx.pop_front();
-      spi_byte(d, d);
-    end
+    foreach (fw_last[i]) spi_byte(fw_last[i], d);
     cs(1);
+    fw_unacked = 1;
+    fw_drained_at = 0;
+    flag_set(0, 0);
+  endtask
+  task automatic fw_queue;  // the next IN packet of the reply
+    int n;
+    n = fw_tx.size() < 8 ? fw_tx.size() : 8;
+    fw_last.delete();
+    fw_last.push_back(fw_toggle ? 8'h4B : 8'hC3);
+    for (int i = 0; i < n; i++) fw_last.push_back(fw_tx.pop_front());
     fw_sent += n;
     fw_zlp = 0;
     fw_toggle ^= 1;
-    flag_set(0, 0);
+    fw_put;
   endtask
   task automatic fw_status_zlp;  // the IN status stage of a no-data or write request
     fw_tx.delete();
@@ -370,6 +386,7 @@ module tb_usb;
     fw_want = {rec[9], rec[8]};
     fw_setups++;
     reg_write(7'h0E, 8'h01);  // drop a stale reply; not the RX FIFO: an OUT may already be arriving
+    fw_unacked = 0;
     flag_clear(0, 0);
     flag_clear(0, 1);
     fw_writing = 0;
@@ -413,6 +430,7 @@ module tb_usb;
     logic [7:0] st;
     if (rec.size() == 1 && rec[0] == 8'hD2) begin  // the host ACKed our IN packet
       fw_acks++;
+      fw_unacked = 0;
       flag_clear(0, 0);
       if (fw_set_addr) begin                        // SET_ADDRESS status stage done: switch
         logic [15:0] t;
@@ -424,7 +442,7 @@ module tb_usb;
         fw_queue;
     end else begin
       st = rec[rec.size()-1];
-      if (!st[1]) fw_bad++;                         // bad CRC: the host sends it again
+      if (!st[1] || st[4]) fw_bad++;                // bad CRC or line error: not ACKed, sent again
       else if (rec[0] == 8'h2D && rec.size() == 14) fw_setup;
       else if (rec[0] == 8'hE1 && fw_writing) begin
         for (int k = 2; k < rec.size() - 4; k++) vendor_mem.push_back(rec[k]);
@@ -436,15 +454,64 @@ module tb_usb;
     end
   endtask
 
+  // Bus reset (BUG-042): SE0 for 2.5 us or more. The firmware puts the device back at address
+  // 0 (program words 6 and 9), drops the reply and the flags, and forgets its state.
+  bit fw_in_reset = 0;
+  task automatic fw_bus_reset;
+    pm_write_word(6, 16'h9000);  // SET OSR, 0x00: address 0
+    pm_write_word(9, 16'h9100);  // SET OSR, 0x10: endpoint 0 and the CRC5 for address 0
+    reg_write(7'h0E, 8'h01);     // flush the TX FIFO
+    reg_write(7'h09, 8'h07);     // clear FLAG0 (IN queued), FLAG1 (STALL) and FLAG2
+    fw_tx.delete();
+    fw_reading = 0;
+    fw_writing = 0;
+    fw_zlp = 0;
+    fw_set_addr = 0;
+    fw_unacked = 0;
+    fw_resets++;
+  endtask
+
+  // The firmware's timer, every 50 us when no record waits: a bus reset, and an IN packet that
+  // has left the TX FIFO (TX_COUNT = 0) without an ACK record for 100 us is queued again.
+  // One register read takes about 6 us, so two reads that both see SE0 are 2.5 us apart; EOPs
+  // (1.33 us of SE0) are at least ~12 us apart, so two of them cannot pass for a reset.
+  task automatic fw_poll;
+    logic [7:0] p, cnt;
+    realtime t;
+    reg_read(7'h05, p);  // PINS: D- is pin 0, D+ pin 1
+    if (p[1:0] == 2'b00) begin
+      t = $realtime;
+      reg_read(7'h05, p);
+      if (p[1:0] == 2'b00 && $realtime - t >= 2500) begin
+        if (!fw_in_reset) fw_bus_reset;
+        fw_in_reset = 1;
+      end
+    end else fw_in_reset = 0;
+    if (fw_unacked) begin
+      reg_read(7'h0C, cnt);  // TX_COUNT
+      if (cnt != 0) fw_drained_at = 0;
+      else if (fw_drained_at == 0) fw_drained_at = $realtime;
+      else if ($realtime - fw_drained_at >= 100000 && !uo_out[1]) begin  // no record waiting
+        fw_resends++;
+        fw_put;
+      end
+    end
+  endtask
+
   // IRQ-driven: read how many bytes wait (RX_COUNT), read exactly those in one burst, split
   // them into records from the end (a status byte is below 0x20, an ACK record is 0xD2), and
-  // handle the records in order.
+  // handle the records in order. Otherwise the timer (fw_poll). One process, like a firmware
+  // main loop, so the two never race.
   logic [7:0] fw_buf[$];
   int fw_ends[$];
   int fw_records = 0, fw_max_pile = 0;
+  realtime fw_next_poll = 0;
   initial forever begin
     @(posedge clk);
-    if (fw_run && !fw_hold && uo_out[1]) begin
+    if (fw_run && !fw_hold && !uo_out[1] && $realtime >= fw_next_poll) begin
+      fw_next_poll = $realtime + 50000;
+      fw_poll;
+    end else if (fw_run && !fw_hold && uo_out[1]) begin
       logic [7:0] cnt, d, b;
       int j, c, from;
       reg_write(7'h02, 8'h01);  // clear the IRQ first: a record arriving meanwhile raises it again
@@ -568,9 +635,17 @@ module tb_usb;
       hs_recv;
       check(!r_ok, "USB: device ACKed a packet with a stuffing error");
       gap;
-      repeat (10000) @(posedge clk);  // the firmware reads 14-byte records: ~2000 clocks each
-      check(fw_bad == bad0 + 2, $sformatf("USB: firmware saw %0d bad records, expected 2", fw_bad - bad0));
-      $display("  a SETUP with a flipped bit and one with a stuffing error: not ACKed, reported as bad");
+      // a stuff bit with the wrong value: the data and the CRC16 arrive intact (BUG-040)
+      hs_token(8'h2D, 0);
+      u_data = '{8'hFF, 8'hFF, 8'h00, 8'h02, 8'h00, 8'h00, 8'h09, 8'h00};
+      h_bad_stuff = 2;                    // six 1s, then a 1 where the stuffed 0 belongs
+      hs_data(8'hC3, 0);
+      hs_recv;
+      check(!r_ok, "USB: device ACKed a packet with a wrong stuff bit (data and CRC intact)");
+      gap;
+      repeat (15000) @(posedge clk);  // the firmware reads 14-byte records: ~2000 clocks each
+      check(fw_bad == bad0 + 3, $sformatf("USB: firmware saw %0d bad records, expected 3", fw_bad - bad0));
+      $display("  a SETUP with a flipped bit, one with a missing and one with a wrong stuff bit: not ACKed, reported as bad");
       // the firmware busy: two (corrupted) OUT records pile up in the RX FIFO and are split apart
       bad0 = fw_bad;
       fw_hold = 1;
@@ -592,7 +667,7 @@ module tb_usb;
     // SET_ADDRESS(0x15), then everything at the new address
     req = '{8'h00, 8'h05, 8'h15, 8'h00, 8'h00, 8'h00, 8'h00, 8'h00};
     ctl_write(0);
-    repeat (3000) @(posedge clk);       // the firmware switches the address (USB allows 2 ms)
+    repeat (6000) @(posedge clk);       // the firmware switches the address (USB allows 2 ms)
     dev_addr = 7'h15;
     $display("  SET_ADDRESS(0x15)");
 
@@ -651,6 +726,59 @@ module tb_usb;
     check(ctl_in.size() == 4 && ctl_in[0] == 8'hCC && ctl_in[1] == 8'hBB && ctl_in[2] == 8'hAA && ctl_in[3] == 8'h55,
           "USB: vendor read did not return the written data");
     $display("  vendor write (OUT data) and read back");
+
+    // the host's ACK for an IN data packet is lost (BUG-041): the firmware queues the same
+    // packet again, and the device sends the same DATA1 packet when the host asks again
+    begin
+      logic [7:0] first[$];
+      int resends0;
+      resends0 = fw_resends;
+      h_pct = 0;
+      req = '{8'h80, 8'h06, 8'h00, 8'h01, 8'h00, 8'h00, 8'h12, 8'h00};
+      ctl_in.delete();
+      hs_setup;
+      h_lose_ack = 1;
+      hs_in;
+      check(in_res == 0 && in_pid == 8'h4B && in_pkt.size() == 8, "USB: first DATA1 packet of the descriptor");
+      first.delete();
+      foreach (in_pkt[i]) first.push_back(in_pkt[i]);
+      hs_in;                              // NAKed until the firmware has queued it again
+      check(in_res == 0 && in_pid == 8'h4B, $sformatf("USB: after a lost ACK the device sent PID %02x (res %0d), expected DATA1 again", in_pid, in_res));
+      check(in_pkt.size() == first.size(), $sformatf("USB: after a lost ACK the device sent %0d bytes, first %0d", in_pkt.size(), first.size()));
+      foreach (first[i]) if (i < in_pkt.size()) check(in_pkt[i] === first[i], $sformatf("USB: resent byte %0d differs", i));
+      check(fw_resends == resends0 + 1, $sformatf("USB: firmware resent %0d packets, expected 1", fw_resends - resends0));
+      foreach (in_pkt[i]) ctl_in.push_back(in_pkt[i]);
+      hs_in;
+      check(in_res == 0 && in_pid == 8'hC3, "USB: second packet after the resend is not DATA0");
+      foreach (in_pkt[i]) ctl_in.push_back(in_pkt[i]);
+      hs_in;
+      check(in_res == 0 && in_pid == 8'h4B, "USB: third packet after the resend is not DATA1");
+      foreach (in_pkt[i]) ctl_in.push_back(in_pkt[i]);
+      out_data.delete();
+      hs_out(8'h4B);
+      check(ctl_in.size() == 18, $sformatf("USB: descriptor after a lost ACK: %0d bytes", ctl_in.size()));
+      foreach (ctl_in[i]) if (i < 18) check(ctl_in[i] === dev_desc[i], $sformatf("USB: descriptor byte %0d after a lost ACK", i));
+      $display("  a lost ACK: the firmware queued the packet again, the device resent the same DATA1");
+    end
+
+    // bus reset (BUG-042): 10 ms of SE0 puts the device back at address 0
+    begin
+      int resets0;
+      resets0 = fw_resets;
+      hs_line(0);
+      #(10ms);
+      hs_line(1);
+      #(BIT_NS);
+      ext_drive[1:0] = 0;
+      repeat (200) @(posedge clk);
+      check(fw_resets == resets0 + 1, $sformatf("USB: firmware saw %0d bus resets, expected 1", fw_resets - resets0));
+      dev_addr = 0;
+      req = '{8'h80, 8'h06, 8'h00, 8'h01, 8'h00, 8'h00, 8'h40, 8'h00};
+      ctl_read;
+      check(ctl_in.size() == 18, $sformatf("USB: device descriptor at address 0 after a bus reset: %0d bytes", ctl_in.size()));
+      foreach (ctl_in[i]) if (i < 18) check(ctl_in[i] === dev_desc[i], $sformatf("USB: descriptor byte %0d after a bus reset", i));
+      $display("  a 10 ms bus reset: back at address 0, GET_DESCRIPTOR works again");
+    end
 
     fw_run = 0;
     check(contention == 0, $sformatf("USB: host and device drove the bus at the same time for %0d clocks", contention));

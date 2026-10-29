@@ -9,8 +9,9 @@
 ;   Single slots (Search ROM): set FLAG1 while the TX FIFO is empty. Each TX byte is then one
 ;     slot using bit 0; the bit seen comes back in bit 7 (0x80 or 0x00).
 ;   Strong pull-up (parasite-powered devices, e.g. DS18B20 CONVERT T): queue the byte first,
-;     then set FLAG0. 7 us after the byte's last slot the engine drives DQ hard high, until the
-;     host clears FLAG0. (FLAG0 with nothing queued still means reset.)
+;     then set FLAG0. 6 us after the byte's last slot the engine drives DQ hard high, until the
+;     host clears FLAG0, and then pushes the byte seen (a full RX FIFO does not delay the
+;     pull-up). (FLAG0 with nothing queued still means reset.)
 ;
 ; Slot timing: low 6 us, release or keep low (write 0), sample at 13 us, release at 60 us,
 ; 5 us recovery: 65 us per slot.
@@ -29,8 +30,8 @@ bit:    PIN  dq, DRV0 [5]    ; t=0: every slot starts with 6 us low
         NOP  [14]            ; t=45
         PIN  dq, REL [3]     ; t=60: end of a write-0 pulse; recovery
         JMP  X--, bit        ; t=64: next slot starts at 65 us
+        JMP  FLAG0, spu      ; t=65: FLAG0 set during this byte: strong pull-up, before the PUSH
         PUSH                 ; what was on the wire
-        JMP  FLAG0, spu      ; FLAG0 set during this byte: strong pull-up
         JMP  idle
 one:    SET  X, 0
         JMP  bit
@@ -47,7 +48,8 @@ rwait:  JMP  X--, rwait [15] ; rest of the presence window (> 480 us in total)
         PUSH                 ; 0x00 = device present, 0x80 = none
         FLAG 0, CLR          ; only now tell the host the reset is done
         JMP  idle
-spu:    PIN  dq, DRV1        ; t=67: drive DQ hard high (within 10 us of the last slot)
+spu:    PIN  dq, DRV1        ; t=66: drive DQ hard high (within 10 us of the last slot)
+        PUSH                 ; only now: a full RX FIFO must not delay the pull-up (BUG-038)
         WAIT FLAG 0, LOW     ; until the host clears FLAG0
         PIN  dq, REL
         JMP  idle

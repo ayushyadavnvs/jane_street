@@ -65,7 +65,7 @@ idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per e
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL` / `PUSH` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full) |
 | 110 | `FLAG n, SET/CLR/IRQ`, `MOV dst, src` | Shared flags between engines, or interrupt the host. Action 3 is `MOV` between X, OSR and ISR (source `0` = zero); with no destination it does nothing: the assembler's `NOP` (`0xD800`) |
-| 111 | `CRCRST`, `OSRCRC LO/HI [, INV]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC; load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the CRC is not ok; jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). Sub-op 7 free |
+| 111 | `CRCRST`, `OSRCRC LO/HI [, INV]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). Sub-op 7 free |
 
 **Timeout:** if `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks (engine register
 +C/+D, 0 = never), the engine abandons it and jumps to `TIMEOUT_PC` (`LINE_CFG[5:0]`, +E).
@@ -97,7 +97,9 @@ that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
   In byte mode the CRC takes each byte's 8 bits one per clock, and the next instruction waits
   for that.
 - **Errors:** a stuff bit with the wrong value, a receive overrun or a send underrun set
-  `STATUS[4]` (line error); write `STATUS[3]` = 1 to clear it.
+  `STATUS[4]` (line error). `JCRCBAD` treats it as a bad packet. `CRCRST` clears it (a new
+  checked packet starts); `STAT` reports it without clearing it; the host clears it by writing
+  `STATUS[3]` = 1.
 
 **FIFO counts:**
 - `RX_COUNT` (0x0A, 0x0B) and `TX_COUNT` (0x0C, 0x0D) give the bytes in each engine's FIFOs.
@@ -193,7 +195,8 @@ pull-up), D+ = pin base + 1.
 
 **Records in the RX FIFO**, each ending with FLAG2 and IRQ:
 - `[0x2D or 0xE1] [DATA PID] [n bytes: data and CRC] [255 − n] [status]`: a SETUP or OUT data
-  packet. It was ACKed only if status bit 1 (CRC ok) is set; otherwise the host sends it again.
+  packet. It was ACKed only if status bit 1 (CRC ok) is set and bit 4 (line error) is clear;
+  otherwise the host sends it again.
 - `[0xD2]`: the host ACKed our IN packet.
 
 **Firmware rules:**
@@ -202,6 +205,12 @@ pull-up), D+ = pin base + 1.
 - On a SETUP, drop a stale reply with `TX_FLUSH`, not the CTRL flush.
 - After a SET_ADDRESS status stage, rewrite words 6 and 9 of the program (`SET OSR` with the
   token's 2nd and 3rd byte for the new address, endpoint 0).
+- Keep the last IN packet until its `[0xD2]` record. If the TX FIFO has drained (`TX_COUNT` = 0)
+  and no `[0xD2]` came within about 100 µs, the host's ACK was lost: queue the same packet again,
+  same DATA PID, and set FLAG0.
+- Bus reset: poll `PINS`; SE0 (D− and D+ low) lasting 2.5 µs or more is a reset. Then rewrite
+  words 6 and 9 to `0x9000` and `0x9100` (address 0), clear FLAG0–2, flush the TX FIFO and forget
+  any transfer in progress.
 
 The engine answers every token itself in about 3 bit times.
 
@@ -215,8 +224,9 @@ Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pu
 - **Single slots** (Search ROM): set FLAG1 with the TX FIFO empty. Each TX byte is then one slot
   (bit 0), and the bit seen comes back in bit 7.
 - **Strong pull-up** (parasite-powered devices, e.g. a DS18B20 during CONVERT T): queue the
-  byte first, then set FLAG0. 7 µs after the byte's last slot the engine drives DQ hard high,
-  until the host clears FLAG0.
+  byte first, then set FLAG0. 6 µs after the byte's last slot the engine drives DQ hard high,
+  until the host clears FLAG0; it pushes the byte seen after turning the pull-up on, so a full
+  RX FIFO cannot delay it.
 - Slots are 65 µs: 6 µs low for a 1 or a read, 60 µs low for a 0, sample at 13 µs.
 - CRCs: set the CRC unit up for the device's CRC (CRC-8: poly 0x31, `CRC_CFG` 0xA7; CRC-16:
   poly 0x8005, `CRC_CFG` 0xAF), restart it after the command byte, and read "CRC ok" from
@@ -227,8 +237,9 @@ Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pu
 RS-485 half duplex, 8E1 (or 8O1), any baud rate. Tick = 1/8 bit, LSB first, `JMP_PIN` = 1.
 Pins: TX = pin base, RX = base + 1, driver enable = base + 2.
 Engine settings: `CRC_POLY` = 0x8005, `CRC_CFG` = 0xFF, `LINE_CFG` = 0x01 (0x81 for 8O1, 0x41
-for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up to 19200 baud,
-1.75 ms above). `TIMEOUT_PC` = 1: the timeout routine is the program's word 1.
+for 8N2), `TIMEOUT` = 1.5 characters in ticks + 9 = 141 at any baud rate. `TIMEOUT_PC` = 1:
+the timeout routine is the program's word 1. It watches the line 2 more characters: silence
+ends the frame (3.5 characters in all), a start bit makes the frame invalid.
 
 - **Send:** queue only the data bytes. When the request is queued and the TX FIFO is empty, set
   FLAG1; the engine adds the parity bits, appends the CRC, turns the driver off after the last
@@ -236,6 +247,10 @@ for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up
 - **Receive:** two RX bytes per character, `[data] [status]`: status bit 0 = parity error,
   bit 1 = CRC ok so far (so on the last character: the frame's CRC is correct). At the end of
   the frame the engine sets FLAG2 and raises IRQ.
+- **Invalid frame:** a character after more than 1.5 characters of silence inside a frame
+  (Modbus over serial line §2.5.1.1). The engine sets FLAG3 at once and receives nothing more
+  until the line has been silent 3.5 characters; then FLAG2 and IRQ as usual. With FLAG3 set,
+  discard the frame and clear FLAG3.
 - FLAG0 is used inside the program.
 
 ## Status
@@ -252,11 +267,14 @@ for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up
   4. 1-Wire with two DS18B20-style device models: presence and absence, READ ROM, Search ROM
      finding both devices, MATCH ROM + READ SCRATCHPAD, CRC-8 checked both by the host and by the
      engine's CRC unit (through `STATUS`), CONVERT T on a parasite-powered device with the strong
-     pull-up (the device model fails the conversion if DQ is not held high), a block with an
+     pull-up (the device model fails the conversion if DQ is not held high), again with the RX
+     FIFO full (the pull-up must still come within 10 µs of the last slot), a block with an
      inverted CRC-16 checked through the CRC value read-out, and the timing of every low pulse.
   5. Modbus RTU master against an RS-485 device model, using the CRC unit, parity bit and
      timeout: a normal exchange, a response with a parity error, a response with a corrupted CRC
-     (both reported by the engine), an exchange at 115200 baud, one in 8N2, and an RX overflow
+     (both reported by the engine), an exchange at 115200 baud, one in 8N2, responses with a
+     2-character pause (reported invalid) and a 1-character pause (valid) at 19200 and
+     115200 baud, and an RX overflow
      (the host deliberately not reading) reported in `STATUS` and by IRQ. The device checks the
      engine-appended CRC, parity or second stop bit, driver enable and glitches on the TX line.
   6. Two flag-using protocols at once: a 1-Wire Search ROM on engine 0 while engine 1 runs I2C
@@ -275,10 +293,13 @@ for 8N2), `TIMEOUT` = end-of-frame silence in ticks + 9 (3.5 characters = 317 up
   11. USB low-speed device (`tb_usb`): a host model at ±1.5 % enumerates it:
      - GET_DESCRIPTOR (device; configuration, 9 and 18 bytes), SET_ADDRESS, SET_CONFIGURATION,
        STALL for an unsupported request, a vendor write and read;
-     - not ACKed: a SETUP with a flipped bit and one with a stuffing error;
+     - not ACKed: a SETUP with a flipped bit, one with a missing stuff bit, and one with a
+       wrong stuff bit but intact data and CRC;
      - ignored: tokens for another address and with a bad CRC5;
      - no reply: keep-alives and a bus reset;
-     - piled-up records split apart.
+     - piled-up records split apart;
+     - a lost ACK: the device sends the same DATA1 packet again;
+     - a 10 ms bus reset after SET_ADDRESS: the device answers at address 0 again.
 
      The host model checks the device's CRCs and stuffing itself. Every reply starts 2–7.5 bit
      times after the host's EOP (measured 2.97–3.05), and host and device never drive the bus

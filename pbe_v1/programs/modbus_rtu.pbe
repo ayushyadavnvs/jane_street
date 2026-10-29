@@ -4,8 +4,9 @@
 ; Config: tick = 1/8 bit (CLKDIV = clk / (8 * baud) - 1), OUT and IN LSB first, JMP_PIN = rx.
 ;   CRC_POLY = 0x8005, CRC_CFG = 0xFF (16 bits, init all ones, reversed output, fed by OUT and IN)
 ;   LINE_CFG = 1 (timeout jumps to word 1; even parity) or 0x81 for odd parity
-;   TIMEOUT  = end-of-frame silence in ticks, + 9: 3.5 characters (317) up to 19200 baud,
-;              1.75 ms above.
+;   TIMEOUT  = 1.5 characters in ticks, + 9: 141 (any baud rate). After 1.5 characters of
+;              silence the program watches the line 2 more characters: silence ends the frame
+;              (3.5 characters in all), a start bit makes it invalid (BUG-039).
 ; Pins: tx = pin base, rx = pin base + 1, de = pin base + 2 (RS-485 driver enable).
 ;
 ; Host protocol
@@ -15,13 +16,18 @@
 ;   Receive: each character arrives as [data] [status]: status bit 0 = parity error, bit 1 = CRC
 ;     ok so far (so on the last character: the frame's CRC is correct). At the end of the frame
 ;     the engine sets FLAG2 and raises IRQ.
+;   Invalid frame: a character after more than 1.5 characters of silence inside a frame (Modbus
+;     over serial line 2.5.1.1). The engine sets FLAG3 at once and stops receiving; once the line
+;     has been silent for 3.5 characters it sets FLAG2 and raises IRQ as for any frame end. With
+;     FLAG3 set the host discards the frame (the characters before the pause are in the RX FIFO,
+;     none after it) and clears FLAG3.
 ;   FLAG0 is used inside the program ("in a frame").
 .equ tx 0
 .equ rx 1
 .equ de 2
 
         JMP  init
-tmo:    JMP  FLAG0, fend     ; word 1: a timeout lands here. In a frame: frame complete
+tmo:    JMP  FLAG0, gap      ; word 1: a timeout lands here. In a frame: frame complete?
         JMP  TX_EMPTY, idle  ; idle: anything to send?
 tx:     PIN  de, DRV1 [7]    ; driver on, one bit before the first start bit
         CRCRST
@@ -55,6 +61,9 @@ c1:     PIN  tx, OUT, NOCRC [6]
         PIN  de, DRV0        ; driver off
         FLAG 1, CLR
         JMP  idle
+gap:    SET  X, 87           ; 1.5 characters of silence so far: watch 2 more (88 x 2 ticks)
+gw:     JMP  PIN_LO, bad     ; a start bit: the frame is invalid
+        JMP  X--, gw
 fend:   FLAG 0, CLR
         FLAG 2, SET          ; frame complete
         FLAG 0, IRQ
@@ -72,7 +81,10 @@ rbit:   IN   rx [6]          ; data bits 0..6
         IN   rx, NOCRC       ; parity bit: into the parity check, not the CRC
         STAT                 ; ISR <= {.., CRC ok, parity error}
         PUSH
-inframe: WAIT rx, FALL [3]   ; next character (or 3.5 characters of silence -> tmo)
+inframe: WAIT rx, FALL [3]   ; next character (or 1.5 characters of silence -> tmo)
         JMP  PIN_HI, inframe
         SET  X, 6 [5]
         JMP  rbit
+bad:    FLAG 3, SET          ; invalid frame: tell the host, receive nothing more
+        SET  X, 153          ; until 3.5 characters of silence (154 x 2 ticks), then fend
+        JMP  gw

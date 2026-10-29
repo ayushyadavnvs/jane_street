@@ -235,6 +235,9 @@ module tb_pbe;
   ow_device #(.ROM(ROM_B), .SP(OW_SP), .SP_CONV(OW_SP_25C), .BLK(OW_BLK)) u_ow_b
       (.dq(bus[OW]), .enable(ow_en_b), .hard_hi(ow_strong), .pull(ow_pull_b));
   wire ow_pull_any = ow_pull_a | ow_pull_b;
+  realtime ow_last_rise = 0, ow_spu_on = 0;  // DQ's last rising edge; when the strong pull-up began
+  always @(posedge bus[OW]) ow_last_rise = $realtime;
+  always @(posedge ow_strong) ow_spu_on = $realtime;
 
   // Slot timing: every low pulse the controller makes on its own must be a write-1/read pulse
   // (1-15 us), a write-0 pulse (60-120 us) or a reset (>= 480 us); recovery >= 1 us.
@@ -354,6 +357,8 @@ module tb_pbe;
   real MB_BIT = 1.0e9 / 19200.0;  // ns
   bit mb_en = 0;
   bit mb_npar = 0;  // 8N2: no parity bit, a second stop bit instead
+  int mb_gap_at = -1;     // the response pauses before this byte...
+  real mb_gap_chars = 0;  // ...for this many character times (11 bits)
   int mb_bad = -1, mb_frames = 0, mb_par_err = 0, mb_stop_err = 0, mb_de_err = 0, mb_k, mb_m;
   real mb_max_gap = 0;
   realtime mb_t_end;
@@ -394,6 +399,7 @@ module tb_pbe;
     #(MB_BIT);
     for (mb_m = 0; mb_m < mb_resp.size(); mb_m++) begin
       mb_o = mb_resp[mb_m];
+      if (mb_m == mb_gap_at) #(mb_gap_chars * 11 * MB_BIT);  // a pause inside the frame
       ext_val[1] = 0;  // start
       #(MB_BIT);
       for (mb_k = 0; mb_k < 8; mb_k++) begin
@@ -444,10 +450,9 @@ module tb_pbe;
   real mb_baud = 19200.0;
   task mb_config;  // engine 0 for Modbus at mb_baud: tick = 1/8 bit, CRC, parity, timeout
     mb_div = $rtoi(1.0e9 / mb_baud / 8.0 / CLK_NS + 0.5) - 1;
-    // end of frame: 3.5 characters up to 19200 baud, 1.75 ms above; +9 ticks because the
-    // program starts waiting 9 ticks before the stop bit ends
-    if (mb_baud <= 19200) mb_tmo = 3.5 * 11 * 8 + 9;
-    else mb_tmo = $rtoi(1.75e6 / ((mb_div + 1) * CLK_NS) + 0.5) + 9;
+    // 1.5 characters of silence (the program then watches 2 more for the frame end, BUG-039);
+    // +9 ticks because the program starts waiting 9 ticks before the stop bit ends
+    mb_tmo = 1.5 * 11 * 8 + 9;
     reg_write(7'h00, 8'b0000_0000);    // stop E0
     reg_write(7'h10, mb_div[7:0]);
     reg_write(7'h11, mb_div[15:8]);
@@ -759,6 +764,42 @@ module tb_pbe;
       check(ow_buf[ow_i] === OW_SP_25C[8*ow_i+:8], $sformatf("1-Wire converted scratchpad byte %0d: %02x", ow_i, ow_buf[ow_i]));
     $display("  CONVERT T with strong pull-up: device read 25.0625 C");
 
+    // CONVERT T while the RX FIFO is full (BUG-038): the strong pull-up must come within 10 us
+    // of the last slot, not after the host has made room for the byte's PUSH
+    for (ow_j = 0; ow_j < 6; ow_j++) fifo_send(ow_e, 8'hFF);  // 6 read slots, left unread
+    do reg_read(7'h0B, ow_f); while (ow_f != 6);
+    flag_set(ow_e, 0);                   // reset: its presence byte is left unread too
+    do flag_get(ow_e, 0, ow_fb); while (ow_fb);
+    ow_tx = 8'h55; fifo_send(ow_e, ow_tx);
+    for (ow_j = 0; ow_j < 8; ow_j++) fifo_send(ow_e, ROM_A[8*ow_j+:8]);
+    do reg_read(7'h0B, ow_f); while (ow_f != 16);
+    reg_read(7'h01, ow_f);
+    check(ow_f[5], "1-Wire: RX FIFO not full before CONVERT T");
+    ow_spu_on = 0;
+    begin
+      int conv0;
+      conv0 = u_ow_a.conversions;
+      fifo_send(ow_e, 8'h44);            // CONVERT T, then FLAG0, with the RX FIFO full
+      flag_set(ow_e, 0);
+      #(700us);                          // 8 slots and more; the host still reads nothing
+      check(ow_spu_on > 0, "1-Wire: no strong pull-up after CONVERT T with the RX FIFO full");
+      if (ow_spu_on > 0)
+        check(ow_spu_on - ow_last_rise <= 10000,
+              $sformatf("1-Wire: strong pull-up %0.1f us after the last slot, needs <= 10 us",
+                        (ow_spu_on - ow_last_rise) / 1000.0));
+      for (ow_j = 0; ow_j < 17; ow_j++) fifo_recv(ow_e, ow_r);  // 16 waiting and CONVERT T's
+      check(ow_r == 8'h44, $sformatf("1-Wire: CONVERT T came back as %02x", ow_r));
+      #(1200us);
+      flag_clear(ow_e, 0);
+      #(20us);
+      check(!uio_oe[OW], "1-Wire: DQ still driven after the strong pull-up ended (RX FIFO full)");
+      check(u_ow_a.conversions == conv0 + 1 && u_ow_a.conv_fails == 0,
+            $sformatf("1-Wire: RX FIFO full: %0d conversions, %0d failed", u_ow_a.conversions - conv0, u_ow_a.conv_fails));
+      if (ow_spu_on > 0)
+        $display("  CONVERT T with the RX FIFO full: strong pull-up %0.1f us after the last slot",
+                 (ow_spu_on - ow_last_rise) / 1000.0);
+    end
+
     // Inverted CRC-16 (DS2408/DS2431 style): the host reads the CRC unit's value and compares
     ow_reset;
     ow_tx = 8'h55; ow_xbyte;
@@ -806,13 +847,17 @@ module tb_pbe;
     mb_en = 1;
 
     // round 0: normal; 1: response parity error; 2: response CRC corrupted; 3: normal at 115200;
-    // 4: 8N2 at 19200
-    for (int round = 0; round < 5; round++) begin
-      mb_baud = (round == 3) ? 115200.0 : 19200.0;
+    // 4: 8N2 at 19200; 5, 6: a 2-character pause inside the response at 19200 and 115200 (the
+    // frame is invalid, BUG-039); 7, 8: a 1-character pause at 115200 and 19200 (allowed)
+    for (int round = 0; round < 9; round++) begin
+      bit invalid;
+      mb_baud = (round == 3 || round == 6 || round == 7) ? 115200.0 : 19200.0;
       mb_npar = (round == 4);
-      if (round == 4) reg_write(7'h1E, 8'h41);  // LINE_CFG: no parity (second stop bit instead)
-      if (round == 0 || round == 3 || round == 4) mb_config;
+      reg_write(7'h1E, mb_npar ? 8'h41 : 8'h01);  // LINE_CFG: even parity, or a second stop bit
+      mb_config;
       mb_bad = (round == 1) ? 3 : -1;
+      mb_gap_at = (round >= 5) ? 4 : -1;
+      mb_gap_chars = (round == 5 || round == 6) ? 2.0 : 1.0;
       mb_resp = '{8'h01, 8'h03, 8'h04, 8'h12, 8'h34, 8'h56, 8'h78, 8'h81, 8'h07};
       if (round == 2) mb_resp[8] = 8'h06;  // wrong CRC high byte
       mb_buf = '{8'h01, 8'h03, 8'h00, 8'h00, 8'h00, 8'h02, 8'hC4, 8'h0B};  // what must arrive
@@ -820,25 +865,36 @@ module tb_pbe;
       mb_send;
       mb_receive;
       check(uo_out[1], "Modbus: no IRQ at the end of the response");
+      flag_get(0, 3, invalid);             // FLAG3: the frame had a pause of over 1.5 characters
+      flag_clear(0, 3);
       flag_clear(0, 2);
       reg_write(7'h02, 8'h03);
-      check(mb_req_got.size() == 8, $sformatf("Modbus round %0d: device got %0d request bytes", round, mb_req_got.size()));
-      for (mb_i = 0; mb_i < 8 && mb_i < mb_req_got.size(); mb_i++)
-        check(mb_req_got[mb_i] === mb_buf[mb_i],
-              $sformatf("Modbus round %0d request byte %0d: %02x, expected %02x", round, mb_i, mb_req_got[mb_i], mb_buf[mb_i]));
-      check(mb_rx.size() == mb_resp.size(), $sformatf("Modbus round %0d: host got %0d response bytes", round, mb_rx.size()));
-      mb_perr = 0;
-      for (mb_i = 0; mb_i < mb_rx.size(); mb_i++) begin
-        check(mb_rx[mb_i] === mb_resp[mb_i], $sformatf("Modbus round %0d response byte %0d: %02x", round, mb_i, mb_rx[mb_i]));
-        mb_x = mb_par[mb_i];
-        if (mb_x[0]) mb_perr++;            // parity errors found by the engine
+      mb_gap_at = -1;
+      check(invalid == (round == 5 || round == 6),
+            $sformatf("Modbus round %0d: frame reported %0s", round, invalid ? "invalid" : "valid"));
+      if (round == 5 || round == 6) begin
+        check(mb_rx.size() == 4, $sformatf("Modbus round %0d: %0d bytes before the pause, expected 4", round, mb_rx.size()));
+        $display("  round %0d at %0.0f baud: a 2-character pause inside the response: frame %0s",
+                 round, mb_baud, invalid ? "reported invalid" : "NOT reported invalid");
+      end else begin
+        check(mb_req_got.size() == 8, $sformatf("Modbus round %0d: device got %0d request bytes", round, mb_req_got.size()));
+        for (mb_i = 0; mb_i < 8 && mb_i < mb_req_got.size(); mb_i++)
+          check(mb_req_got[mb_i] === mb_buf[mb_i],
+                $sformatf("Modbus round %0d request byte %0d: %02x, expected %02x", round, mb_i, mb_req_got[mb_i], mb_buf[mb_i]));
+        check(mb_rx.size() == mb_resp.size(), $sformatf("Modbus round %0d: host got %0d response bytes", round, mb_rx.size()));
+        mb_perr = 0;
+        for (mb_i = 0; mb_i < mb_rx.size(); mb_i++) begin
+          check(mb_rx[mb_i] === mb_resp[mb_i], $sformatf("Modbus round %0d response byte %0d: %02x", round, mb_i, mb_rx[mb_i]));
+          mb_x = mb_par[mb_i];
+          if (mb_x[0]) mb_perr++;            // parity errors found by the engine
+        end
+        check(mb_perr == (round == 1 ? 1 : 0), $sformatf("Modbus round %0d: engine reported %0d parity errors", round, mb_perr));
+        mb_x = mb_par[mb_par.size() - 1];  // status after the last character: CRC ok?
+        check(mb_x[1] == (round != 2), $sformatf("Modbus round %0d: CRC ok = %b", round, mb_x[1]));
+        check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus round %0d: %0.0f ns gap inside a request", round, mb_max_gap));
+        $display("  round %0d at %0.0f baud %s: request with hardware CRC ok; response %0d parity error(s), CRC ok = %b",
+                 round, mb_baud, mb_npar ? "8N2" : "8E1", mb_perr, mb_x[1]);
       end
-      check(mb_perr == (round == 1 ? 1 : 0), $sformatf("Modbus round %0d: engine reported %0d parity errors", round, mb_perr));
-      mb_x = mb_par[mb_par.size() - 1];  // status after the last character: CRC ok?
-      check(mb_x[1] == (round != 2), $sformatf("Modbus round %0d: CRC ok = %b", round, mb_x[1]));
-      check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus round %0d: %0.0f ns gap inside a request", round, mb_max_gap));
-      $display("  round %0d at %0.0f baud %s: request with hardware CRC ok; response %0d parity error(s), CRC ok = %b",
-               round, mb_baud, mb_npar ? "8N2" : "8E1", mb_perr, mb_x[1]);
     end
     mb_npar = 0;
 

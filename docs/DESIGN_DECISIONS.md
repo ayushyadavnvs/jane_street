@@ -347,10 +347,13 @@ mark the old one **Changed** instead of deleting it.
 
 ## D25. 1-Wire controller (program only) — **Changed (strong pull-up)**
 
-- **Now 35 words.** FLAG0 has two meanings: with nothing queued it requests a reset; set *after*
-  a byte is queued it requests a strong pull-up after that byte (DQ driven hard high from 7 µs
+- **Now 36 words.** FLAG0 has two meanings: with nothing queued it requests a reset; set *after*
+  a byte is queued it requests a strong pull-up after that byte (DQ driven hard high from 6 µs
   after the last slot until the host clears FLAG0), which parasite-powered devices need during
   CONVERT T. The idle loop therefore checks for queued bytes before FLAG0.
+  - **Changed (BUG-038):** the program tests FLAG0 *before* pushing the byte seen, and the
+    pull-up path pushes only after driving DQ high. A `PUSH` blocks while the RX FIFO is full,
+    and the pull-up must not wait for the host (a DS18B20 needs it within 10 µs). Was 35 words.
   - **Alternative:** a separate flag for the pull-up. Rejected: `JMP` can only test FLAG0 and
     FLAG1, and FLAG1 is single-slot mode.
 - **CRCs** are checked with the CRC unit through the host registers (D29): CRC-8 by "CRC ok",
@@ -373,9 +376,12 @@ mark the old one **Changed** instead of deleting it.
 - **Left to the host:** CRC8, and the strong pull-up some parasite-powered devices need
   (`PIN dq, DRV1`). Overdrive speed needs a second program with a finer tick.
 
-## D26. Modbus RTU master — **Changed (CRC, parity, timeout hardware)**
+## D26. Modbus RTU master — **Changed (CRC, parity, timeout hardware; frame validity, D47)**
 
-- **Now:** `programs/modbus_rtu.pbe`, 56 words, uses the CRC unit (D29), the parity bit (D30) and
+- **Changed (D47):** the receiver now rejects a frame with a pause of more than 1.5 characters,
+  and the timeout is 1.5 characters at every baud rate (it was 3.5 characters up to 19200 baud
+  and 1.75 ms above). 62 words.
+- **Before D47:** `programs/modbus_rtu.pbe`, 56 words, uses the CRC unit (D29), the parity bit (D30) and
   the timeout (D31). The host sends only data bytes; the engine adds parity and appends the CRC,
   checks received parity and CRC, finds start bits with `WAIT FALL` (exact, instead of a 2-tick
   poll) and ends a frame with the timeout. The 19200-baud limit is gone (tested at 115200).
@@ -403,7 +409,8 @@ mark the old one **Changed** instead of deleting it.
   engine turns the driver off after the last stop bit, then clears FLAG1.
 - **CRC:** computed by the host. (v2's USB CRC unit computes the same CRC-16; Modbus is the
   inverted USB field.)
-- **Not checked by the receiver:** the 1.5-character maximum gap inside a frame.
+- **Not checked by the receiver:** the 1.5-character maximum gap inside a frame. **Changed:**
+  checked since D47 (BUG-039).
 
 ## D27. Shared flags limit which protocols can run together — **Resolved by D11**
 
@@ -722,6 +729,8 @@ mark the old one **Changed** instead of deleting it.
   - After SET_ADDRESS, the firmware rewrites the two address words in program memory.
   - It uses `RX_COUNT`, `TX_FLUSH` and flags (FLAG0 = IN packet queued, FLAG1 = STALL,
     FLAG2 = record).
+  - It also resends an IN packet whose ACK was lost and handles a bus reset (D49).
+  - A data packet is ACKed only when its CRC is good *and* the line coder saw no error (D48).
 - **Scope: endpoint 0 only.** A HID keyboard also needs an interrupt IN endpoint, about 10 more
   words, and a program window is 64 words (6-bit jump targets). What would make room:
   - a one-level `CALL`/`RET`;
@@ -738,8 +747,10 @@ mark the old one **Changed** instead of deleting it.
 - **Tested (Test 11, `tb_usb.sv`):** a USB host model at ±1.5 % enumerates the device:
   - GET_DESCRIPTOR (device; configuration 9 and 18 bytes), SET_ADDRESS, SET_CONFIGURATION,
     STALL for an unsupported request, and a vendor write and read;
-  - refused: a SETUP with a flipped bit, one with a stuffing error, tokens for the old address
-    and with a bad CRC5;
+  - refused: a SETUP with a flipped bit, one with a missing stuff bit, one with a wrong stuff
+    bit but intact data and CRC (BUG-040), tokens for the old address and with a bad CRC5;
+  - a lost ACK (the same DATA1 packet comes again, BUG-041) and a 10 ms bus reset after
+    SET_ADDRESS (address 0 again, BUG-042);
   - no reply: keep-alives and a bus reset;
   - two records piled up and split apart.
 
@@ -832,4 +843,93 @@ part I under-estimated most.
   is now being finished (reviewer fixes, the 48 MHz timing fix) before physical design
   resumes. Otherwise each RTL push would start a 2.5-hour build, and each testbench push would
   test new tests against an old netlist. RTL tests (`regression`) still run on every push.
+
+## D47. Modbus RTU: a pause of more than 1.5 characters makes a frame invalid
+
+- **Rule:** Modbus over serial line, §2.5.1.1: the characters of a frame follow each other with
+  at most 1.5 character times of silence; a frame with a longer pause must be discarded. A
+  frame ends after 3.5 characters of silence. Before this the program waited 3.5 characters
+  inside a frame, so a 2-character pause was accepted (BUG-039).
+- **Chosen:** `TIMEOUT` = 1.5 characters (+ 9 ticks, as before, because the program starts
+  waiting 9 ticks before the stop bit ends): 141 ticks at 1/8 bit. The timeout routine, if in a
+  frame, watches the line for 2 more characters in an X loop (`JMP PIN_LO` / `JMP X--`, 2 ticks
+  a pass, 88 passes):
+  - silence: the frame ends as before (FLAG2, IRQ), after 3.5 characters in all;
+  - a start bit: the frame is invalid. FLAG3 is set at once; the program receives nothing more,
+    and waits for 3.5 characters of silence (the same loop with X = 153, restarted by every low
+    sample), then ends the frame with FLAG2 and IRQ. The host discards a frame with FLAG3 set.
+- **Why a flag, not a status value:** the status byte is per character and the frame is only
+  known to be invalid after the pause; FLAG3 is the engine's last free flag and needs no RX
+  FIFO space. FLAG2 and IRQ still mark the end, so the host's frame loop is unchanged.
+- **Why FLAG3 at once but IRQ only at the end:** one more word (an `IRQ` in `bad`) would make
+  65; the host sees FLAG3 whenever it looks, and the IRQ comes when the line is quiet and the
+  next frame may start.
+- **Alternatives:**
+  - a second timeout value in hardware (1.5 and 3.5): a register and a comparator for one
+    protocol, against 6 words of program;
+  - keep receiving after the pause and mark only the end: simpler, but the junk would fill the
+    RX FIFO; the rule says discard.
+- **Above 19200 baud:** the spec recommends fixed timers (750 µs and 1.75 ms) there, to spare
+  slow CPUs; it does not forbid character-based ones. This engine counts in characters at every
+  rate, so a 2-character pause is caught at 115200 baud too, and the frame end comes after
+  3.5 characters (about 0.33 ms at 115200) instead of 1.75 ms. A host that wants the fixed
+  750 µs can set `TIMEOUT` to it; the watch after it stays 2 characters (frame end at
+  750 µs + 2 characters).
+- **Cost:** 6 words (56 → 62 of 64).
+- **Known limit (not new):** while idle, a timeout every 1.5 characters runs 2 instructions
+  (`tmo`, `JMP TX_EMPTY`) before `WAIT rx, FALL` waits again; a start edge in those 2 ticks
+  would be missed. It was the same with 3.5 characters, only rarer.
+- **Tested (Test 5):** a 2-character pause in a response at 19200 and 115200 baud is reported
+  invalid (4 characters before the pause, none after); a 1-character pause at both rates is a
+  valid frame; all earlier rounds (parity error, bad CRC, 8N2, RX overflow) still pass.
+
+## D48. JCRCBAD means "packet bad": CRC not ok or a line error
+
+- **Problem (BUG-040):** a USB packet with a wrong stuff bit but intact data and CRC was ACKed.
+  `STAT` cleared the line error before `JCRCBAD`, and `JCRCBAD` looked only at the CRC.
+- **Chosen:**
+  - `JCRCBAD` jumps when the CRC is not ok **or** the line error is set.
+  - `CRCRST` clears the line error: it marks the start of a new checked packet. (An error in
+    the very clock of the `CRCRST` is kept.)
+  - `STAT` **no longer clears** the line error. It still reports it (bit 4) and still clears
+    parity and timeout.
+- **Why STAT stops clearing it:** USB's program does `STAT` then `JCRCBAD`, so the record gets
+  the status and the jump decides on the same packet; a clear in `STAT` would hide the error from
+  the jump. With `CRCRST` as the clear, the error's scope is one packet: from its `CRCRST` to the
+  next one. The host's own clear (`STATUS[3]`) and restart still work.
+  - **Alternative:** keep `STAT` clearing and swap the program's order (`JCRCBAD` before
+    `STAT`): then the record and the ACK decision would need two code paths, and the 64-word
+    USB program has no room.
+  - **Alternative:** a separate `JLERR` jump: sub-op 7 is the last one free; "packet bad" is the
+    test every checked protocol wants (USB, HDLC, CAN), so one jump covers both.
+- **Programs:** `usb_dev.pbe` does `CRCRST` first in `dat`, before the DATA PID, so an error
+  anywhere in the data packet counts (an error in the token before it does not). The firmware
+  treats status bit 4 as bad, like bit 1 clear. Modbus uses `STAT` without the line coder, so
+  its line error is always 0; no other program uses `JCRCBAD`.
+- **Cost:** one OR gate and the clear on `CRCRST`.
+
+## D49. USB host firmware: resend an IN packet whose ACK was lost; handle bus reset
+
+- **Retransmission (BUG-041):** the engine sends an IN packet once; if the host's ACK is lost
+  (or corrupted) the TX FIFO is empty and the next IN gets a NAK, and the host never gets its
+  data. USB's rule is that the device sends the same packet (same DATA PID) until it is ACKed.
+  - **Chosen:** in the firmware. It keeps the last IN packet; if `TX_COUNT` = 0 and no `[0xD2]`
+    record came for about 100 µs (a host ACKs within 7.5 bit times, 5 µs, and the record
+    reaches the firmware within tens of µs), it queues the same bytes again and sets FLAG0.
+    Meanwhile the engine NAKs, which USB allows.
+  - **Alternative:** in the program, by not popping the packet until the ACK (a "peek" read of
+    the TX FIFO): needs FIFO hardware for one protocol, and the program has no room.
+- **Bus reset (BUG-042):** a reset (SE0 for at least 2.5 µs; hosts send 10 ms) must bring the
+  device back to address 0. The engine sees it only as a long EOP.
+  - **Chosen:** the firmware polls `PINS`; SE0 seen twice, 2.5 µs or more apart (one register
+    read takes about 6 µs), is a reset. EOPs last 1.33 µs and are at least ~12 µs apart, so two
+    EOPs cannot pass for one. It then rewrites program words 6 and 9 to `0x9000` and `0x9100`
+    (`SET OSR` 0x00 and 0x10: address 0), clears FLAG0–2, flushes the TX FIFO and forgets any
+    transfer.
+  - **Alternative:** a reset event from the line coder (SE0 longer than N bits), as an IRQ:
+    hardware for USB only, and the host polling every 50 µs is enough for a 10 ms reset.
+- **The firmware model** (`tb_usb.sv`) does both on a 50 µs timer in the same process as the
+  record handler, like a firmware main loop, so the two never race. The test waits 6000 clocks
+  (was 3000) after SET_ADDRESS for the address switch, since a timer poll may come first; USB
+  allows 2 ms.
 

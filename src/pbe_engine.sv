@@ -18,11 +18,14 @@
 //                   MOV: [5:4] destination, [3:2] source: 1 X, 2 OSR, 3 ISR (source 0: zero);
 //                   destination 0 does nothing (0xD800 is the assembler's NOP)
 //  111  EXT         [8:6] sub-op, [5:0] param
-//                   0 CRCRST      load the CRC's initial value
+//                   0 CRCRST      load the CRC's initial value and clear the line error: a new
+//                                 checked packet starts
 //                   1 OSRCRC      OSR <= CRC byte (param[0]: 0 low, 1 high; param[1]: inverted)
 //                   2 STAT        ISR <= {3'b0, line error, RX overflow, timeout happened, CRC ok,
-//                                 parity error}; then clears parity, timeout and line error
-//                   3 JCRCBAD a   jump to a if the CRC is not ok (not at its good value)
+//                                 parity error}; then clears parity and timeout (not the line
+//                                 error: a JCRCBAD after STAT must still see it)
+//                   3 JCRCBAD a   jump to a if the packet is bad: the CRC is not ok (not at its
+//                                 good value) or the line coder saw an error since the last CRCRST
 //                   4 JEQ a       jump to a if ISR == OSR
 //                   5 JNE a       jump to a if ISR != OSR
 //                   6 JLINE a     jump to a if the line coder saw the end of a frame; clears it
@@ -422,13 +425,13 @@ module pbe_engine (
                   osr     <= (arg[0] ? crc_value[15:8] : crc_value[7:0]) ^ {8{arg[1]}};
                   par_out <= 1'b0;
                 end
+                E_CRCRST:  if (!l_err) line_err <= 1'b0;  // an error in this very clock stays
                 E_STAT: begin
                   isr      <= {3'b0, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
                   par_in   <= 1'b0;
                   tmo_seen <= 1'b0;
-                  line_err <= 1'b0;
                 end
-                E_JCRCBAD: if (!crc_ok) pc <= start_pc + {1'b0, arg[5:0]};
+                E_JCRCBAD: if (!crc_ok || line_err) pc <= start_pc + {1'b0, arg[5:0]};
                 E_JEQ:     if (isr == osr) pc <= start_pc + {1'b0, arg[5:0]};
                 E_JNE:     if (isr != osr) pc <= start_pc + {1'b0, arg[5:0]};
                 E_JLINE:   if (line_ev) pc <= start_pc + {1'b0, arg[5:0]};

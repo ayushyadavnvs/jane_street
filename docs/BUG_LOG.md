@@ -951,3 +951,164 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
     2.5-hour rebuild.
 - **Test:** `make test` (RTL, Icarus 12) passes, and the next `gl_regression` run compiles
   `tb_pbe` with Icarus 13.
+
+## BUG-038 — 1-Wire: a full RX FIFO delayed the strong pull-up
+
+- **Where:** `pbe_v1/programs/onewire_ctrl.pbe`, the end of a byte.
+- **Found by:** review. After the last slot the program did `PUSH` and only then
+  `JMP FLAG0, spu`. With the RX FIFO full, `PUSH` blocks until the host reads, so the strong
+  pull-up came late or never; a parasite-powered DS18B20 needs it within 10 µs, or its
+  conversion fails.
+- **Before:**
+  ```
+          JMP  X--, bit        ; t=64: next slot starts at 65 us
+          PUSH                 ; what was on the wire
+          JMP  FLAG0, spu      ; FLAG0 set during this byte: strong pull-up
+          JMP  idle
+  ...
+  spu:    PIN  dq, DRV1        ; t=67
+          WAIT FLAG 0, LOW
+  ```
+- **After:** test FLAG0 first; the pull-up path drives DQ high, then pushes (36 words, was 35):
+  ```
+          JMP  X--, bit        ; t=64: next slot starts at 65 us
+          JMP  FLAG0, spu      ; t=65: strong pull-up, before the PUSH
+          PUSH                 ; what was on the wire
+          JMP  idle
+  ...
+  spu:    PIN  dq, DRV1        ; t=66
+          PUSH                 ; only now: a full RX FIFO must not delay the pull-up
+          WAIT FLAG 0, LOW
+  ```
+- **Test (Test 4, `tb_pbe.sv`):** 6 read slots and a reset leave 7 bytes unread, MATCH ROM adds
+  9: the RX FIFO is full (16). Then CONVERT T with FLAG0; the host reads nothing for 700 µs.
+  The time from DQ's last rising edge to the start of the strong pull-up must be ≤ 10 µs, and
+  the device model's conversion must succeed.
+  - Before: `FAIL: 1-Wire: no strong pull-up after CONVERT T with the RX FIFO full`,
+    `FAIL: 1-Wire: RX FIFO full: 0 conversions, 1 failed`.
+  - After: passes; `strong pull-up 6.0 us after the last slot`.
+
+## BUG-039 — Modbus RTU accepted a frame with a pause of more than 1.5 characters
+
+- **Where:** `pbe_v1/programs/modbus_rtu.pbe` and its `TIMEOUT` setting.
+- **Found by:** review. Inside a frame the program waited 3.5 characters for the next start
+  bit, so a 2-character pause was accepted; Modbus over serial line §2.5.1.1 says such a frame
+  must be discarded. The design decision is D47.
+- **Before:** `TIMEOUT` = 3.5 characters + 9 (317 ticks; 1.75 ms above 19200 baud), and
+  ```
+  tmo:    JMP  FLAG0, fend     ; word 1: a timeout lands here. In a frame: frame complete
+  ```
+- **After:** `TIMEOUT` = 1.5 characters + 9 (141 ticks, any baud rate), and (62 words, was 56)
+  ```
+  tmo:    JMP  FLAG0, gap      ; word 1: a timeout lands here. In a frame: frame complete?
+  ...
+  gap:    SET  X, 87           ; 1.5 characters of silence so far: watch 2 more (88 x 2 ticks)
+  gw:     JMP  PIN_LO, bad     ; a start bit: the frame is invalid
+          JMP  X--, gw
+  fend:   FLAG 0, CLR
+  ...
+  bad:    FLAG 3, SET          ; invalid frame: tell the host, receive nothing more
+          SET  X, 153          ; until 3.5 characters of silence (154 x 2 ticks), then fend
+          JMP  gw
+  ```
+  The testbench's `mb_config` sets the new `TIMEOUT`.
+- **Test (Test 5, `tb_pbe.sv`):** the device model can pause before a response byte. Rounds 5
+  and 6 pause 2 characters before byte 4 at 19200 and 115200 baud: FLAG3 must be set and only
+  the 4 bytes before the pause received. Rounds 7 and 8 pause 1 character: a valid frame.
+  - Before: `FAIL: Modbus round 5: frame reported valid`, `FAIL: Modbus round 6: frame reported
+    valid` (with the new `TIMEOUT` and the old program, rounds 7 and 8 failed too: the old
+    program ended the frame at 1.5 characters).
+  - After: all 9 rounds and the RX overflow test pass.
+
+## BUG-040 — USB: a packet with a stuffing error but intact data and CRC was ACKed
+
+- **Where:** `src/pbe_engine.sv` (`STAT`, `JCRCBAD`, `CRCRST`), `pbe_v1/programs/usb_dev.pbe`.
+- **Found by:** review. A stuff bit with the wrong value (a 1 where the stuffed 0 belongs) sets
+  the line error, but the unstuffer drops the bit, so data and CRC arrive intact. `STAT` cleared
+  the line error, and `JCRCBAD` looked only at the CRC: the packet was ACKed. The existing test
+  left the stuffed bit out, which shifts the data, so the CRC caught it. Decision: D48.
+- **Before:**
+  ```systemverilog
+                E_STAT: begin
+                  isr      <= {3'b0, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
+                  par_in   <= 1'b0;
+                  tmo_seen <= 1'b0;
+                  line_err <= 1'b0;
+                end
+                E_JCRCBAD: if (!crc_ok) pc <= start_pc + {1'b0, arg[5:0]};
+  ```
+- **After:**
+  ```systemverilog
+                E_CRCRST:  if (!l_err) line_err <= 1'b0;  // an error in this very clock stays
+                E_STAT: begin
+                  isr      <= {3'b0, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
+                  par_in   <= 1'b0;
+                  tmo_seen <= 1'b0;
+                end
+                E_JCRCBAD: if (!crc_ok || line_err) pc <= start_pc + {1'b0, arg[5:0]};
+  ```
+  In `usb_dev.pbe`, `CRCRST` moved to the start of `dat` (before the DATA PID; same word count),
+  and the firmware model counts a record with status bit 4 as bad.
+- **Test (Test 11, `tb_usb.sv`):** the host model's `h_bad_stuff = 2` sends the stuffed bit as a
+  1. A SETUP sent that way must get no ACK, and the firmware must count 3 bad records.
+  - Before: `FAIL: USB: device ACKed a packet with a wrong stuff bit (data and CRC intact)`,
+    `FAIL: USB: firmware saw 2 bad records, expected 3` (and the ACKed junk SETUP then broke
+    the rest of the enumeration).
+  - After: passes.
+
+## BUG-041 — USB: an IN packet whose ACK was lost was never sent again
+
+- **Where:** the device firmware model in `pbe_v1/test/tb_usb.sv` (the host side of
+  `usb_dev.pbe`).
+- **Found by:** review. The engine pops the IN packet as it sends it. If the host's ACK is lost,
+  the TX FIFO is empty and FLAG0 still set, so the next IN gets a NAK, forever. Decision: D49.
+- **Before:** `fw_queue` wrote the packet to the TX FIFO and forgot it.
+- **After:** the packet is kept in `fw_last` until its `[0xD2]` record; a 50 µs timer in the
+  firmware loop queues it again (same DATA PID) when `TX_COUNT` = 0 and no ACK came for 100 µs:
+  ```systemverilog
+    if (fw_unacked) begin
+      reg_read(7'h0C, cnt);  // TX_COUNT
+      if (cnt != 0) fw_drained_at = 0;
+      else if (fw_drained_at == 0) fw_drained_at = $realtime;
+      else if ($realtime - fw_drained_at >= 100000 && !uo_out[1]) begin  // no record waiting
+        fw_resends++;
+        fw_put;
+      end
+    end
+  ```
+- **Test (Test 11):** `h_lose_ack` makes the host model skip its ACK once, in the first data
+  stage of GET_DESCRIPTOR. The next IN must bring the same 8 bytes as DATA1, the firmware must
+  have resent once, and the rest of the transfer (DATA0, DATA1, status) must complete.
+  - Before: `FAIL: USB: after a lost ACK the device sent PID 5a (res 0), expected DATA1 again`
+    (NAK after 200 tries), `FAIL: USB: firmware resent 0 packets, expected 1`.
+  - After: passes.
+- **Tool note:** Icarus 12 compiles `in_pkt == first` on two queues but aborts at run time
+  (`vvp: vthread.cc: ... Assertion 'sig' failed`), and rejects `continue` in a `for` loop
+  (`syntax error`). The tests compare element by element and use `if`/`else`, as BUG-024 did.
+
+## BUG-042 — USB: a bus reset did not bring the address back to 0
+
+- **Where:** the device firmware model in `pbe_v1/test/tb_usb.sv`.
+- **Found by:** review. After SET_ADDRESS the program's words 6 and 9 hold the new address; a
+  bus reset must return the device to address 0, but nothing watched for one. Decision: D49.
+- **Before:** no bus-reset handling.
+- **After:** the firmware timer polls `PINS`; SE0 on two reads 2.5 µs or more apart is a reset:
+  ```systemverilog
+    reg_read(7'h05, p);  // PINS: D- is pin 0, D+ pin 1
+    if (p[1:0] == 2'b00) begin
+      t = $realtime;
+      reg_read(7'h05, p);
+      if (p[1:0] == 2'b00 && $realtime - t >= 2500) begin
+        if (!fw_in_reset) fw_bus_reset;
+        fw_in_reset = 1;
+      end
+    end else fw_in_reset = 0;
+  ```
+  `fw_bus_reset` rewrites words 6 and 9 to `0x9000` and `0x9100`, clears FLAG0–2, flushes the TX
+  FIFO and resets the firmware state.
+- **Test (Test 11):** after SET_ADDRESS(0x15) and the rest of the enumeration, 10 ms of SE0;
+  then GET_DESCRIPTOR at address 0 must return the 18-byte descriptor.
+  - Before: `FAIL: USB: firmware saw 0 bus resets, expected 1`, `FAIL: USB: SETUP not ACKed`,
+    `FAIL: USB: device descriptor at address 0 after a bus reset: 0 bytes`.
+  - After: passes.
+
