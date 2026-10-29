@@ -53,6 +53,7 @@ test/fetch_image.hex: test/fetch_timing.pbe test/fetch_host.pbe tools/pbe_asm.py
 
 test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	$(LINT)
+	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp
 	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(addprefix ../,$(SRC)) && vvp -n ops.vvp
 	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(addprefix ../,$(SRC)) && vvp -n fetch.vvp
@@ -60,6 +61,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
+	$(PYTHON) tools/check_spec_boundaries.py
 	$(MAKE) test-model
 	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
@@ -148,3 +150,8 @@ CASES ?= 3
 .PHONY: test-buses
 test-buses:
 	$(PYTHON) test/bus_models/run.py --seed $(BUS_SEED) --cases $(CASES)
+
+# Round-2 fault audit: long runs stay outside the default gate.
+.PHONY: mutate
+mutate:
+	$(PYTHON) tools/mutate.py --jobs $(or $(JOBS),2) --n 1 --cycles 600 --seed $(SEED)

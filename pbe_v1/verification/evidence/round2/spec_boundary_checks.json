@@ -1,0 +1,56 @@
+{
+  "baseline": "2d62b89",
+  "rtl_changes": "comments only; comment-stripped tokens identical to baseline",
+  "cases": [
+    {
+      "case": "documented_contract",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "marker_found": true,
+      "passed": true,
+      "output": "BUG-058 prefetch pc=64 while instruction 63 executes\nBUG-058 actual instruction 64 executes outside offset window\nBUG-059 PM write edge: out=01 oe=01 RAM[0]=0000 iv=0 next_pc=1\nPASS: BUG-058/059 original claims have explicit preserved counterexamples\n/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_spec_boundaries.sv:72: $finish called at 1406000 (1ps)\n"
+    },
+    {
+      "case": "original_prefetch_pc_window",
+      "returncode": 1,
+      "expected_returncode": 1,
+      "marker_found": true,
+      "passed": true,
+      "output": "BUG-058 prefetch pc=64 while instruction 63 executes\nFATAL: /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_spec_boundaries.sv:46: original requested pc<=start_pc+63 property fails\n       Time: 686000  Scope: tb_spec_boundaries.$ivl_for_loop1\n"
+    },
+    {
+      "case": "original_instruction_window",
+      "returncode": 1,
+      "expected_returncode": 1,
+      "marker_found": true,
+      "passed": true,
+      "output": "BUG-058 prefetch pc=64 while instruction 63 executes\nBUG-058 actual instruction 64 executes outside offset window\nFATAL: /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_spec_boundaries.sv:52: sequential executed-instruction window property fails\n       Time: 696000  Scope: tb_spec_boundaries.$ivl_for_loop1\n"
+    },
+    {
+      "case": "original_write_cancellation",
+      "returncode": 1,
+      "expected_returncode": 1,
+      "marker_found": true,
+      "passed": true,
+      "output": "BUG-058 prefetch pc=64 while instruction 63 executes\nBUG-058 actual instruction 64 executes outside offset window\nBUG-059 PM write edge: out=01 oe=01 RAM[0]=0000 iv=0 next_pc=1\nFATAL: /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_spec_boundaries.sv:65: old ready instruction executes on same PM-write edge\n       Time: 1396000  Scope: tb_spec_boundaries\n"
+    }
+  ],
+  "model_tests": {
+    "command": "PYTHONPATH=.:model python3 -m unittest model.test_top_model model.test_model",
+    "tests": 24,
+    "result": "PASS"
+  },
+  "BUG060_before": {
+    "command": "python3 -m unittest model.test_top_model.TestTopModel.test_partial_program_word_stays_unspecified_until_both_bytes_written model.test_top_model.TestTopModel.test_rewriting_one_unknown_word_half_does_not_initialize_other_half",
+    "exitcode": 1,
+    "failures": [
+      "AssertionError: 55296 is not None",
+      "AssertionError: 4608 is not None"
+    ]
+  },
+  "BUG060_after": {
+    "command": "python3 -m unittest model.test_top_model",
+    "tests": 9,
+    "exitcode": 0
+  }
+}

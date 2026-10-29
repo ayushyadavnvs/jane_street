@@ -1,0 +1,23 @@
+{
+  "primary_specification": {
+    "title": "Universal Serial Bus Specification Revision1.1",
+    "date": "1998-09-23",
+    "url": "https://www.alsa-project.org/files/pub/manuals/usb/usb11.pdf",
+    "sha256": "eb7632510f087e6b57f212e456f8377d6747901cb6d30a7d6baae4d193ecbaba",
+    "bytes": 2021447,
+    "chapters_reviewed": [
+      "7.1.7 Table7-1",
+      "7.1.8",
+      "7.1.9",
+      "7.1.10",
+      "8.6.4",
+      "8.7.1",
+      "8.7.2"
+    ]
+  },
+  "stock_decoders": {
+    "usb_signalling/pd.py": "91c38c1de1fb3bedaac5c22d380ce8ecdce88d0accba4a1abf19e33207b9f4a9",
+    "usb_packet/pd.py": "0768f95149c6d6a0dbf36ca254bfb5c4f9800cccb0602a558d43bbff7cbbf72f",
+    "usb_request/pd.py": "bc65af71f912d288d48c4133355e5adb77181537d2cd7878c57a4834c54689a2"
+  }
+}

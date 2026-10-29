@@ -54,6 +54,25 @@ class TestTopModel(unittest.TestCase):
         self.assertEqual(m.program[127],0x1234)
         self.assertEqual(m.read(6),0)
 
+    def test_partial_program_word_stays_unspecified_until_both_bytes_written(self):
+        m=PBEModel()
+        m.write(7,0xd8)  # Only the high byte is known; low byte was never written.
+        self.assertIsNone(m.program[0])
+        m.reset()  # Reset must retain the one known byte, without inventing the other.
+        self.assertIsNone(m.program[0])
+        m.write(6,1); m.write(7,0x13)
+        self.assertEqual(m.program[0],0xd813)
+        m.write(6,0); m.write(7,0x80)
+        self.assertEqual(m.program[0],0x8013)
+
+    def test_rewriting_one_unknown_word_half_does_not_initialize_other_half(self):
+        m=PBEModel()
+        for high in (0x12,0x34):
+            m.write(6,0); m.write(7,high)
+            self.assertIsNone(m.program[0])
+        m.write(7,0x56)
+        self.assertEqual(m.program[0],0x3456)
+
     def test_tx_only_flush_leaves_rx(self):
         m=PBEModel(); m.program=[0xd800]*128
         m.tx[0].edge(push=True,data=0xab); m.rx[0].edge(push=True,data=0xcd)

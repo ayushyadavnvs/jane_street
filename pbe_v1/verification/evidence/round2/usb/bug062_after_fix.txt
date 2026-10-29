@@ -1,0 +1,6 @@
+test_nonempty_stdout_and_exit_zero_do_not_hide_decoder_exception (reg.DecoderExitStatus) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+OK

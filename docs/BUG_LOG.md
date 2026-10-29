@@ -1527,3 +1527,138 @@ No decoder or system USB configuration was changed.
   `make test` is rerun with that environment before publishing. This demonstrates
   the dependency requirement locally, not a claim of an observed GitHub CI pass.
 - **RTL, GDS and GL workflows:** unchanged. GitHub CI results must be checked after push.
+
+## BUG-058 — Specification implied an enforced 64-word program fence (contract text, clarified; original assertion fails)
+
+- **Before (headers):**
+  ```systemverilog
+  // ... so each engine works in its own 64-word window ...
+  // START_PC ... (64-word window)
+  ```
+  The implementation always used a full7-bit sequential PC. Six-bit jump operands
+  bound branch offsets, not sequential execution or instruction prefetch.
+- **After (comments only):**
+  ```systemverilog
+  // A target is 6 bits; this is a branch-offset window, not a memory-protection boundary.
+  // Sequential execution increments the full 7-bit PC and can leave that window or wrap 127->0.
+  ```
+- **Regression:** `python tools/check_spec_boundaries.py` runs the retained original
+  physical-PC fence assertion and actual-instruction fence assertion; both must
+  fail with their exact markers. It also runs a corrected-contract check that
+  passes. PhysicalPC64/current instruction63 is distinguished from actually
+  executing instruction64. The wrapper rejects a missing expected failure or
+  an unrelated simulator error. Evidence: `evidence/round2/spec_boundary_checks.json`.
+- **Status:** architectural protection is not added. The requested unconditional
+  formal window property must retain its counterexample; clarifying text is not
+  proof of the original stronger claim. HDL behavior is unchanged.
+
+## BUG-059 — Program-write comment overstated atomic instruction cancellation (contract text, clarified)
+
+- **Before:**
+  ```systemverilog
+  // A host write to the program memory refetches the current instruction ...
+  // ... a program the host changes is never run from a stale copy ...
+  ```
+- **After (comment only):**
+  ```systemverilog
+  // It does not cancel an instruction already ready to execute on that same edge:
+  // that instruction uses the old registered word.
+  // ... its successor (or taken target) is fetched again.
+  ```
+- **Regression:** `test_memory_write_may_execute_old_ready_word` checks the model;
+  `tools/check_spec_boundaries.py` checks actual RTL. The original same-edge
+  cancellation assertion fails with its expected marker: the old DRV1 drives
+  out01/oe01 while RAM word0 is replaced by DRV0, and validity clears. The updated
+  snapshot/refetch contract passes. The original stronger claim remains an
+  explicit negative regression. No instruction side effects were suppressed.
+- **Boundary:** this does not establish failure of a correctly sampled
+  `iv -> instr_q == memory[pc-1]` invariant: PM-write invalidation can make that
+  invariant true even though a ready old instruction executes on the write edge.
+- **HDL:** unchanged.
+
+## BUG-060 — Golden model invented the unknown half of a partially written program word (model, fixed)
+
+- **Before:**
+  ```python
+  old = self.program[word]
+  old = 0 if old is None else old
+  self.program[word] = (old & 0xff00 | data) if self.pm_ptr & 1 else (old & 255 | data << 8)
+  ```
+- **After:** retain separately known byte values and a two-bit validity mask;
+  keep `program[word] is None` until both halves are written. Reset preserves
+  partial memory state, just as it preserves unreset RAM.
+  ```python
+  value, known = self._pm_partial.get(word, (0, 0))
+  value = (value & ~(255 << shift)) | data << shift
+  known |= 1 << (shift // 8)
+  if known == 3: self.program[word] = value
+  else: self._pm_partial[word] = value, known
+  ```
+- **Fail-before/pass-after:** new top model tests
+  `test_partial_program_word_stays_unspecified_until_both_bytes_written` and
+  `test_rewriting_one_unknown_word_half_does_not_initialize_other_half` originally
+  failed with `55296 is not None` and `4608 is not None`. Both now pass, alongside
+  initialized-memory differential checks. No RTL value is copied into the model.
+- **HDL:** unchanged. Unknown execution remains outside the deterministic oracle.
+
+## BUG-061 — Verification missed isolated empty-FIFO pop rejection (test coverage, fixed)
+
+- **Finding:** scratch mutation M21 removes `!empty` from the FIFO pop guard.
+  Initial `make test` and separate `make diff` both return0. Their host/engine
+  stimulus qualifies logical pops and did not drive this isolated block boundary.
+- **Before:** no standalone FIFO robustness check in the default target.
+- **After:**
+  ```make
+  cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
+  ```
+  The new test drives empty pops, full pushes, ordered16-byte traffic and flush.
+- **Fail-before/pass-after sensitivity:** without the test M21 survives both make
+  invocations; with it the mutant fails with `empty pop must be ignored count=31`.
+  Unchanged RTL passes. Correct source remains:
+  ```systemverilog
+  if (pop && !empty) rptr <= rptr + 1'b1;
+  ```
+  The faulty `if (pop)` exists only in scratch. All24 selected mutants now have a
+  recorded detecting check. Full table/receipts: `ROUND2_MUTATIONS.md` and
+  `evidence/round2/mutations/`, including the original survivor and corrective rerun.
+
+### BUG-050/051 round-2 root cause and expected-failure disposition
+
+`tools/usb_decoder_repro.py` reproduces both defects without PBE/NRZI/VCD input.
+USB1.1 sections8.7.1–2 require transaction timeout and discarded corrupt traffic;
+section8.6.4 describes identical PID/data retry after missing ACK. Both stock
+request-start options fail. BUG-051 specifically follows missing DATA/handshake
+timeout -> rejected retry IN -> intervening NAK associated with stale DATA1 ->
+unconditional control-IN append, then acknowledged duplicate append. Primary
+specification hash/source/receipts: `ROUND2_USB.md`. Default full-trace checks now
+mark only exact verified signatures XFAIL, never PASS; strict `sigrok-full` still
+fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged.
+
+## BUG-062 — Stock USB first-ack decoder raises TypeError but exits0 with partial output (external tool and harness guard)
+
+- **External code before/after:** unchanged libsigrokdecode0.5.3 usb_request:
+  ```python
+  ss_data = None
+  # first-ack updates this only if actual data arrives
+  self.putr(ss_data, es, ...)
+  ```
+  An empty BULK-IN timeout supplies None as native annotation start sample. Native
+  sigrok prints `argument 1 must be int, not None`, but exits0 with partial output.
+  The independent packet reproducer and native full waveform both confirm it.
+- **Harness before:**
+  ```python
+  result = call(command, output)
+  if not result: raise RuntimeError('empty decoder output')
+  ```
+- **Harness after:** also reject decoder exceptions from stderr.
+  ```python
+  stderr = output.with_suffix('.stderr').read_text(errors='replace')
+  if 'Traceback (most recent call last)' in stderr or re.search(r'Calling .* decode\(\) failed', stderr):
+      raise RuntimeError('stock decoder exception')
+  ```
+- **Fail-before/pass-after:** regression
+  `DecoderExitStatus.test_nonempty_stdout_and_exit_zero_do_not_hide_decoder_exception`
+  fails against the old helper and passes now. Exact `bug062_before_fix.txt` and
+  `bug062_after_fix.txt` transcripts are in `evidence/round2/usb/`. Installed-stock
+  replay covers both options and native exception. Default pins submit; no patch
+  or passing first-ack full-trace result is claimed. RTL is unchanged.

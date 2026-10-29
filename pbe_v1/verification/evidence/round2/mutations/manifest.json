@@ -1,0 +1,170 @@
+[
+  {
+    "id": "M01",
+    "category": "jump",
+    "file": "src/pbe_engine.sv",
+    "before": "3'd0:    jmp_take = 1'b1;",
+    "after": "3'd0:    jmp_take = 1'b0;"
+  },
+  {
+    "id": "M02",
+    "category": "jump",
+    "file": "src/pbe_engine.sv",
+    "before": "jmp_take = (x != 8'd0);",
+    "after": "jmp_take = (x == 8'd0);"
+  },
+  {
+    "id": "M03",
+    "category": "jump",
+    "file": "src/pbe_engine.sv",
+    "before": "3'd2:    jmp_take = pins_in[jmp_idx];",
+    "after": "3'd2:    jmp_take = !pins_in[jmp_idx];"
+  },
+  {
+    "id": "M04",
+    "category": "delay",
+    "file": "src/pbe_engine.sv",
+    "before": "dly_cnt <= dly;",
+    "after": "dly_cnt <= dly + 1'b1;"
+  },
+  {
+    "id": "M05",
+    "category": "tick",
+    "file": "src/pbe_engine.sv",
+    "before": "(div_cnt >= clkdiv)",
+    "after": "(div_cnt > clkdiv)"
+  },
+  {
+    "id": "M06",
+    "category": "FIFO-empty",
+    "file": "src/pbe_fifo.sv",
+    "before": "assign empty = (wptr == rptr);",
+    "after": "assign empty = (wptr != rptr);"
+  },
+  {
+    "id": "M07",
+    "category": "FIFO-full",
+    "file": "src/pbe_fifo.sv",
+    "before": "(wptr[ADDR_BITS] != rptr[ADDR_BITS]);",
+    "after": "(wptr[ADDR_BITS] == rptr[ADDR_BITS]);"
+  },
+  {
+    "id": "M08",
+    "category": "FIFO-count",
+    "file": "src/pbe_fifo.sv",
+    "before": "assign count = wptr - rptr;",
+    "after": "assign count = wptr - rptr + 1'b1;"
+  },
+  {
+    "id": "M09",
+    "category": "flag-clear",
+    "file": "src/tt_um_pbe.sv",
+    "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+    "after": "p_clr[7:0] | p_clr[15:8] | 8'h00"
+  },
+  {
+    "id": "M10",
+    "category": "flag-clear",
+    "file": "src/tt_um_pbe.sv",
+    "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+    "after": "8'h00 | 8'h00 | host_clr"
+  },
+  {
+    "id": "M11",
+    "category": "MSB-LSB",
+    "file": "src/pbe_engine.sv",
+    "before": "out_msb_first ? osr[7] : osr[0]",
+    "after": "out_msb_first ? osr[0] : osr[7]"
+  },
+  {
+    "id": "M12",
+    "category": "MSB-LSB",
+    "file": "src/pbe_engine.sv",
+    "before": "in_msb_first ? {isr[6:0], pin_now} : {pin_now, isr[7:1]}",
+    "after": "in_msb_first ? {pin_now, isr[7:1]} : {isr[6:0], pin_now}"
+  },
+  {
+    "id": "M13",
+    "category": "CRC-init",
+    "file": "src/pbe_crc.sv",
+    "before": "init_ones ? mask : '0",
+    "after": "init_ones ? '0 : mask"
+  },
+  {
+    "id": "M14",
+    "category": "CRC-feedback",
+    "file": "src/pbe_crc.sv",
+    "before": "bit_in ^ |(crc & top)",
+    "after": "bit_in ^ ~|(crc & top)"
+  },
+  {
+    "id": "M15",
+    "category": "D50-pm-write",
+    "file": "src/pbe_engine.sv",
+    "before": "if (pm_wr) iv <= 1'b0;",
+    "after": "if (1'b0) iv <= 1'b0;"
+  },
+  {
+    "id": "M16",
+    "category": "D50-pm-write",
+    "file": "src/pbe_engine.sv",
+    "before": "(iv && !exec) ? pc - 1'b1 : pc",
+    "after": "(iv && !exec) ? pc : pc"
+  },
+  {
+    "id": "M17",
+    "category": "stuff-5-vs-6",
+    "file": "src/pbe_line.sv",
+    "before": "(st == 2'd1) ? 3'd6 : 3'd5",
+    "after": "(st == 2'd1) ? 3'd5 : 3'd6"
+  },
+  {
+    "id": "M18",
+    "category": "stuff-TX",
+    "file": "src/pbe_line.sv",
+    "before": "wire n_stuff = !tstuff && st != 2'd0 && n_run == run_n;",
+    "after": "wire n_stuff = 1'b0;"
+  },
+  {
+    "id": "M19",
+    "category": "timeout",
+    "file": "src/pbe_engine.sv",
+    "before": "tmo_cnt >= timeout",
+    "after": "tmo_cnt > timeout"
+  },
+  {
+    "id": "M20",
+    "category": "pin-ownership",
+    "file": "src/tt_um_pbe.sv",
+    "before": "(e_out[15:8] & pin_own) | (e_out[7:0] & ~pin_own)",
+    "after": "(e_out[15:8] & ~pin_own) | (e_out[7:0] & pin_own)"
+  },
+  {
+    "id": "M21",
+    "category": "FIFO-accept",
+    "file": "src/pbe_fifo.sv",
+    "before": "if (pop && !empty) rptr <= rptr + 1'b1;",
+    "after": "if (pop) rptr <= rptr + 1'b1;"
+  },
+  {
+    "id": "M22",
+    "category": "restart-side-effect",
+    "file": "src/pbe_engine.sv",
+    "before": "wire exec = issue && ready && !restart;",
+    "after": "wire exec = issue && ready;"
+  },
+  {
+    "id": "M23",
+    "category": "parity",
+    "file": "src/pbe_engine.sv",
+    "before": "no_par || (par_out ^ odd)",
+    "after": "no_par || !(par_out ^ odd)"
+  },
+  {
+    "id": "M24",
+    "category": "FIFO-ready",
+    "file": "src/pbe_engine.sv",
+    "before": "OP_FIFO: ready = arg_hi ? !rx_full : !tx_empty;",
+    "after": "OP_FIFO: ready = arg_hi ? rx_full : tx_empty;"
+  }
+]

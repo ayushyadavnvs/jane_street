@@ -1,0 +1,9 @@
+{
+  "command": [
+    "iverilog -g2012 -s tb_fifo_robustness -o /tmp/pbe-fifo-robust.vvp pbe_v1/test/tb_fifo_robustness.sv pbe_v1/src/pbe_fifo.sv",
+    "vvp -n /tmp/pbe-fifo-robust.vvp"
+  ],
+  "returncode": 0,
+  "result": "PASS: FIFO boundary, rejection, order and flush",
+  "log": "fifo-boundary-baseline.log.gz"
+}

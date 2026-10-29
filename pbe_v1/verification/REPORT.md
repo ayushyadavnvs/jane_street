@@ -149,3 +149,48 @@ make sigrok SIGROK_CLI=/tmp/pbe-sigrok-root/usr/bin/sigrok-cli
 Those `/tmp` tools are session-local; on another machine install the listed
 compiler/decoder versions normally. The Python dependencies live in the
 checkout's ignored `.venv`, with pinned requirement files checked in.
+
+# Round 2 — audit, formal, vectors, coverage and robustness
+
+Branch `verify/round2` starts at `verify/golden-model` commit `2d62b89`. These
+sections supersede the stronger round-1 independence and unconditional-window
+interpretations. Report assumptions, bounded checks, proofs and counterexamples
+separately. Physical-design/GDS/gate-level workflows remain untouched.
+
+## Round 2 phase 0: audit and open items
+
+- [ROUND2_MODEL_AUDIT.md](ROUND2_MODEL_AUDIT.md) inventories93 grouped rules,
+  separating original specification text, implementation-informed cycle priorities
+  and unspecified inputs. Shared priorities provide observational conformance,
+  not independent architectural proof. Six headers clarify existing behavior;
+  comment/string-aware comparison confirms unchanged HDL behavior.
+- Original physical-PC and actual-instruction64-word fence assertions and same-
+  edge PM-write cancellation fail as expected; the observed contracts pass in
+  `tools/check_spec_boundaries.py`. No window protection/cancellation was added.
+  Correctly sampled D50 valid-instruction/RAM equality remains a formal property.
+- BUG-060 fixes invented zero bytes in partial PM writes using byte validity.
+  Two new tests failed before and pass now. All24 model unit tests pass.
+- [ROUND2_MUTATIONS.md](ROUND2_MUTATIONS.md):24 faults,48 actual make invocations;
+  initial test23/24, separate one-seed diff17/24. The sole combined survivor
+  (empty-pop guard removal) is caught by a new FIFO boundary test and rerun.
+  Per-check blind spots, original comment-hash interruption and reconstructed
+  summary provenance remain visible. This is finite fault sensitivity, not RTL
+  coverage or exhaustive verification.
+- [ROUND2_USB.md](ROUND2_USB.md): USB1.1 chapters7/8 and independent stock packet
+  replays locate both disagreements in request-decoder state/ACK handling.
+  Fresh `make sigrok`:22PASS,2exact XFAIL,exit0; strict run22PASS,2FAIL,exit1.
+  BUG-062 exception/exit0 is rejected rather than expected away. Five independent
+  extraction/classification/exception/replay unit tests pass with stock sources
+  installed; ordinary test environments explicitly skip optional stock replay.
+- BUG-058/059 clarify misleading contracts;060 repairs model validity;061 closes
+  FIFO boundary coverage;062 hardens external-tool result handling. No behavioral
+  RTL repair was made. D55–57 record decisions, alternatives and new tool versions.
+- Run `make test`, long `make mutate`, `make sigrok`, strict `make sigrok-full`,
+  or `python tools/usb_decoder_repro.py --decoder /path/to/usb_request/pd.py`.
+  Long audits remain separate from the default gate.
+
+Phase0 commit gate: `make test` **PASS**,151.42seconds, including24 model tests,
+standalone FIFO boundaries, retained spec-counterexample wrapper and fixed-seed
+clock comparisons. The optional installed-stock replay was also run separately
+with all5 extraction/decoder tests passing. `evidence/round2/phase0_gate.json`
+records the gate and unchanged HDL token comparison for all six source files.

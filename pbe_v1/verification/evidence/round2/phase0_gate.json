@@ -1,0 +1,36 @@
+{
+  "base": "2d62b89",
+  "phase": 0,
+  "make_test": "PASS",
+  "wall_seconds": 151.42,
+  "hdl_tokens_unchanged": {
+    "src/pbe_crc.sv": true,
+    "src/pbe_engine.sv": true,
+    "src/pbe_fifo.sv": true,
+    "src/pbe_host_spi.sv": true,
+    "src/pbe_line.sv": true,
+    "src/tt_um_pbe.sv": true
+  },
+  "summary": [
+    "PASS: FIFO boundary, rejection, order and flush",
+    "PASS: restart suppresses instruction side effects",
+    "PASS: JEQ, JNE, MOV, OSRCRC INV and the CRC good value (USB CRC16 dd 94, residual 800d)",
+    "PASS",
+    "PASS: line coder",
+    "PASS",
+    "PASS",
+    "PASS",
+    "PASS documented_contract: exit=0",
+    "PASS original_prefetch_pc_window: exit=1 (expected counterexample)",
+    "PASS original_instruction_window: exit=1 (expected counterexample)",
+    "PASS original_write_cancellation: exit=1 (expected counterexample)",
+    "Ran 24 tests in 0.055s",
+    "OK",
+    "test_only_verified_exact_signature_is_expected_failure (test_sigrok_extract.ExpectedExternalLimitations) ... XFAIL: test",
+    "PASS: test",
+    "Ran 5 tests in 0.001s",
+    "OK (skipped=1)",
+    "                                                         ** TESTS=1 PASS=1 FAIL=0 SKIP=0             1021101.31           7.96     128232.86  **",
+    "real 151.42"
+  ]
+}

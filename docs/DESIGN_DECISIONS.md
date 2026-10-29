@@ -1201,3 +1201,71 @@ clean (0 design violations).
   change. The two physical-flow entry points retain their existing triggers.
 - **Evidence:** missing-dependency import fails with an unconfigured interpreter;
   the pinned environment imports cocotb 2.0.1 and runs the suite. See BUG-057.
+
+## D55. Round-2 verification records contracts, negative checks and tool versions
+
+- **Scope:** branch `verify/round2` starts at `verify/golden-model` commit `2d62b89`.
+  Complete the round-1 audit before formal/vector/coverage phases. Run `make test`
+  successfully before each phase commit; long jobs stay separate. Do not merge
+  to main or invoke physical-design/GDS/gate-level flows.
+- **Model independence:** distinguish original specified ISA rules from exact
+  cycle priorities learned from implementation. The rule inventory in
+  `pbe_v1/verification/ROUND2_MODEL_AUDIT.md` preserves that provenance. Header
+  additions document existing behavior; they do not retrospectively make a
+  shared model assumption independent. Behavioral HDL remains unchanged.
+- **Alternatives:** calling every model agreement an independent specification
+  check would overstate evidence. Tightening RTL or restricting formal inputs to
+  hide the original stronger window/write claims would conceal counterexamples.
+  Retain those assertions as explicit expected failures and document the observed
+  contract separately (BUG-058/059).
+- **Tools installed locally:** OSS CAD Suite archive `20260727`; Yosys
+  `0.67+94 (7defa5186-dirty)`; SBY `v0.67-4-gfea6e46`; Yices `2.7.0` revision
+  `05178c03ddf49c6bba63c5c7153774c11a5da12d`; Bitwuzla `0.9.1`;
+  Verilator `5.051 devel v5.050-99-gf8fb1d664 (mod)`. The bundle is extracted in
+  `/tmp/pbe-round2-tools/oss-cad-suite`, not installed into the system. Downloading
+  the suite does not invoke its physical-design tools. Icarus12/cocotb2.0.1 and
+  the pinned round-1 libraries remain available; receipts record each actual tool.
+- **Limits:** finite simulation, BMC, induction proofs, decoder agreement and RTL
+  coverage are different evidence. Report assumptions, depth, result and traces
+  separately. A two-state formal model alone cannot establish absence of X values
+  in a four-state simulator. A failed requested property remains visible.
+
+## D56. Mutation sensitivity is measured using isolated fault copies
+
+- **Decision:** mutate one exact RTL site at a time in an immutable scratch-copy
+  baseline, run actual `make test` and `make diff` for every fault, retain raw
+  compressed logs plus source hashes and per-check receipts. Never commit a mutant.
+- **Alternatives:** compilation errors, infrastructure failures and wall-time
+  timeouts do not demonstrate a test detecting a hardware fault. They are recorded
+  separately. A simulation watchdog is specifically identified rather than called
+  a byte-level assertion failure. Mutant jobs use separate directories.
+- **Result:** 24 faults tested; initial suite catches23, separate one-seed diff
+  catches17. The sole combined survivor is empty-FIFO pop guard removal. Add an
+  independent boundary test and rerun that mutant; it now fails with count31.
+  Preserve the original survivor and correction rather than rewriting history.
+- **Provenance:** the first aggregate source-hash guard correctly rejected a
+  concurrent comment-only audit edit after all48 make invocations finished. Its
+  summary is explicitly reconstructed from receipts; it is not claimed as a
+  successful original runner exit. The revised runner freezes a baseline and
+  offers opt-in comment-only equivalence, with literal hashes strict by default.
+- **Evidence:** `ROUND2_MUTATIONS.md` and `evidence/round2/mutations/`. Keep `make
+  mutate` separate from the short default gate. BUG-061 records the new boundary
+  test, without modifying the correct FIFO RTL.
+
+## D57. Keep full USB decoder disagreements as exact expected failures
+
+- **Decision:** always run full low-speed request decode in `make sigrok`, pin both
+  signalling/packet low-speed options and `in_request_start=submit`, distinguish
+  PASS/verified exact XFAIL/unexpected FAIL, and keep `sigrok-full` strict. Changed
+  versions/results, absent signatures and exceptions are not expected failures.
+- **Evidence:** USB1.1 chapters7/8, original PDF hash and source references are in
+  `ROUND2_USB.md`. Synthetic packets sent to the unchanged stock request class
+  reproduce both defects without PBE waveforms. Both request-start options fail;
+  first-ack adds BUG-062. This characterizes tools, not complete PBE conformance.
+- **Root cause:** missing DATA/handshake timeout leaves DATA RECEIVED stuck. A
+  retry IN is rejected; its NAK finishes stale data, unconditionally appended to
+  control IN before an acknowledged retry appends it again. This refines BUG-051.
+- **Alternatives:** suppressing traces, treating every failure as expected, or
+  editing RTL to fit a decoder would hide faults. Exact independently reproduced
+  signatures retain negative evidence. Reject stderr tracebacks even with nonempty
+  stdout and exit0; installed decoder source remains unchanged (BUG-062).

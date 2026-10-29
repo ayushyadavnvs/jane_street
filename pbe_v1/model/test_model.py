@@ -110,6 +110,29 @@ class EngineSpecificationTests(unittest.TestCase):
         self.assertTrue(model.step(program)['execute'])
         self.assertEqual(model.pins_out, 1)
 
+    def test_memory_write_may_execute_old_ready_word(self):
+        model = EngineModel(run=True)
+        program = self.program(instruction(0, 1 << 3))  # old DRV1
+        self.start(model, program)
+        effects = model.step(program, pm_wr=True)
+        program[0] = instruction(0, 0)  # host changes current word to DRV0 at edge
+        self.assertTrue(effects['execute'])
+        self.assertEqual(effects['instruction'], instruction(0, 1 << 3))
+        self.assertEqual(model.pins_out, 1)
+        self.assertEqual(model.pc, 1)  # refetch successor; old word already executed
+        self.assertFalse(model.iv)
+        self.assertFalse(model.step(program)['execute'])
+        self.assertTrue(model.step(program)['execute'])
+        self.assertEqual(model.pins_out, 1)
+
+    def test_branch_window_does_not_fence_sequential_execution(self):
+        model = EngineModel(run=True, start_pc=0)
+        program = self.program()
+        self.start(model, program)
+        addresses = [model.step(program)['instruction_pc'] for _ in range(130)]
+        self.assertEqual(addresses[:65], list(range(65)))
+        self.assertEqual(addresses[127:130], [127, 0, 1])
+
     def test_timeout_disabled_and_enabled(self):
         program = self.program(instruction(5, 0), instruction(0, 1 << 3))
         model = EngineModel(run=True, timeout=0, line_cfg=1)

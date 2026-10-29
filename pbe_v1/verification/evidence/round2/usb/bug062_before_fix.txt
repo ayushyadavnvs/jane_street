@@ -1,0 +1,14 @@
+test_nonempty_stdout_and_exit_zero_do_not_hide_decoder_exception (reg.DecoderExitStatus) ... FAIL
+
+======================================================================
+FAIL: test_nonempty_stdout_and_exit_zero_do_not_hide_decoder_exception (reg.DecoderExitStatus)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/test_sigrok_extract.py", line 62, in test_nonempty_stdout_and_exit_zero_do_not_hide_decoder_exception
+    with self.assertRaisesRegex(RuntimeError, 'stock decoder exception'):
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=1)

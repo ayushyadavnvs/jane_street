@@ -1,0 +1,41 @@
+{
+  "id": "M18",
+  "category": "stuff-TX",
+  "file": "src/pbe_line.sv",
+  "before": "wire n_stuff = !tstuff && st != 2'd0 && n_run == run_n;",
+  "after": "wire n_stuff = 1'b0;",
+  "baseline_sha256": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+  "scratch": "/tmp/pbe-mutation-M18-cylzojfq/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 1.256,
+      "status": "caught",
+      "first_failure": "FAIL: USB TX: driven for 2144 clocks, expected 72 bits x 32",
+      "log": "M18-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 5.121,
+      "status": "survived",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M18-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test"
+  ]
+}

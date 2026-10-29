@@ -1,4 +1,4 @@
-"""Executable specification of the PBE instruction machine.
+"""Executable ISA and documented cycle-contract reference for the PBE.
 
 The public interface separates pre-edge effects from edge updates.  A top-level
 model must compute effects for *both* engines before changing shared flags/FIFOs.
@@ -6,8 +6,12 @@ Architectural rules come from the instruction comments, CRC comments and D50;
 the fetch address is the next word while ``iv`` is true.  All integer arithmetic
 is explicitly bounded, so Python's unlimited integers do not hide wraparound.
 
-This model intentionally does not invoke an HDL simulator or import RTL-derived
-values.  ``snapshot`` is diagnostic only, not the differential oracle.
+This model does not invoke an HDL simulator or import live RTL state. That is
+not sufficient to prove historical independence: the round-2 audit inventories
+implementation-informed priorities/timing and the header clarifications that
+now document them (verification/ROUND2_MODEL_AUDIT.md). Treat shared corner-case
+rules as observational conformance, not independent proof of architecture.
+``snapshot`` is diagnostic only, not the differential oracle.
 """
 
 from collections import Counter

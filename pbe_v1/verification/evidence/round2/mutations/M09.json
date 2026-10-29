@@ -1,0 +1,41 @@
+{
+  "id": "M09",
+  "category": "flag-clear",
+  "file": "src/tt_um_pbe.sv",
+  "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+  "after": "p_clr[7:0] | p_clr[15:8] | 8'h00",
+  "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+  "scratch": "/tmp/pbe-mutation-M09-8zopaag1/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 9.976,
+      "status": "caught",
+      "first_failure": "FAIL: USB: status stage is not a DATA1 ZLP",
+      "log": "M09-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 5.206,
+      "status": "survived",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M09-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test"
+  ]
+}
