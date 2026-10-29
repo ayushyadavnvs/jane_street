@@ -49,6 +49,9 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-035 | Tooling | More Icarus 12 limits: queue arguments, `return` in tasks, array ports, and others | Bring-up of tb_line, tb_usb | Worked around |
 | BUG-036 | CI | The gate-level regression job looked for the netlist one folder too deep | First CI run | Fixed |
 | BUG-037 | Testbench / CI | The gate-level regression failed early; with Icarus 13, tb_pbe used a variable before its declaration | Second and third CI runs | Fixed |
+| BUG-043 | Design (D50 draft) | A bubble after every instruction broke the SPI peripheral at 2 MHz | Timing review of the draft; Test 9 on it | Fixed (prefetch) |
+| BUG-044 | Tooling | Yosys merged the copies of the read address back into one register, `keep` on the variable notwithstanding | Flip-flop count after synthesis | Fixed |
+| BUG-045 | Tooling | Verilator 5.020 rejects a default value on a module input, which the unit testbenches needed for `pm_wr` | Lint before the first run | Worked around |
 
 ---
 
@@ -1112,3 +1115,85 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
     `FAIL: USB: device descriptor at address 0 after a bus reset: 0 bytes`.
   - After: passes.
 
+## BUG-043 — A bubble after every instruction broke the SPI peripheral at 2 MHz
+
+- **Where:** `src/pbe_engine.sv`, the first design of the instruction register (D50).
+- **Found by:** the timing review before it was written, then confirmed by running it as a
+  mutation of the final design. The draft loaded `instr_q` from `pmem[pc]` every clock, with
+  `pc` the current word, and marked it valid one clock after any change of `pc`. So every
+  instruction took at least 2 clocks at CLKDIV 0. The SPI peripheral (D35) must get from the
+  8th rising SCLK edge to `WAIT sclk, FALL` in a 12-clock half period. It needs 8 instructions
+  for that, 8 clocks before and 16 in the draft.
+- **Before (draft):**
+  ```systemverilog
+  if (exec) begin
+    if (jump) iv <= 1'b0;
+    else iv <= 1'b0;           // every instruction: fetch the next word first
+  ...
+  if (exec) pc_next = jump ? jump_pc : pc;  // (with pc + 1 applied on the fetch)
+  ```
+- **After:** `pc` is the word after the current instruction, so it is already read when the
+  current one executes. Only a taken jump fetches.
+  ```systemverilog
+  if (exec) begin
+    if (jump) iv <= 1'b0;
+    else instr_q <= instr;     // the next word, already read at pc
+  ...
+  if (exec) pc_next = jump ? jump_pc : pc + 1'b1;
+  ```
+- **Test:**
+  - Before: Test 9 `FAIL: SPI peripheral: MISO changed while SCLK was high`, `FAIL: SPI
+    peripheral replies bc 52 ff, expected 3c a5 ff` and 7 more; `tb_fetch` fails 11 timing
+    checks at CLKDIV 0. (USB still passed, at 3.19–3.35 bit times.)
+  - After: `PASS` (Test 9 and `tb_fetch`).
+
+## BUG-044 — Yosys merged the copies of the read address back into one register
+
+- **Where:** `src/pbe_engine.sv`, the copies of `pc` that share out its fan-out (D50).
+- **Found by:** counting flip-flops in a small test before using the copies: 7 instead of 28.
+  The copies have the same D input, clock and reset, so `opt_merge` replaced them with one
+  register. `(* keep *)` on the variable does not reach the flip-flop cells.
+- **Before:**
+  ```systemverilog
+  (* keep *) logic [20:0] pc_copy;
+  ...
+  pc_copy <= {3{pc_next}};
+  ```
+- **After:** the attribute is on the `always_ff`, which Yosys passes on to the flip-flops it
+  makes from it. `pc` is in the same block, so it is not merged with a copy either.
+  ```systemverilog
+  (* keep *)
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pc      <= '0;
+      pc_copy <= '0;
+    end else begin
+      pc      <= pc_next;
+      pc_copy <= {3{pc_next}};
+    end
+  end
+  ```
+- **Test:** the small test gives 28 flip-flops; `make synth` gives 3,494 `dfrbpq` flip-flops,
+  76 more than before D50 (17 + 21 per engine). Place and route keeps cells as Yosys leaves
+  them, but the next routed run should be checked for four `pc` registers per engine.
+
+## BUG-045 — Verilator rejects a default value on a module input
+
+- **Where:** `src/pbe_engine.sv`, the new `pm_wr` input (D50).
+- **Cause:** `tb_engine_restart` and `tb_engine_ops` connect the engine by port name and must
+  stay unchanged, so `pm_wr` is unconnected there and reads z. In an expression z gives x, and
+  an x in `iv` or `pc` would stop the engine. A default (`input logic pm_wr = 1'b0`) is legal
+  SystemVerilog, and Icarus 12 and Yosys 0.33 accept it, but the CI lint does not:
+  ```
+  %Error-UNSUPPORTED: Unsupported: Default value on module input: 'a'
+  ```
+  (Verilator 5.020, the version Ubuntu 24.04 installs.)
+- **Workaround:** `pm_wr` appears only in `if` conditions. There z (or the x it gives in
+  `pm_wr && ...`) takes the `else` path, as no write. In the chip it is always driven.
+  ```systemverilog
+  if (pm_wr && !(exec && jump) && !tmo_hit) pc_next = (iv && !exec) ? pc - 1'b1 : pc;
+  ...
+  if (pm_wr) iv <= 1'b0;  // see pc_next
+  ```
+- **Test:** Verilator lint `-Wall` is clean; `tb_engine_restart` and `tb_engine_ops` pass
+  unchanged.

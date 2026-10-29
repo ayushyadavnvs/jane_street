@@ -4,6 +4,20 @@
 // Each instruction issues on a tick and then idles DLY more ticks before the next one.
 // A tick is one clock every (clkdiv + 1) clocks.
 //
+// Instruction fetch (D50): the instruction runs from a register (instr_q), not straight from
+// the program memory, which cuts the clock's worst path in two. The memory is read at `pc`,
+// the word after the current instruction, so the next word is always ready when the current
+// one executes. A taken jump (JMP, JCRCBAD, JEQ, JNE, JLINE, the timeout) must fetch its target
+// first: one clock with no instruction (a bubble). A tick that falls on a bubble is held for
+// that clock, so it is late, never lost. Instruction times:
+//   CLKDIV >= 1: (DLY + 1) * (CLKDIV + 1) clocks, exactly as without the register (the next
+//                tick is at least 2 clocks away, and the bubble fits in between).
+//   CLKDIV = 0, and the line coder (instructions run every clock): DLY + 1 clocks, plus 1 for
+//                a taken jump. The first instruction after a restart starts 1 clock later.
+// A host write to the program memory refetches the current instruction (one bubble), so a
+// program the host changes is never run from a stale copy; with CLKDIV = 0 the engine slips
+// by that clock.
+//
 //  OP   name        ARG
 //  000  PIN p, act  [8:6] pin, [5:3] act: 0 DRV0, 1 DRV1, 2 REL, 3 TOG, 4 OUT, 5 OUTOD, 6 OUTPAR,
 //                   7 END (line coder: end the frame); [0] NOCRC (OUT/OUTOD): leave this bit out
@@ -83,8 +97,10 @@ module pbe_engine (
     output logic [4:0]  status,       // {line error, RX overflow, timeout happened, CRC ok, parity error}
     output logic [15:0] crc_now,      // the CRC unit's current value, for the host
     // program memory
-    output logic [6:0]  pc,           // absolute program memory address
-    input  logic [15:0] instr,
+    output logic [6:0]  pc,           // program memory read address (absolute): the next word
+    output logic [20:0] pc_copy,      // three more copies of pc, to share out its fan-out
+    input  logic [15:0] instr,        // the program memory word at pc
+    input  logic        pm_wr,        // the host is writing the program memory (any word)
     // pins
     input  logic [7:0]  pins_in,  // synchronized
     output logic [7:0]  pins_out,
@@ -120,11 +136,13 @@ module pbe_engine (
   logic        line_ev, line_err;
   logic [3:0]  cf_cnt;      // byte mode: CRC bits still to feed
   logic [7:0]  cf_sh;
+  logic [15:0] instr_q;     // the current instruction
+  logic        iv;          // instr_q holds the word at pc - 1 (else it is being fetched from pc)
 
   // ---- decode ----
-  wire [2:0] op  = instr[15:13];
-  wire [8:0] arg = instr[12:4];
-  wire [3:0] dly = instr[3:0];
+  wire [2:0] op  = instr_q[15:13];
+  wire [8:0] arg = instr_q[12:4];
+  wire [3:0] dly = instr_q[3:0];
 
   wire [2:0] arg_pin  = arg[8:6];
   wire [2:0] pin_act  = arg[5:3];
@@ -159,8 +177,9 @@ module pbe_engine (
   logic [7:0] l_rxd;
 
   // ---- issue and readiness ----
-  wire tick  = coder_on || (div_cnt >= clkdiv);
-  wire issue = run && (blocked || (tick && dly_cnt == 4'd0));
+  wire tick_due = coder_on || (div_cnt >= clkdiv);
+  wire tick     = tick_due && iv;  // a tick that falls on a fetch bubble waits for it
+  wire issue    = run && iv && (blocked || (tick && dly_cnt == 4'd0));
 
   wire now = arg[5] ? flags[arg[7:6]] : pin_now;
   wire was = arg[5] ? flags_prev[arg[7:6]] : pin_was;
@@ -191,7 +210,7 @@ module pbe_engine (
   wire exec = issue && ready && !restart;
 
   // A blocked instruction that has waited `timeout` ticks is abandoned.
-  wire tmo_hit = run && !restart && blocked && !ready && timeout != 16'd0 && tmo_cnt >= timeout;
+  wire tmo_hit = run && !restart && iv && blocked && !ready && timeout != 16'd0 && tmo_cnt >= timeout;
 
   // ---- CRC unit, fed by the bits the engine shifts ----
   wire is_out = exec && op == OP_PIN && (pin_act == 3'd4 || pin_act == 3'd5);
@@ -286,6 +305,54 @@ module pbe_engine (
   end
   wire jline_take = exec && op == OP_EXT && ext_op == E_JLINE && line_ev;
 
+  // a jump the current instruction takes if it executes: the next word must be fetched again
+  logic jump;
+  always_comb begin
+    case (op)
+      OP_JMP: jump = jmp_take;
+      OP_EXT:
+        case (ext_op)
+          E_JCRCBAD: jump = !crc_ok || line_err;
+          E_JEQ:     jump = isr == osr;
+          E_JNE:     jump = isr != osr;
+          E_JLINE:   jump = line_ev;
+          default:   jump = 1'b0;
+        endcase
+      default: jump = 1'b0;
+    endcase
+  end
+  wire [6:0] jump_pc = start_pc + {1'b0, arg[5:0]};
+
+  // ---- fetch address ----
+  logic [6:0] pc_next;
+  always_comb begin
+    pc_next = pc;
+    if (restart) pc_next = start_pc;
+    else begin
+      if (!iv) pc_next = pc + 1'b1;  // the fetch fills instr_q: read on
+      if (exec) pc_next = jump ? jump_pc : pc + 1'b1;
+      if (tmo_hit) pc_next = start_pc + {1'b0, tmo_pc};
+      // A host write to the program memory may change the current or the next word: fetch the
+      // instruction that runs next again (a jump fetches its target anyway). pm_wr appears only
+      // in `if`s: the unit testbenches leave it unconnected, and z must read as no write.
+      if (pm_wr && !(exec && jump) && !tmo_hit) pc_next = (iv && !exec) ? pc - 1'b1 : pc;
+    end
+  end
+
+  // pc drives the read multiplexers of all 16 bits of the program memory: thousands of inputs,
+  // which place and route had to reach through long buffer chains (D50). Four copies each read
+  // 4 bits. `keep` stops synthesis from merging them back into one register.
+  (* keep *)
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pc      <= '0;
+      pc_copy <= '0;
+    end else begin
+      pc      <= pc_next;
+      pc_copy <= {3{pc_next}};
+    end
+  end
+
   // ---- side-effect pulses (combinational, valid in the exec cycle) ----
   assign tx_pop   = exec && op == OP_FIFO && !arg_hi;
   assign rx_push  = exec && op == OP_FIFO && arg_hi;
@@ -297,7 +364,8 @@ module pbe_engine (
   // ---- state ----
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      pc         <= '0;
+      instr_q    <= '0;
+      iv         <= 1'b0;
       div_cnt    <= '0;
       dly_cnt    <= '0;
       blocked    <= 1'b0;
@@ -318,7 +386,7 @@ module pbe_engine (
       tmo_cnt    <= '0;
       rx_ovf     <= 1'b0;
     end else if (restart) begin
-      pc       <= start_pc;
+      iv       <= 1'b0;
       div_cnt  <= '0;
       dly_cnt  <= '0;
       blocked  <= 1'b0;
@@ -351,11 +419,17 @@ module pbe_engine (
         cf_sh  <= cf_load;
       end
 
+      // fetch: fill an empty instruction register (also while stopped)
+      if (!iv) begin
+        instr_q <= instr;
+        iv      <= 1'b1;
+      end
+
       if (run) begin
         // tick divider; restarts when a blocked instruction completes
         if ((exec && blocked) || tmo_hit) div_cnt <= '0;
         else if (tick) div_cnt <= '0;
-        else div_cnt <= div_cnt + 1'b1;
+        else if (!tick_due) div_cnt <= div_cnt + 1'b1;
 
         if (tick && dly_cnt != 4'd0 && !blocked) dly_cnt <= dly_cnt - 1'b1;
 
@@ -368,7 +442,8 @@ module pbe_engine (
         if (exec) begin
           blocked <= 1'b0;
           dly_cnt <= dly;
-          pc      <= pc + 1'b1;
+          if (jump) iv <= 1'b0;
+          else instr_q <= instr;  // the next word, already read at pc
 
           case (op)
             OP_PIN: begin
@@ -394,7 +469,6 @@ module pbe_engine (
               par_in <= par_in ^ in_bit;
             end
             OP_JMP: begin
-              if (jmp_take) pc <= start_pc + {1'b0, arg[5:0]};
               if (jmp_cnd == 3'd1 && x != 8'd0) x <= x - 1'b1;
             end
             OP_SET: begin
@@ -431,11 +505,7 @@ module pbe_engine (
                   par_in   <= 1'b0;
                   tmo_seen <= 1'b0;
                 end
-                E_JCRCBAD: if (!crc_ok || line_err) pc <= start_pc + {1'b0, arg[5:0]};
-                E_JEQ:     if (isr == osr) pc <= start_pc + {1'b0, arg[5:0]};
-                E_JNE:     if (isr != osr) pc <= start_pc + {1'b0, arg[5:0]};
-                E_JLINE:   if (line_ev) pc <= start_pc + {1'b0, arg[5:0]};
-                default: ;
+                default: ;  // the jumps are above
               endcase
             end
             default: ;
@@ -445,12 +515,14 @@ module pbe_engine (
 
         // timeout: abandon the blocked instruction and jump to the timeout routine
         if (tmo_hit) begin
-          pc       <= start_pc + {1'b0, tmo_pc};
+          iv       <= 1'b0;
           blocked  <= 1'b0;
           dly_cnt  <= '0;
           tmo_seen <= 1'b1;
         end
       end
+
+      if (pm_wr) iv <= 1'b0;  // see pc_next
     end
   end
 endmodule

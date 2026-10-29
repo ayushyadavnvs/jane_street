@@ -40,6 +40,7 @@ mark the old one **Changed** instead of deleting it.
 | USB | A packet must leave without gaps and a SETUP arrives at line rate | FIFOs 4 → 16 bytes (now in v1) | D10 |
 | USB | New per-engine settings, but +0..+F were full | Second register page per engine at 0x30 / 0x40 | D32, D44 |
 | USB (its firmware) | Burst reads could lose a byte; a flush on SETUP threw away an OUT record | `RX_COUNT`/`TX_COUNT` registers, `TX_FLUSH` | D43, BUG-030, BUG-031 |
+| 48 MHz (USB, D18) in the first routed run | 0.586 ns of setup slack: pc → program memory → decode → next pc in one clock, through long buffer chains | An instruction register with a prefetch; four copies of the read address. A taken jump costs one clock more at CLKDIV = 0 | D7, D18, D50 |
 
 ---
 
@@ -139,7 +140,7 @@ mark the old one **Changed** instead of deleting it.
   `MOV dst, src` (D40). `NOP` (`0xD800`, destination 0) is still a no-op, as BUG-008 requires.
 - **`PIN p, END` — added (USB in v1):** pin action 7 ends a line-coder frame (D39).
 
-## D7. Timing: tick divider, WAIT checks every clock and restarts the divider
+## D7. Timing: tick divider, WAIT checks every clock and restarts the divider — **Changed (48 MHz place and route, D50)**
 
 - **Chosen:** Each engine has a 16-bit `CLKDIV`; one tick every `CLKDIV + 1` clocks.
   A blocked instruction (WAIT, PULL, PUSH, USB) is re-checked every clock, and when it
@@ -148,6 +149,10 @@ mark the old one **Changed** instead of deleting it.
 - **Why:** Re-checking every clock means a short edge is never missed. Restarting the
   divider means the next instructions are timed from the moment the condition was met. This
   is what lets UART RX land its samples in the middle of each bit without extra hardware.
+- **Changed (the first routed run at 48 MHz):** instructions now run from an instruction
+  register (D50). With `CLKDIV` ≥ 1 every time above is exactly as before. With `CLKDIV` = 0
+  (and under the line coder) a taken jump takes one clock more, and a tick that falls on that
+  fetch bubble is held for the clock instead of being lost.
 
 ## D8. Pin model
 
@@ -257,6 +262,10 @@ mark the old one **Changed** instead of deleting it.
   50 MHz (1 % error). UART and I2C rates divide well from 48 MHz too.
 - **Margin:** worst path ~4.9 ns at the slow corner (logic plus flip-flop overhead) vs 20.8 ns
   per cycle, roughly 4×.
+- **Changed (the margin, first routed run):** that estimate had no wires. Routed, the same path
+  took 19.6 ns and left 0.586 ns of slack at the slow corner, mostly in buffer chains on the
+  program counter. The clock stays at 48 MHz (USB needs it); the path was cut in two instead
+  (D50).
 
 ## D19. Protocol host conventions
 
@@ -658,6 +667,7 @@ mark the old one **Changed** instead of deleting it.
 - **What it does:**
   - **Bit timing:** it owns the bit timing (`CLKDIV` becomes the bit time, and instructions then
     run every clock), because a stuffed bit must cost the program nothing. That was v2's lesson.
+    (Since D50 a taken jump takes 2 clocks.)
   - **Transmit:** one queued entry. A frame starts with a 2-bit-time gap and the SYNC byte,
     and `PIN p, END` ends it (pair mode: SE0, SE0, J, then release).
   - **Receive:** samples mid-bit and re-centres on every edge. It hunts for SYNC, unstuffs
@@ -933,3 +943,112 @@ part I under-estimated most.
   (was 3000) after SET_ADDRESS for the address switch, since a timer poll may come first; USB
   allows 2 ms.
 
+
+## D50. An instruction register cuts the clock's worst path in two
+
+- **Problem:** the first full Tiny Tapeout run (LibreLane, routed) met 48 MHz with only
+  0.586 ns of setup slack at the slow corner (1.08 V, 125 °C; typical 7.95 ns, fast 12.3 ns).
+  The worst path ran from `g_eng[1].u_eng.pc[1]` through the program memory read to the next
+  state, all in one clock. From the routed report (`55-openroad-stapostpnr`, slow corner):
+
+  | Part of the path | Delay |
+  |---|---|
+  | Clock to Q of `pc[1]` | 0.33 ns |
+  | `pc[1]` fan-out: a chain of 11 buffers (5 of them `buf_1`, with slews up to 2.1 ns) | 9.15 ns |
+  | The mux4 tree of the 128 × 16 memory (`assign instr = pmem[pc]`) | 2.89 ns |
+  | Decode, `ready`, `exec`, next state (another fan-out chain, a hold buffer) | 7.25 ns |
+  | Data path in all | 19.6 ns (clock period 20.83 ns) |
+
+  `pc` fans out to every first-level multiplexer of all 16 bits (ABC: 1,878 loads on `pc[0]`).
+  That fan-out was also behind most of the slow corner's 277 max-fanout, 114 max-slew and
+  about 65 max-cap warnings. The logic-only estimate (`make timing`, 4.2 ns, D45) had missed
+  all of it: wires and fan-out were three quarters of the routed delay.
+- **Chosen:**
+  1. **An instruction register.** Each engine executes `instr_q`, not the memory output. The
+     memory is read at `pc`, which now means the word *after* the current instruction. When an
+     instruction executes and does not jump, `instr_q` takes that word, so sequential code
+     still runs one instruction per clock. A taken jump (JMP, JCRCBAD, JEQ, JNE, JLINE, the
+     timeout) loads `pc` with its target and clears the valid bit `iv`; the next clock fetches
+     the target (a bubble). Reset and restart also clear `iv`.
+  2. **A tick that falls on a bubble is held** for that clock (`tick = tick_due && iv`, and the
+     divider and delay counter wait), so it is late, never lost.
+  3. **Host writes:** a write to the program memory (`pm_wr`, any word) clears `iv` and fetches
+     the instruction that runs next again. So the host can rewrite the word a stopped or
+     blocked engine sits on, as the USB firmware does after SET_ADDRESS (D42).
+  4. **Four copies of the read address.** `pc` and three copies (`pc_copy`) each address 4 of
+     the 16 bits, so each drives a quarter of the multiplexers. The copies are in an
+     `always_ff` marked `(* keep *)`: without it Yosys merges them back into one register
+     (BUG-044).
+- **Stages:** (1) `pc` → memory multiplexers → `instr_q`; (2) `instr_q` → decode → `ready` →
+  `exec` → next state, including `pc`.
+- **Instruction timing** (in the comment at the top of `pbe_engine.sv`):
+  - `CLKDIV` ≥ 1: (DLY + 1) × (CLKDIV + 1) clocks, exactly as before. The next tick is at least 2
+    clocks after the instruction that jumped, and after a blocked instruction completes the
+    divider restarts, so the bubble always fits in between. `tb_fetch` gives the same edge
+    timings on the old and the new RTL at CLKDIV 1 and 3.
+  - `CLKDIV` = 0, and with the line coder: DLY + 1 clocks, plus 1 for a taken jump. The first
+    instruction after a restart starts 1 clock later. A host write to the program memory makes
+    the engine slip by 1 clock.
+- **Program timing:**
+
+  | Program | Mode | Effect |
+  |---|---|---|
+  | UART, SPI controller, I2C controller (and PEC), 1-Wire, Modbus RTU, WS2812 | CLKDIV ≥ 1 | None |
+  | SPI peripheral (D35) | CLKDIV 0 | The tight path, from the 8th rising edge to `WAIT sclk, FALL`, has no taken jump: still 8 clocks of the 12 in a 2 MHz half period. The `JMP X--` and `JMP bit` each take 1 clock more. Test 9 passes at 2 MHz |
+  | I2C target and watcher (D37) | CLKDIV 0 | Polling loops take 3 clocks instead of 2, and the watcher waits 1 clock longer after a `JMP PIN_LO`. Hold and setup times come from the `[12]`/`[15]` delays, which are unchanged. Test 10 passes |
+  | USB device (D42) | line coder | A few taken jumps on the reply path: turnaround 2.97–3.05 → 3.00–3.19 bit times (allowed 2–7.5). The byte-mode CRC feed already holds the next instruction for 8 clocks, and the `OUT`/`IN` handshakes with `pbe_line` take no jumps, so neither changes. Each byte still has 256 clocks. Test 11 passes |
+
+- **Alternatives:**
+  1. **A bubble after every instruction** (`instr_q` loaded from `pmem[pc]` every clock, `pc` the
+     current word, as first suggested): the same cut, but every instruction takes at least 2
+     clocks at CLKDIV 0. Run as a mutation, it breaks the SPI peripheral at 2 MHz (Test 9:
+     MISO changes while SCLK is high, wrong bytes in both directions), because the path after
+     the 8th rising edge grows from 8 to 16 clocks against a 12-clock half period. USB still
+     passes, at 3.19–3.35 bit times. Rejected (BUG-043).
+  2. **Read both `pmem[pc]` and `pmem[pc + 1]`:** no bubble even on jumps, but a second set of
+     multiplexers for both engines, about as large as the memory read itself. A 1-clock bubble
+     on taken jumps costs no program any margin.
+  3. **Register the read address in the top level:** a stage between the next-pc logic and the
+     memory. It cuts the same path, but every instruction then needs 2 clocks, as in 1.
+  4. **A lower clock:** ruled out: USB low speed needs exactly 32 clocks per bit (D18).
+  5. **Clear `iv` only when the write hits the current or the next word:** two 7-bit comparators
+     and an address port to spare one clock per host write. Writes are rare (program loading,
+     the USB address patch), so any write refetches.
+- **Unit testbenches unchanged:** they connect the engine by port name and leave the new
+  `pm_wr` input unconnected (z). A default value on the port would fix that, but Verilator
+  5.020 (the lint in CI) rejects it (BUG-045). `pm_wr` is therefore used only in `if`
+  conditions, where z reads as false. In the chip it is always driven.
+- **Measured** (`make timing`, Yosys/ABC logic only, IHP slow library, no wires):
+
+  | | Worst logic path | Levels | Largest fan-out on it |
+  |---|---|---|---|
+  | Before (`pc[0]` → memory → decode → `flags`) | 4.20 ns | 36 | 1,878 (`pc[0]`) |
+  | After, stage 2 (`instr_q[10]` → pin index → `wait_ok` → `exec` → state) | 3.45 ns | 21 | 10 |
+  | After, stage 1 alone (`pc[0]` → memory → `instr_q`; one read port, 4 bits per copy not modelled) | 1.20 ns | 17 | 1,825 |
+
+  The logic numbers drop only by 18 %, because the logic was never the problem.
+- **Expected routed slack** (an estimate from the routed report, not a new run):
+  - **Stage 1:** clock to Q, the `pc` buffer chain and the multiplexers, about 12.8 ns with
+    today's chain. With a quarter of the loads on each copy, the chain should lose 2–3 of its
+    weak stages (about 1.3 ns each). So about 9–10 ns, or 10–11 ns of slack.
+  - **Stage 2:** the decode-to-state part was 7.25 ns, plus clock to Q and the `instr_q` fan-out:
+    about 8 ns.
+  - **Unchanged paths:** the worst path that did not start at `pc` was `clkdiv` → divider
+    compare → `tick` → `issue` → `exec` → state, at 8.16 ns of slack. It has a `nor4_2` driving
+    0.33 pF with a 4.3 ns slew. It is now the likely worst path.
+  - **So:** about 8 ns of slack at the slow corner, up from 0.586 ns: the worst data path goes
+    from 19.6 ns to about 12–13 ns. The `exec`/`tick` fan-out is the next thing to cut if more is
+    needed (for example a registered `tick`).
+- **Cost** (`make synth`, typical library): +76 flip-flops (per engine: `instr_q` 16, `iv` 1,
+  three copies of `pc` 21), area 333,913 → 337,779 µm² (+3,866 µm², +1.2 %).
+- **Tested:** `tb_fetch.sv` (Test 12), end to end through the pins and the host port:
+  - **Timing:** at CLKDIV 0, 1 and 3, every edge of a program of `PIN TOG` instructions (DLY 0,
+    1 and 2, taken and untaken jumps, a `WAIT` on a pin) against the rule above.
+  - **Host writes:** (a) the host rewrites the word a stopped engine is parked on, then runs it
+    without a restart; (b) the host rewrites word 0, then restarts; (c) the host rewrites the
+    low byte of a running engine's blocked `WAIT FLAG 0, HIGH` into `LOW`, and the engine must
+    go on without the flag changing.
+  - **Mutations caught:** no refetch on a host write ((a) and (c) fail), refetch at `pc` instead
+    of the current word ((a) fails), a tick lost on a bubble (CLKDIV 0 fails), and a bubble
+    after every instruction (CLKDIV 0 fails, and Test 9 fails). The old RTL fails exactly the
+    three taken-jump gaps at CLKDIV 0.

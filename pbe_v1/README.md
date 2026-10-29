@@ -23,6 +23,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
 | `test/tb_line.sv` | Unit test: the line coder in USB, CAN and HDLC styles against reference models |
+| `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
 ## Run
@@ -55,6 +56,9 @@ its `START_PC`, and all its jumps are relative to that address, so each engine h
 
 16 bits: `[15:13] OP | [12:4] ARG | [3:0] DELAY`. Each instruction issues on a tick and then
 idles DELAY more ticks. A tick is one clock every (CLKDIV + 1) clocks, set per engine.
+An instruction therefore takes (DELAY + 1) × (CLKDIV + 1) clocks. At CLKDIV = 0 (and with the
+line coder, where instructions run every clock) a taken jump takes one clock more: the engine
+runs from an instruction register and must fetch the jump's target first (D50).
 
 | OP | Mnemonic | Does |
 |---|---|---|
