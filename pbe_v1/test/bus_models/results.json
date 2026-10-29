@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-29",
+  "seed": 20261029,
+  "design_changes": false,
+  "full_suite": {
+    "command": "python pbe_v1/test/bus_models/run.py --seed 20261029 --cases 3",
+    "tests": 6,
+    "cases_per_test": 3,
+    "passed": 6,
+    "failed": 0,
+    "sim_time_ns": 21097383.66,
+    "wall_time_seconds": 59.27,
+    "note": "Before final SPI frame-spacing randomization; all other source behavior identical."
+  },
+  "final_spi_spacing": {
+    "command": "python pbe_v1/test/bus_models/run.py --seed 20261029 --cases 3 --test spi_peripheral",
+    "passed": 1,
+    "failed": 0,
+    "sim_time_ns": 2356898.33,
+    "wall_time_seconds": 7.37
+  },
+  "final_smoke": {
+    "command": "python pbe_v1/test/bus_models/run.py --seed 20261029 --cases 1",
+    "passed": 6,
+    "failed": 0,
+    "sim_time_ns": 6726274.35,
+    "wall_time_seconds": 19.61
+  },
+  "expected_failures": [
+    {
+      "args": "--seed 20261029 --cases 1 --test i2c_target --stock-i2c",
+      "exit_code": 1,
+      "expected_hex": "d5637ebf",
+      "stock_observed_hex": "55e3febf",
+      "cause": "Third-party master samples SDA before releasing/waiting for stretched SCL."
+    },
+    {
+      "args": "--cases 1 --test spi_controller --stock-spi",
+      "exit_code": 1,
+      "cause": "cocotbext-spi 0.5.0 imports BaseClock removed by cocotb 2.0.1; no XML created."
+    }
+  ],
+  "unsupported_mode_checks": {
+    "modes": [
+      1,
+      2,
+      3
+    ],
+    "exit_codes": [
+      2,
+      2,
+      2
+    ],
+    "reason": "Existing protocol programs specify SPI mode 0."
+  },
+  "versions": {
+    "python": "3.10.14",
+    "icarus": "12.0 stable",
+    "cocotb": "2.0.1",
+    "cocotbext-uart": "0.1.4",
+    "cocotbext-spi": "0.5.0",
+    "cocotbext-i2c": "0.1.2",
+    "cocotb-bus": "0.3.0",
+    "find_libpython": "0.5.1",
+    "scapy": "2.8.0"
+  },
+  "final_full_suite": {
+    "command": "make -C pbe_v1 test-buses CASES=3 BUS_SEED=20261029",
+    "tests": 6,
+    "cases_per_test": 3,
+    "passed": 6,
+    "failed": 0,
+    "sim_time_ns": 21321203.33,
+    "cocotb_wall_time_seconds": 61.05,
+    "command_wall_time_seconds": 61.18,
+    "note": "Final source including randomized SPI frame spacing; completed successfully."
+  }
+}

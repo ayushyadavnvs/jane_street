@@ -359,3 +359,14 @@ make diff-engine-line             # engine + coder + CRC composition
 See [verification/REPORT.md](verification/REPORT.md) for the approach, recorded
 coverage, exact tools, bug records and additional decoder/bus test commands.
 These targets run behavioral simulation only and invoke no physical-design flow.
+
+```sh
+make sigrok                       # stock waveform decoders; needs sigrok-cli
+make sigrok-full                  # strict full-USB request checks (known decoder failures)
+make test-buses CASES=3 BUS_SEED=20261029 # requires test/bus_models/requirements.txt
+```
+
+The bus models use the unmodified UART/SPI/I2C programs through external pins.
+Their documented compatibility adapters and unsupported SPI modes are described
+in [verification/PHASE3.md](verification/PHASE3.md); decoder disagreements are
+preserved in [verification/PHASE2.md](verification/PHASE2.md).

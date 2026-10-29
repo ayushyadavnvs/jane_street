@@ -1383,3 +1383,117 @@ output before comparisons. Before: exit status alone could count this as success
 After: `sigrok_verify.py` returns nonzero on empty output; running the offline
 command where libusb initialization is allowed produces 22 real passing checks.
 No decoder or system USB configuration was changed.
+
+## BUG-052 — cocotbext-spi 0.5.0 uses removed APIs and imprecise clock conversion (external-tool compatibility, adapted)
+
+- **Where:** third-party SPI model under cocotb 2.0.1. No installed library or RTL
+  is modified; adapters live in `test/bus_models/test_buses.py`.
+- **Before:**
+  ```python
+  from cocotb.clock import BaseClock       # ImportError on cocotb 2
+  bit = scalar.value.integer              # AttributeError on Logic
+  get_sim_steps(period_in_seconds, 'sec')  # ValueError on float reciprocals
+  ```
+- **After:** a local BaseClock compatibility constructor retains the signal;
+  Logic's local compatibility property returns its integer value; a clock subclass
+  passes an even integral picosecond period to the same SPI library implementation.
+  ```python
+  class _LegacyBaseClock:
+      def __init__(self, signal): self.signal = signal
+  cocotb.clock.BaseClock = _LegacyBaseClock
+  Logic.integer = property(lambda self: int(self))
+  super().__init__(signal, 2*round(period*1e12/2), 'ps', start_high)
+  ```
+- **Tests:** `run.py --cases 1 --test spi_controller --stock-spi` reproduces the
+  import failure with nonzero exit. Without `--stock-spi`, both SPI endpoint tests
+  pass. Intermediate unadapted runs separately raised the Logic/clock exceptions;
+  the passing tests exercise all three adaptations. Wire shifting remains third-party.
+- **RTL/protocol programs:** unchanged. See PHASE3 and `test/bus_models/results.json`.
+
+## BUG-053 — Stock I2C master samples SDA before stretched SCL goes high (external tool, adapted)
+
+- **Where:** cocotbext-i2c 0.1.2 `I2cMaster.recv_bit`.
+- **Before:**
+  ```python
+  await self._half_bit_t
+  b = bool(int(self.sda.value))
+  self._set_scl(1)
+  while not int(self.scl.value): await RisingEdge(self.scl)
+  ```
+- **After:** the verification-only `StretchAwareMaster` samples after the
+  actual SCL-high wait; remaining framing, wire driving and assembly are inherited.
+  ```python
+  await self._half_bit_t
+  self._set_scl(1)
+  while not int(self.scl.value): await RisingEdge(self.scl)
+  b = bool(int(self.sda.value))
+  ```
+- **Fail-before/pass-after:** `run.py --seed 20261029 --cases 1 --test i2c_target
+  --stock-i2c` expects `d5637ebf` but sees `55e3febf`, exit 1. The same test without
+  `--stock-i2c` receives `d5637ebf` and passes. This is an adapted endpoint result,
+  not a claim that the unmodified master passed stretching.
+- **RTL/protocol programs:** unchanged.
+
+## BUG-054 — UART endpoint test did not wait for all transmitted characters (harness, fixed)
+
+- **Where:** `test/bus_models/test_buses.py`, UART TX.
+- **Before:**
+  ```python
+  await Timer(12 * bit_clocks * PERIOD_PS, unit='ps')
+  got = bytes(await sink.read(len(data)))
+  ```
+  Only two complete characters were available when six were requested: QueueEmpty.
+- **After:**
+  ```python
+  await Timer((len(data)+1) * 12 * bit_clocks * PERIOD_PS, unit='ps')
+  got = bytes(await with_timeout(sink.read(len(data)), 10, 'ms'))
+  ```
+- **Test:** `run.py --seed 20261029 --cases 1 --test uart_tx` fails before and
+  passes after, with exact equality of the six random bytes. All three clock-error
+  cases also pass. RTL and transmitted-byte expectations remain unchanged.
+
+## BUG-055 — I2C target host-service test raced an RX count snapshot against FLAGS (harness, fixed)
+
+- **Before:** host service drained one RX_COUNT snapshot, then read FLAGS and
+  classified an empty drained list as a read request. An address could be pushed
+  between the count snapshot and the FLAGS read, leaving address `a0` to be
+  misclassified as payload.
+  ```python
+  drained = [await c.read(0x16) for _ in range(await c.read(0x0a))]
+  flags = await c.read(4)
+  if flags & 4:
+      classify(drained)
+  ```
+- **After:** recheck and drain the FIFO when the address/request flag is present,
+  before classifying the event.
+  ```python
+  if flags & 4:
+      for _ in range(await c.read(0x0a)):
+          drained.append(await c.read(0x16))
+      classify(drained)
+  ```
+- **Test:** `run.py --seed 20261029 --cases 1 --test i2c_target` previously
+  included `a0` among payload; after the correction receives exactly `2f7da1c26b`
+  and address bytes `[0xa0,0xa1]`. No RTL/program or byte assertion changed.
+
+## BUG-056 — I2C stretch stimulus inserted a spurious clock edge (harness, fixed)
+
+- **Before:** delaying the memory model's read callback let its base assert SCL
+  low during an existing high phase, shortening that phase and creating an
+  additional edge. This was invalid stimulus, not a valid stretching failure.
+  ```python
+  async def handle_read(self, ...):
+      await Timer(delay_ns, unit='ns')
+      return await super().handle_read(...)
+  ```
+- **After:** use stock memory callbacks and independently assert stretch only
+  after an existing falling edge.
+  ```python
+  await FallingEdge(d.scl)
+  d.stretch_release.value = 0
+  await Timer(r.randrange(5000, 20000), unit='ns')
+  d.stretch_release.value = 1
+  ```
+- **Test:** `run.py --seed 20261029 --cases 1 --test i2c_controller` originally
+  expected `1a31ca40`, saw `1a63ffff`; after correcting the stimulus it passes
+  with 30 random low-phase stretches. Expected bytes and RTL remain unchanged.

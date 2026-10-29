@@ -99,3 +99,53 @@ and JSON receipts under `evidence/phase2/`.
 
 Install sigrok-cli separately; `SIGROK_CLI=/path/to/sigrok-cli` selects its binary.
 Normal `make test` needs no sigrok binary: only the extraction regression joins it.
+
+## Phase 3: third-party pin-only bus tests
+
+Install `test/bus_models/requirements.txt`, then run:
+
+```sh
+make test-buses CASES=3 BUS_SEED=20261029
+```
+
+Six endpoints (UART TX/RX, SPI controller/peripheral, I2C controller/target) passed
+18 randomized cases, with independent data, gaps, baud/rate choices, stretching
+and ±1% external clock error where applicable. The final SPI-gap rerun and six-test
+smoke pass too. SPI modes 1–3 explicitly report unsupported because the unchanged
+programs implement mode 0. [PHASE3.md](PHASE3.md) and
+[test results](../test/bus_models/results.json) detail settings and limitations.
+
+BUG-052/053 document local adapters for cocotbext-spi compatibility and I2C master
+stretch sampling. Stock failures remain reproducible; installed libraries are
+unchanged. BUG-054–056 record corrected testbench timing/service/stimulus defects.
+No RTL bug was established by these finite simulation campaigns. Formal proofs,
+CRC catalogue expansion and Verilator coverage remain the next verification work.
+
+## Final integration gate and local tool paths
+
+The final-source `make test` passed in **129.17 s**, including 20 model unit tests,
+the capture-boundary regression and a **7.45 s** fixed-seed differential smoke.
+The final-source 18-case bus run passed in **61.18 s**. The coordinator also
+reran the saved-capture sigrok comparisons: 22/22 pass; the strict full-request
+run returns exit 1 with the two documented disagreements (22/24).
+
+Tools were made available locally without a system installation. For this
+workspace session, the simulator is available with:
+
+```sh
+export PATH=/tmp/pbe_review_a70001b_00au7u71/bin:$PATH
+make test
+make test-buses CASES=3 BUS_SEED=20261029
+```
+
+For the locally extracted sigrok packages:
+
+```sh
+export LD_LIBRARY_PATH=/tmp/pbe-sigrok-root/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+export SIGROKDECODE_DIR=/tmp/pbe-sigrok-root/usr/share/libsigrokdecode/decoders
+make sigrok SIGROK_CLI=/tmp/pbe-sigrok-root/usr/bin/sigrok-cli
+```
+
+Those `/tmp` tools are session-local; on another machine install the listed
+compiler/decoder versions normally. The Python dependencies live in the
+checkout's ignored `.venv`, with pinned requirement files checked in.

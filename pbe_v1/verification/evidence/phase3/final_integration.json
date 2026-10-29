@@ -1,0 +1,55 @@
+{
+  "source_baseline": "ea28f91",
+  "branch": "verify/golden-model",
+  "rtl_program_workflow_diff_empty": true,
+  "physical_flow_invoked": false,
+  "make_test": {
+    "command": "make -C pbe_v1 test",
+    "status": "PASS",
+    "wall_time_seconds": 129.17,
+    "added_smoke_seconds": 7.45,
+    "summary": [
+      "PASS: restart suppresses instruction side effects",
+      "PASS: JEQ, JNE, MOV, OSRCRC INV and the CRC good value (USB CRC16 dd 94, residual 800d)",
+      "Test 12: instruction fetch: timing at CLKDIV 0, 1, 3 and host writes to the program memory",
+      "PASS",
+      "PASS: line coder",
+      "Test 11: USB low-speed device (engine 0, D- pin 0, D+ pin 1) enumerated by a host model",
+      "PASS",
+      "Test 8: WS2812 LED driver (engine 0, pin 0) at 800 kbit/s",
+      "Test 9: SPI peripheral (engine 0, pins 0..3), mode 0, SCLK 2 MHz",
+      "Test 10: I2C target at 0x42 (engines 0 + 1, pins 0-1), fast mode controller",
+      "PASS",
+      "Test 0: NOP has no side effects",
+      "Test 1: UART TX (engine 0) looped back into UART RX (engine 1)",
+      "Test 2: SPI controller (engine 0) against a mode-0 peripheral",
+      "Test 3: I2C controller (engine 1, pins 4-5) running alongside UART TX (engine 0)",
+      "Test 4: 1-Wire controller (engine 1, pin 6) with two DS18B20-style devices",
+      "Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 8E1, hardware CRC/parity/timeout",
+      "Test 6: 1-Wire Search ROM (engine 0, pin 6) and I2C (engine 1, pins 4-5) at the same time",
+      "Test 7: SMBus PEC: I2C controller (engine 1) with its CRC unit as CRC-8 (poly 0x07)",
+      "PASS",
+      "Ran 20 tests in 0.048s",
+      "OK",
+      "Ran 1 test in 0.001s",
+      "OK",
+      "                                                         ** TESTS=1 PASS=1 FAIL=0 SKIP=0             1021101.31           7.45     137081.52  **",
+      "real 129.17"
+    ]
+  },
+  "sigrok_coordinator_recheck": {
+    "primary_checks": 22,
+    "primary_passed": 22,
+    "strict_checks": 24,
+    "strict_passed": 22,
+    "strict_exit_code": 1
+  },
+  "source_sha256": {
+    "src/pbe_crc.sv": "3b25526d688495d7aac6baa14f217fbf550dbbbf13250449dbde250260e8fc55",
+    "src/pbe_engine.sv": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+    "src/pbe_fifo.sv": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+    "src/pbe_host_spi.sv": "bccde5257da39f04b635086c6bc5c3ca1230b5293423aefc2c41fd625cd6b74b",
+    "src/pbe_line.sv": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+    "src/tt_um_pbe.sv": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce"
+  }
+}

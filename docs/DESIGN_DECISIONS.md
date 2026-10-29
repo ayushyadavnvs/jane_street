@@ -1163,3 +1163,29 @@ clean (0 design violations).
 - **Results:** 22/22 primary checks pass from fresh simulations; strict full-request
   comparison is 22/24 on libsigrokdecode 0.5.3. Versions, commands and boundaries
   are in `pbe_v1/verification/PHASE2.md` and its checked-in evidence.
+
+## D53. Third-party bus endpoints attach only to chip pins
+
+- **Decision:** use pinned cocotbext UART/SPI/I2C libraries through a test-only
+  scalar-pin fixture. Load/configure/read the actual chip exclusively through
+  host SPI. A resolved digital bus uses pull-ups and low-dominant wired signals.
+- **Alternatives:** hierarchical memory/FIFO deposits would speed setup but bypass
+  host behavior; handwritten endpoints would offer less independence. Neither is
+  used in these bus tests. The fixture is not an analog pad or contention model.
+- **Random settings:** independent endpoint bytes, gaps, UART baud choices, SPI
+  mode-0 clock choices and I2C rates/stretching. Three cases cycle -1%, nominal,
+  +1% error for externally timed UART, peripheral SPI and target I2C. Controller
+  SPI/I2C vary program dividers. The original SPI programs only support mode 0;
+  selecting modes 1–3 fails with an explicit unsupported-mode message.
+- **Compatibility:** cocotbext-spi 0.5.0 needs local cocotb-2 API/time adapters;
+  cocotbext-i2c 0.1.2 needs receive sampling after actual SCL-high when stretched.
+  The library implementations remain installed unchanged. The test file names
+  these adaptations, and `--stock-spi`/`--stock-i2c` reproduce their failures with
+  nonzero exits. No design change is used to satisfy an endpoint assumption.
+- **Stretch stimulus:** an independent low-phase stretcher only starts after an
+  existing SCL falling edge; a callback delay that creates extra edges is invalid
+  stimulus and was rejected (BUG-056). A target's host-response latency separately
+  tests legitimate target clock stretching.
+- **Evidence:** six endpoints, 18 randomized cases pass; final randomized SPI gap
+  rerun and six-endpoint smoke also pass. Full settings, versions, limits and
+  reproducible bugs are in `pbe_v1/verification/PHASE3.md` and bus `results.json`.

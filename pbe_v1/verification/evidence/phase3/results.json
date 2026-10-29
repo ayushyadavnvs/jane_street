@@ -1,0 +1,37 @@
+{
+  "source_baseline": "ea28f91",
+  "command": "make -C pbe_v1 test-buses CASES=3 BUS_SEED=20261029",
+  "results": {
+    "command": "make -C pbe_v1 test-buses CASES=3 BUS_SEED=20261029",
+    "tests": 6,
+    "cases_per_test": 3,
+    "passed": 6,
+    "failed": 0,
+    "sim_time_ns": 21321203.33,
+    "cocotb_wall_time_seconds": 61.05,
+    "command_wall_time_seconds": 61.18,
+    "note": "Final source including randomized SPI frame spacing; completed successfully."
+  },
+  "log_summary": [
+    "861350.48ns INFO     cocotb.bus_top                     UART TX case=0 bit_clocks=192 error=-1.00% data=a1ff27c64cc0",
+    "1720440.47ns INFO     cocotb.bus_top                     UART TX case=1 bit_clocks=192 error=+0.00% data=9c049c56f659",
+    "2955063.31ns INFO     cocotb.bus_top                     UART TX case=2 bit_clocks=384 error=+1.00% data=f567adb7f3f8",
+    "3609532.17ns INFO     cocotb.bus_top                     UART RX case=0 bit_clocks=96 error=-1.00% data=e81924c881d8",
+    "4678816.38ns INFO     cocotb.bus_top                     UART RX case=1 bit_clocks=384 error=+0.00% data=9af50947bffb",
+    "5473154.30ns INFO     cocotb.bus_top                     UART RX case=2 bit_clocks=192 error=+1.00% data=06b386f89691",
+    "5991410.47ns INFO     cocotb.bus_top                     SPI controller mode=0 case=0 data=e280a2abbb replies=f60a21b29f",
+    "6621847.31ns INFO     cocotb.bus_top                     SPI controller mode=0 case=1 data=ebcb5d630b replies=12dcadc620",
+    "7169781.51ns INFO     cocotb.bus_top                     SPI controller mode=0 case=2 data=d016fb5f51 replies=9a0d14b982",
+    "7874856.16ns INFO     cocotb.bus_top                     SPI peripheral mode=0 case=0 SCLK=1980001.980002",
+    "8670860.79ns INFO     cocotb.bus_top                     SPI peripheral mode=0 case=1 SCLK=500000.000000",
+    "9526679.85ns INFO     cocotb.bus_top                     SPI peripheral mode=0 case=2 SCLK=505000.005050",
+    "10830356.98ns INFO     cocotb.bus_top                     I2C controller case=0 data=1a31ca40 low-phase stretches=30",
+    "12603434.55ns INFO     cocotb.bus_top                     I2C controller case=1 data=6ddf71e8 low-phase stretches=77",
+    "14793587.97ns INFO     cocotb.bus_top                     I2C controller case=2 data=d628a9e3 low-phase stretches=114",
+    "17477035.03ns INFO     cocotb.bus_top                     I2C target case=0 speed=99000.000000 write=2f7da1c26b read=d5637ebf",
+    "18667231.23ns INFO     cocotb.bus_top                     I2C target case=1 speed=400000.000000 write=ae47805f76 read=92a58403",
+    "21321203.33ns INFO     cocotb.bus_top                     I2C target case=2 speed=101000.000000 write=521d24fd91 read=4d6d08b3",
+    "                                                          ** TESTS=6 PASS=6 FAIL=0 SKIP=0           21321203.33          61.05     349240.05  **",
+    "real 61.18"
+  ]
+}

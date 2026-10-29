@@ -142,3 +142,9 @@ sigrok-full:
 
 test-sigrok-extract:
 	$(PYTHON) -m unittest discover -s test -p test_sigrok_extract.py -v
+
+BUS_SEED ?= 20261029
+CASES ?= 3
+.PHONY: test-buses
+test-buses:
+	$(PYTHON) test/bus_models/run.py --seed $(BUS_SEED) --cases $(CASES)
