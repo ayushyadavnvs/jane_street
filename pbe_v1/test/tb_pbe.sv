@@ -109,6 +109,8 @@ module tb_pbe;
     return crc;
   endfunction
 
+  bit scl_stretched = 0, scl_after_stretch = 0;  // declared before the peripheral model uses it (BUG-037)
+
   task automatic i_sda(input bit v);  // open drain: 0 pulls low, 1 releases
     ext_drive[SDA] = !v;
     ext_val[SDA] = 0;
@@ -176,7 +178,6 @@ module tb_pbe;
   // The period check skips the cycle right after a stretch: the controller times that high
   // phase from when it sees SCL rise, which the spec allows (only low/high minimums apply).
   realtime scl_fell = 0, scl_rose = 0, scl_min_low = 1e9, scl_min_high = 1e9, scl_min_period = 1e9;
-  bit scl_stretched = 0, scl_after_stretch = 0;
   always @(posedge bus[SCL]) if (i2c_en) begin
     if (scl_fell > 0 && $realtime - scl_fell < scl_min_low) scl_min_low = $realtime - scl_fell;
     if (scl_rose > 0 && !scl_after_stretch && $realtime - scl_rose < scl_min_period)

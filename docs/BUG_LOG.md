@@ -48,7 +48,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-034 | Testbench | A pile-up test that overflowed the 16-byte RX FIFO | Full suite | Fixed |
 | BUG-035 | Tooling | More Icarus 12 limits: queue arguments, `return` in tasks, array ports, and others | Bring-up of tb_line, tb_usb | Worked around |
 | BUG-036 | CI | The gate-level regression job looked for the netlist one folder too deep | First CI run | Fixed |
-| BUG-037 | CI | The gate-level regression failed to build or run with Ubuntu's Icarus 12 (cause not yet confirmed) | Second CI run | Open |
+| BUG-037 | Testbench / CI | The gate-level regression failed early; with Icarus 13, tb_pbe used a variable before its declaration | Second and third CI runs | Fixed |
 
 ---
 
@@ -922,21 +922,32 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   ```
 - **Test:** the job's next run.
 
-## BUG-037 — The gate-level regression stopped within seconds (open)
+## BUG-037 — The gate-level regression stopped early; tb_pbe used a variable before declaring it
 
-- **Where:** the gate-level regression job.
-- **Found by:** its second run. With BUG-036 fixed, the PDK installed, but `make test-gl` stopped
-  with exit code 2 about 40 seconds into the job. That is too early for a test failure, so it is
-  most likely a build error. The log cannot be read from this workspace, and the annotation gives
-  only the exit code.
-- **Likely cause:** Tiny Tapeout's own gate-level job installs its Icarus 13 build for the IHP
-  cell models; ours used Ubuntu's Icarus 12.
-- **Changes:**
-  - **Same simulator:** the job uses Tiny Tapeout's Icarus 13.
+- **Where:** the gate-level regression job, and `pbe_v1/test/tb_pbe.sv`.
+- **Found by:**
+  - **Second run:** with BUG-036 fixed, the PDK installed, but `make test-gl` stopped with exit
+    code 2 about 40 seconds in. The log could not be read from this workspace, and the
+    annotation gave only the exit code.
+  - **Third run:** the job by then used Tiny Tapeout's Icarus 13 and reported its output as an
+    annotation. `tb_proto` and `tb_usb` **passed on the routed netlist**; `tb_pbe` did not
+    compile:
+    ```
+    tb_pbe.sv:165: error: Could not find variable ``scl_stretched'' in ``tb_pbe''
+    tb_pbe.sv:179:      : A symbol with that name was declared here. Check for declaration after use.
+    ```
+- **Cause:** the I2C peripheral model (line 165) sets `scl_stretched`, which was declared further
+  down, with the SCL timing checks. Icarus 12 accepts that; Icarus 13 rightly refuses it. Whether
+  the second run's failure had the same cause cannot be told now, because that run used Icarus 12
+  and its output was lost.
+- **Before:** `bit scl_stretched = 0, scl_after_stretch = 0;` after the model that uses it.
+- **After:** the declaration moved above the model.
+- **Other changes:**
+  - **Same simulator:** the job uses the Icarus build Tiny Tapeout's `gl_test` uses.
   - **Readable failures:** on failure it writes the end of its output as an annotation, which
     the public API returns, and it always writes a pass/fail summary.
   - **Own workflow:** it moved to `gl_regression.yaml`, triggered by each `gds` run and by
-    testbench changes, using the netlist of the latest `gds` run. So a fix here does not need
-    a 2.5-hour rebuild.
-- **Test:** the next run of `gl_regression`. This entry is updated with the confirmed cause.
-
+    testbench changes, using the netlist of the latest `gds` run. So a fix needs minutes, not a
+    2.5-hour rebuild.
+- **Test:** `make test` (RTL, Icarus 12) passes, and the next `gl_regression` run compiles
+  `tb_pbe` with Icarus 13.
