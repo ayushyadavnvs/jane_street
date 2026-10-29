@@ -1,0 +1,20 @@
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:24: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:24: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:25: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:41: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:41: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:42: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:58: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:58: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:59: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:75: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:75: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:76: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:92: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:92: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:93: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:109: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:109: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:110: error: Array index expressions must be constant here.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:126: error: A reference to a wire or reg (`i') is not allowed in a constant expression.
+/tmp/pbe_protocol_before_queue_bits/modbus_reference.svh:126: error: Array index expressions must be constant here.

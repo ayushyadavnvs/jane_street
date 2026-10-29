@@ -164,3 +164,11 @@ FORMAL_ARGS ?=
 .PHONY: formal
 formal:
 	$(PYTHON) formal/run.py --block $(FORMAL_BLOCK) --jobs $(FORMAL_JOBS) $(FORMAL_ARGS)
+
+# Independent library/catalogue packet checks; install their pinned requirements explicitly.
+.PHONY: test-crc-vectors test-protocol-vectors
+test-crc-vectors:
+	$(PYTHON) test/reference_crc/run.py
+
+test-protocol-vectors:
+	$(PYTHON) test/reference_protocols/run.py

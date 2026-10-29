@@ -1791,3 +1791,42 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   exact input/configuration checks; no solver rerun was needed. The 15 successful
   cover jobs reach 22 reached statement events across jobs. Corrected aggregate receipt
   and compressed raw logs are retained under `evidence/round2/formal/`.
+
+## BUG-065 — Independent protocol harness had count and simulator-expression defects (test, fixed)
+
+- **USB before:**
+  ```python
+  if len(actual) != 14:
+      raise RuntimeError(...)
+  ```
+  The planned scenarios produce 13 final responses; this rejected a correct
+  simulation with `USB expected14 captured responses, got13`.
+- **USB after:** derive the complete expected response-ID sequence from the
+  planned stimulus and compare captured IDs before comparing packet bytes.
+  The expectation is never derived from DUT output:
+  ```python
+  assert [int(index) for index, _ in actual] == usb['expected_responses'], actual
+  for index, raw in actual:
+      assert raw == usb['packets'][int(index)]['hex']
+  ```
+- **Modbus before:** generated SystemVerilog selected bits directly from a
+  variable-index queue element (the exact offending expressions):
+  ```systemverilog
+  mb_par[i][0]
+  mb_par[mb_par.size()-1][1]
+  ```
+  Icarus 12 rejects this expression form with 20 elaboration errors.
+- **Modbus after:** copy the selected byte into the existing temporary first:
+  ```systemverilog
+  mb_x = mb_par[i]; check(!mb_x[0], "independent Modbus parity status");
+  mb_x = mb_par[mb_par.size()-1];
+  // Generated CRC check reads mb_x[1] against its case's fixed expected bit.
+  ```
+- **Fail-before/pass-after:** temporary before-fix scripts return nonzero with
+  the count error or compiler errors. Exact commands/output are retained as
+  `pbe_v1/verification/evidence/round2/vectors/protocol_bug065_before_*`.
+  The corrected `test/reference_protocols/run.py --seed 0x50424532` passes USB
+  (38 transmitted host packets, 13 final responses) and all seven Modbus cases.
+  A second USB seed also passes. Full packets, generated SV tasks, source hashes
+  and PASS logs are retained beside the failure evidence. No RTL, protocol
+  program, packet bytes or installed library implementation was changed.

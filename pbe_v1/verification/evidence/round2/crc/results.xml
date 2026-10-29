@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1793270407" />
+    <testcase name="catalogue_checks" classname="test_catalogue" file="/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/reference_crc/test_catalogue.py" lineno="55" time="2.333608865737915" sim_time_ns="647916.864" ratio_time="277645.8700996239" />
+  </testsuite>
+</testsuites>

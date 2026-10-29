@@ -1,0 +1,4 @@
+# Independent protocol encoders; install explicitly, never from make test.
+usb-protocol==0.9.2
+luna-usb==0.2.3
+pymodbus==3.11.3

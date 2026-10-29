@@ -1,0 +1,8 @@
+{
+  "command": "make -C pbe_v1 test",
+  "exit": 0,
+  "seconds": 130.69,
+  "differential_clocks": 49010,
+  "log_sha256": "1d8e50edcd584f656612f99e942c00e169a41dcfa503e3f44fd657a0035a2b37",
+  "note": "Before Phase2 commit; optional reference-vector include guards off in default benches; vector evidence separately retained."
+}

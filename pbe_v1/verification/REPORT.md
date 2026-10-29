@@ -257,3 +257,55 @@ D58 records assumptions, alternatives and evidence boundaries. Phase1 pre-commit
 unit tests,3 formal-receipt tests,5 decoder/extraction unit tests (optional stock
 replay explicitly skipped when absent), and49,010 differential clocks. Raw gate
 log and source provenance are retained in `evidence/round2/phase1_gate*`.
+
+## Round 2 phase 2: independent catalogue and protocol vectors
+
+The unchanged CRC RTL passes **22 native catalogue configurations**, covering
+**220 valid payload/codewords and 22 corrupted checksums**. Three additional
+catalogue entries require arbitrary initial seeds and are explicitly unsupported,
+not counted as RTL passes. USB and Modbus pin-level tests also pass with
+externally generated expected packet bytes; no behavioral RTL change was made.
+
+- [ROUND2_CRC_VECTORS.md](ROUND2_CRC_VECTORS.md): program-used CRC families plus
+  16 additional configurations span widths 3–16. Each native configuration checks
+  `123456789`, empty data and eight seeded random payloads against crccheck and
+  pinned RevEng check/residue records. Tests exercise byte-by-byte raw state,
+  idle preservation, init-over-feed priority, exact-width checksum append,
+  CRC_GOOD acceptance/rejection and a flipped checksum bit. Raw state, reflected
+  catalogue residue and final XOR are reported separately; software XOR does
+  not become a claimed hardware register. This is a direct primitive test;
+  existing engine/program integration tests provide separate evidence.
+- [ROUND2_PROTOCOL_VECTORS.md](ROUND2_PROTOCOL_VECTORS.md): LUNA generates USB
+  token/data/handshake packets and CRC bytes; usb-protocol checks PID nibbles.
+  Seeds `0x50424532` and `0x50424533` each pass **38 host packets and 13 final
+  device responses**, including wrong-address/bad-CRC rejection, descriptor
+  chunks, vendor transfers, zero-length data and STALL. Recorded USB runs take
+  2.009 s and 2.188 s respectively, excluding compilation. Response byte checks
+  use independent packets while retaining the existing bus serializer/monitor
+  and firmware model; exhaustive USB or physical pad conformance is not claimed.
+- PyModbus FramerRTU supplies full Modbus ADUs, including CRC bytes, and decodes
+  actual captured traffic. **Seven cases pass** at 19,200/115,200 baud with
+  varied data/counts and 8E1/8N2. A corrupt-CRC response is rejected, and a
+  two-character gap reports a partial invalid frame. The latter's timing check
+  comes from the wire bench/program, not PyModbus. The run takes 43.096 s,
+  excluding compilation. BUG-065 records the corrected USB response-count check
+  and Icarus queue-expression adaptation, with fail-before/pass-after evidence.
+
+Run from `pbe_v1/` after explicitly installing the pinned requirement files:
+
+```sh
+make test-crc-vectors
+make test-protocol-vectors
+# Longer reproducible CRC payload sweep:
+../.venv/bin/python test/reference_crc/run.py --seed 0x435243 --random-cases 100
+# Select a protocol or another reproducible seed:
+../.venv/bin/python test/reference_protocols/run.py --protocol usb --seed 0x50424533
+```
+
+Evidence is under `evidence/round2/crc/` and `evidence/round2/vectors/protocol*`:
+fixed inputs, external-library metadata, source hashes, XML/PASS output and
+failed harness bring-up transcripts are retained. Missing/failing tests and
+unexpected packets return nonzero. D59 records decisions, alternatives and
+actual tool versions. These longer targets remain separate from `make test`;
+Phase2 pre-commit `make test` **PASS**,130.69seconds, including49,010
+differential clocks; see `evidence/round2/phase2_gate*`.
