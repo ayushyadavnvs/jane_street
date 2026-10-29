@@ -309,3 +309,62 @@ unexpected packets return nonzero. D59 records decisions, alternatives and
 actual tool versions. These longer targets remain separate from `make test`;
 Phase2 pre-commit `make test` **PASS**,130.69seconds, including49,010
 differential clocks; see `evidence/round2/phase2_gate*`.
+
+## Round 2 phase 3: Verilator functional and structural coverage
+
+The final hardened coverage campaign hits **92/92 named functional bins**.
+It runs the ordinary SV benches under Verilator, the unchanged per-clock top
+oracle (`N=2 CYCLES=600 SEED=0x504245`) and the independent 160-configuration
+line sweep. Three initial misses (flag-edge WAITs and overflow-status clear)
+are closed by observable directed tests. No RTL/program behavior changed.
+
+[COVERAGE.md](COVERAGE.md) defines every bin and the aggregation boundary.
+The 92 bins are a logical union across engines/test roots, not a promise that
+each instance, every operand or both outcomes of each jump were covered.
+Original RTL source points are also coalesced across copies, with instrumentation
+and benches excluded:
+
+| Source point type | Hit / total | Coverage |
+|---|---:|---:|
+| Line | 190 / 191 | 99.5% |
+| Toggle, directional transitions | 3,186 / 4,062 | 78.4% |
+| Branch | 278 / 292 | 95.2% |
+| Expression | 443 / 461 | 96.1% |
+
+The remaining source line is a reachable unused-register no-op at
+`src/tt_um_pbe.sv:235`; it was not exercised. Toggle/branch/expression misses
+remain visible in annotations. Raw `verilator_coverage` counts include benches,
+instrumentation and hierarchy copies and have different denominators; their
+verbatim report is retained alongside the logical summary. 100% named bins
+does not mean 100% RTL structural coverage, proof or hardware validation.
+
+BUG-069 records scratch diagnostic-format/annotation-cwd fixes. BUG-072 adds
+fresh nonempty dump requirements across bench/diff/line launch paths, actual
+program-image rebuild prerequisites, and isolated differential diagnostics.
+Seven fast harness tests pass; restoring old artifact acceptance makes the
+three missing/stale/empty negative regressions fail. The complete campaign
+was rerun under the hardened checks and preserves all metrics. Previous
+successful data under the weaker artifact policy remains explicitly archived.
+
+BUG-073 corrects Python provenance: live launcher and embedded Icarus/Verilator
+`sys.version` probes report **3.10.12**, while cocotb startup logs print
+3.10.14. The banner is retained, and no cause is inferred. CRC/coverage receipts
+and D59 now use the measured runtime; before/after receipt checks are saved.
+This is a metadata correction, not a change to verification outcomes.
+
+Run from `pbe_v1/` with the recorded Verilator/C++ toolchain and Python dependencies:
+
+```sh
+make coverage
+make test-coverage-tools
+../.venv/bin/python coverage/run.py --jobs 2 --reuse-builds
+```
+
+Selected `.dat`, LCOV, annotated sources, user-bin manifests, checks, raw logs
+and hashes are in `evidence/round2/coverage/`; version probes are under
+`evidence/round2/python_runtime/`. Only builds with matching source/include
+signatures are reused. Failures and absent/stale/empty data return nonzero.
+The default Icarus gate remains the four-state evidence: Verilator's two-state
+`$isunknown` behavior is not an X-freedom proof. D60 records assumptions,
+alternatives and versions. Phase-3 final `make test` passed in **128.23 s**, with
+all seven new coverage-tool tests; the coordinator retains its gate receipt.

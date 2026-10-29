@@ -1,0 +1,137 @@
+[
+  {
+    "test": "tb_coverage_gaps",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_coverage_gaps",
+        "--Mdir",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps",
+        "-o",
+        "sim",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/test/tb_coverage_gaps.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 8.226,
+      "passed": true,
+      "log": "build/coverage/tb_coverage_gaps-build.log"
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_coverage_gaps.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.084,
+      "passed": true,
+      "log": "build/coverage/tb_coverage_gaps-run.log"
+    },
+    "passed": true
+  },
+  {
+    "test": "tb_engine_known_reset",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_engine_known_reset",
+        "--Mdir",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_engine_known_reset",
+        "-o",
+        "sim",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/test/tb_engine_known_reset.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 9.369,
+      "passed": true,
+      "log": "build/coverage/tb_engine_known_reset-build.log"
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_engine_known_reset/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_engine_known_reset.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.086,
+      "passed": true,
+      "log": "build/coverage/tb_engine_known_reset-run.log"
+    },
+    "passed": true
+  },
+  {
+    "test": "tb_line",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_line",
+        "--Mdir",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_line",
+        "-o",
+        "sim",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/test/tb_line.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 5.983,
+      "passed": true,
+      "log": "build/coverage/tb_line-build.log"
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_line/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_line.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.058,
+      "passed": true,
+      "log": "build/coverage/tb_line-run.log"
+    },
+    "passed": true
+  }
+]

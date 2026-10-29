@@ -1360,8 +1360,57 @@ clean (0 design violations).
   firmware behavior or analog pads, nor establish complete USB/Modbus conformance.
   No unsupported hardware feature is introduced to fit a catalogue entry.
 - **Tools/provenance:** primary RevEng catalogue accessed 2026-10-29; crccheck
-  1.3.1, cocotb 2.0.1, Icarus/vvp 12.0; Python 3.10.14 for CRC and 3.10.12 for
-  protocol runs. Protocol pins use luna-usb 0.2.3, usb-protocol 0.9.2 and pymodbus
+  1.3.1, cocotb 2.0.1, Icarus/vvp 12.0; measured Python 3.10.12 for CRC and
+  protocol runs. The earlier CRC 3.10.14 entry came from the cocotb banner and
+  is corrected by launcher/embedded probes in phase 3 (BUG-073), with old
+  receipts/logs preserved. Protocol pins use luna-usb 0.2.3, usb-protocol 0.9.2 and pymodbus
   3.11.3. Requirements, catalogue anchors, commands, generated tasks, hashes,
   raw outputs and before/after BUG-065 evidence are checked in with the two
   vector reports. Only simulation runs; no physical-design flow is invoked.
+
+## D60. Coverage reports logical obligations separately from raw tool instances
+
+- **Decision:** build/run the normal SV benches under Verilator with coverage,
+  then reuse the same per-clock top differential oracle and independent line
+  sweep. Add observation-only cover instrumentation in ignored scratch sources;
+  never change tracked RTL, protocol programs or assertions to obtain a hit.
+  Keep `make coverage` as a separate long target and `make test-coverage-tools`
+  as seven fast harness regressions. The ordinary gate remains Icarus/four-state.
+- **Functional obligations:** aggregate 92 named bins by logical name across
+  engines and test roots: 8 opcodes, 22 sub-ops, 8 JMP conditions, 8 pin/flag
+  WAIT conditions, 3 timeout/overflow/D50 events, 10 STATUS set/clear transitions,
+  32 active line modes and simultaneous running engines. Initial 89/92 gaps
+  close with observable WAIT FLAG RISE/FALL and overflow-clear tests. A hit does
+  not imply every engine, operand or taken/not-taken outcome was exercised.
+  D50's bin observes an invalidation request; separate fetch assertions check
+  the refill. Final functional coverage is 92/92.
+- **Structural aggregation:** coalesce identical original RTL source points
+  across hierarchies/benches, excluding testbench and appended instrumentation.
+  A source point is covered if any instance hits it. Final counts are line
+  190/191, toggle 3,186/4,062, branch 278/292, expression 443/461. Preserve the
+  raw vendor report separately because it includes testbenches, instrumentation
+  and per-hierarchy copies with different denominators. Neither denominator is
+  silently substituted for the other. The remaining line is a reachable unused-
+  address no-op, not an exclusion or declaration of unreachability.
+- **Artifact/provenance rules:** every successful simulation must create a new
+  regular nonempty data file. Clear old dumps before launch and before full
+  aggregation; propagate compile, assertion, XML and missing-data failures.
+  Refresh existing program-image make dependencies before snapshotting hex;
+  require source/include signatures for reused builds; isolate differential
+  diagnostics by build. Negative regressions retain failure evidence (BUG-072).
+  Scratch diagnostic-format and annotation-cwd adaptations are explicit tool
+  fixes (BUG-069), with failed originals retained.
+- **Alternatives/limits:** a raw per-copy percentage alone obscures logical
+  obligations, while reporting only 100% bins hides unexercised structural
+  behavior. Keep both. Verilator is two-state: `$isunknown` cannot prove X
+  freedom there. Only the model-marked unspecified empty-FIFO MISO bit is masked;
+  known outputs remain checked, and the separate Icarus four-state gate remains
+  authoritative for those X checks. Preserve three negative contract runs as
+  expected failures, not successful assertion traces used to improve coverage.
+- **Tools and outcome:** Verilator/verilator_coverage 5.051 devel
+  (`v5.050-99-gf8fb1d664`), GCC/G++ 11.4.0, cocotb 2.0.1 and measured Python
+  3.10.12. Launcher and embedded Icarus/Verilator probes resolve the misleading
+  3.10.14 banner as a metadata discrepancy (BUG-073), without asserting its
+  cause. The hardened complete campaign preserves 92/92 bins and all reported
+  source metrics. Raw logs, data, hashes, annotations and old artifact-policy
+  receipts are retained; no physical-design or synthesis flow is invoked.

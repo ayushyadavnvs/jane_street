@@ -1,0 +1,12 @@
+{
+  "command": "make -C pbe_v1 test",
+  "exit": 0,
+  "seconds": 128.23,
+  "differential_clocks": 49010,
+  "model_units": 24,
+  "formal_receipt_units": 3,
+  "coverage_guard_units": 7,
+  "decoder_units": 5,
+  "log_sha256": "0f7fe004605fb96f4ec8d545e2efbbf8e77dc16c4980c41e750c157a9a715f35",
+  "note": "Before Phase3 commit. Harness code frozen; actual full hardened Verilator campaign separately passed with14checkgroups and92/92functionalbins."
+}

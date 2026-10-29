@@ -65,6 +65,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	$(PYTHON) tools/check_spec_boundaries.py
 	$(MAKE) test-model
 	$(PYTHON) -m unittest discover -s formal -p test_runner.py -v
+	$(MAKE) test-coverage-tools
 	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
 
@@ -172,3 +173,12 @@ test-crc-vectors:
 
 test-protocol-vectors:
 	$(PYTHON) test/reference_protocols/run.py
+
+# Source coverage remains a separate long campaign; artifact guards are quick default tests.
+COVERAGE_JOBS ?= 2
+.PHONY: coverage test-coverage-tools
+coverage:
+	$(PYTHON) coverage/run.py --jobs $(COVERAGE_JOBS)
+
+test-coverage-tools:
+	$(PYTHON) -m unittest discover -s coverage -p test_harness.py -v

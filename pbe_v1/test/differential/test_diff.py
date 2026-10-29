@@ -16,6 +16,10 @@ from model.top_model import PBEModel
 ROOT=Path(__file__).resolve().parents[2]
 
 
+def output_path(filename):
+    return Path(os.getenv('PBE_DIFF_OUTPUT_DIR',str(ROOT/'build'/'differential')))/filename
+
+
 def word(op,arg=0,dly=0): return op << 13 | (arg & 511) << 4 | dly
 
 
@@ -89,7 +93,7 @@ class Harness:
     def mismatch(self,why):
         payload=dict(seed=self.seed,cycle=self.clocks,reason=why,
                      model=self.model.state(),rtl=self.rtl_state(),last_stimulus=self.history[-64:])
-        out=ROOT/'build'/'differential'/f'failure-{self.seed}.json'
+        out=output_path(f'failure-{self.seed}.json')
         out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(payload,indent=2))
         raise AssertionError(json.dumps(payload,indent=2))
 
@@ -114,9 +118,10 @@ class Harness:
         self.clocks+=1
         uo=str(d.uo_out.value)
         # An empty RX FIFO can be speculatively prefetched after its last byte.
-        # Preserve that single unknown MISO bit; all other bits still compare.
+        # Icarus must preserve that unknown MISO. Verilator is two-state, so
+        # mask only this model-marked unspecified bit; all known bits compare.
         expected_unknown=self.model.host.miso is None
-        if expected_unknown and uo[-1].lower() not in ('x','z'): self.mismatch('expected unspecified empty-FIFO MISO')
+        if expected_unknown and os.getenv('PBE_TWO_STATE') != '1' and uo[-1].lower() not in ('x','z'): self.mismatch('expected unspecified empty-FIFO MISO')
         actual=(int(d.uio_out.value),int(d.uio_oe.value),int(uo[:-1]+'0',2) if expected_unknown else int(uo,2))
         expected=self.model.outputs
         if actual != expected: self.mismatch(f'outputs actual={actual}, expected={expected}')
@@ -220,5 +225,5 @@ async def random_differential(dut):
         h.check_final(); coverage.update(h.coverage); clocks+=h.clocks
         retained_fifos=[list(f.mem) for f in h.model.tx+h.model.rx]
     report=dict(seed=seed,seeds=n,clocks=clocks,coverage=dict(sorted(coverage.items())))
-    out=ROOT/'build'/'differential'/'coverage.json'; out.write_text(json.dumps(report,indent=2))
+    out=output_path('coverage.json'); out.write_text(json.dumps(report,indent=2))
     dut._log.info('DIFFERENTIAL %s',json.dumps(report,sort_keys=True))

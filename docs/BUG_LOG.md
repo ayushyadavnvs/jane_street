@@ -1830,3 +1830,89 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   A second USB seed also passes. Full packets, generated SV tasks, source hashes
   and PASS logs are retained beside the failure evidence. No RTL, protocol
   program, packet bytes or installed library implementation was changed.
+
+## BUG-069 — Coverage tool rejected diagnostic formatting and annotation cwd (tool compatibility, fixed)
+
+- **Before:** the Icarus-accepted diagnostic in the scratch `tb_line` copy used:
+  ```systemverilog
+  $sformatf("USB RX %+0.1f %%: ...", ...)
+  ```
+  Verilator rejected three such strings with `Unknown $display-like format
+  code: '%+'`. The original failed compiler log remains in
+  `evidence/round2/coverage/coverage-initial-tb_line-build.log.gz`.
+- **After (scratch printing only):**
+  ```systemverilog
+  $sformatf("USB RX %0.1f %%: ...", ...)
+  ```
+  The same stimulus/assertions now compile and `tb_line` passes. Tracked bench
+  source and RTL are unchanged; only scratch diagnostic formatting is adapted.
+- **Annotation before:** `verilator_coverage --annotate ...` ran outside the
+  scratch test directory, so bare relative `tb_host.svh` could not be found.
+  **After:** launch annotation with `cwd=build/coverage/test`, where the copied
+  include lives. The preserved wrong-cwd negative returns 1; correct-cwd merge,
+  annotation and LCOV generation pass. Evidence includes
+  `annotation-wrong-cwd-negative.log.gz` and the final merged/annotated outputs.
+
+## BUG-072 — Coverage accepted absent/stale artifacts and shared stale inputs/diagnostics (verification, fixed)
+
+- **Before:** normal benches required only an exit status/PASS marker; the
+  line sweep did not require data, and differential existence-only checking
+  could accept a stale file:
+  ```python
+  passed = proc.returncode == 0 and 'PASS' in proc.stdout
+  if coverage and not coverage_output.exists():
+      raise SystemExit('missing coverage')
+  ```
+- **After:** all three launch paths unlink the expected file before launch and
+  require a new regular nonempty file after successful checks:
+  ```python
+  clear_coverage(expected_path)
+  run_simulator()
+  require_coverage(expected_path)
+  ```
+  Exit/PASS and fresh data are jointly required; a failed run with a dump still
+  fails. A full campaign clears old data before aggregation. Partial runs are
+  explicitly debugging runs and may aggregate existing inputs.
+- **Image before/after:** copying existing hex could silently use stale program
+  images. `refresh_images()` now invokes the existing 13 make image prerequisites
+  before copying the snapshot, so a changed `.pbe` rebuilds its image or fails.
+  Its regression runs a real temporary make graph with newer program/stale hex.
+- **Diagnostics before/after:** the differential wrote metrics/failure JSON to
+  fixed `build/differential/` even under a separate Verilator build. It now uses
+  the launcher's `PBE_DIFF_OUTPUT_DIR` and `output_path(...)` for both artifacts.
+  Default Icarus paths are unchanged; coverage diagnostics live in their own
+  `build/coverage/obj_diff/` to avoid overwriting independent runs.
+- **Fail-before/pass-after:** seven tests in `coverage/test_harness.py` pass.
+  Restoring old acceptance in a scratch helper makes the missing/stale/empty
+  artifact regressions all fail as expected. The new image/isolation regressions
+  additionally check rebuild and unchanged-default behavior. Logs/receipts are
+  `evidence/round2/coverage/bug072-legacy-acceptance-negative.*`,
+  `harness-tests.log.gz` and `image_prerequisites.json`. Old successful data is
+  retained under `before_bug072/`; the final hardened complete campaign reran
+  successfully with all 11 bench dumps fresh/nonempty and 92/92 functional bins.
+  No RTL or protocol-program behavior changed.
+
+## BUG-073 — Tool receipts mistook a cocotb banner for the Python runtime (metadata, fixed)
+
+- **Before:** CRC/coverage receipts copied the startup banner into metadata:
+  ```python
+  tools['python'] = '3.10.14'  # copied from "Using Python 3.10.14"
+  ```
+  Independent launcher and in-cocotb probes instead report `sys.version`
+  3.10.12 for the exact `.venv/bin/python` used by both Icarus and Verilator.
+  The same probe logs still print the original 3.10.14 banner. No mechanism
+  for that discrepancy is established or claimed.
+- **After:** capture the live launcher value and check it against the embedded
+  probes, retaining banner text separately:
+  ```python
+  tools['python'] = sys.version.split()[0]
+  ```
+  CRC/coverage reports/receipts now identify measured Python 3.10.12. D59's
+  earlier CRC version statement is corrected as metadata, not silently preserved.
+- **Fail-before/pass-after:** `python_runtime/check_receipt.py` compares a receipt
+  with the measured probe. Original receipts return 1/VERSION MISMATCH; corrected
+  receipts return 0/VERSION MATCH. `run_probe.py --sim icarus` and `--sim verilator`
+  each execute `runtime_probe.py` inside cocotb. Launcher JSON, both embedded
+  runtime JSON/XML/logs, old receipts, and before/after comparison results are
+  under `evidence/round2/python_runtime/`. Raw banner logs remain unchanged.
+  No RTL, stimulus, comparison or verification result changed.

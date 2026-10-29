@@ -1,0 +1,10 @@
+{
+  "returncode": 1,
+  "expected_failure": true,
+  "tests": [
+    "test_harness.CoverageArtifacts.test_success_exit_without_dump_fails",
+    "test_harness.CoverageArtifacts.test_stale_dump_without_replacement_fails",
+    "test_harness.CoverageArtifacts.test_empty_dump_fails"
+  ],
+  "note": "Scratch helper restores pre-fix acceptance policy by bypassing clear_coverage/require_coverage. Production code is unchanged. Three negative regressions then fail, demonstrating detection of success-without-dump, stale dump and empty dump."
+}

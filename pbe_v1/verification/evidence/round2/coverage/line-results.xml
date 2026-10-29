@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1793293325" />
+    <testcase name="differential_line" classname="test_line_cocotb" file="/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/model/test_line_cocotb.py" lineno="11" time="7.1294755935668945" sim_time_ns="1669913.952" ratio_time="234226.75764635557" />
+  </testsuite>
+</testsuites>

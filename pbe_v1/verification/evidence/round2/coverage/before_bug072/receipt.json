@@ -1,0 +1,38 @@
+{
+  "command": [
+    "coverage/run.py",
+    "--jobs",
+    "2",
+    "--reuse-builds"
+  ],
+  "returncode": 0,
+  "baseline_commit": "6130fa7c006777fda956408d216807d4fbaf5f7b",
+  "tools": {
+    "verilator": "5.051 devel v5.050-99-gf8fb1d664",
+    "g++": "11.4.0",
+    "cocotb": "2.0.1",
+    "python": "3.10.14"
+  },
+  "raw_rtl_sha256": {
+    "src/pbe_engine.sv": "68cbdbde6d69ef637d773a6fdadde14cc6fbedaf477c8348944c1c79cb27d99b",
+    "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1",
+    "src/pbe_host_spi.sv": "e797259e321c4344bad7d541ed13953f1fcd5361411b0620ad636f62d8841d94",
+    "src/pbe_fifo.sv": "0dab5b2937704a236f43f8972991446d4e0dfa10894e86b1ef87d8cd3acf8898",
+    "src/tt_um_pbe.sv": "d9e7c849262c8d242438654c108f8d9c7ba5a0372777ad1ef3d3e95cef98a0e9",
+    "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f"
+  },
+  "coverage_script_sha256": {
+    "pbe_v1/coverage/run.py": "708bb3b89c8999d0508a78859fb628e900899cd71fd885a2ba30aa20a10aad99",
+    "pbe_v1/coverage/run_line.py": "886304f47a0b8622d8d8f3f82402decfb60a7f47fe3cc6801a11a99119ac751a",
+    "pbe_v1/coverage/prepare.py": "6c8684d59519d09fd76586f789a256dc2bca6e420e09d8bb19c1b0abb8c469a7",
+    "pbe_v1/coverage/summarize.py": "d5cb15bcf0956181314b7d110121dae880e22f7d49d3a48288dce6b3a39a6a47"
+  },
+  "coverage_data_sha256": "ad0f0c15bafef6244aa8b4989565ad6ec41b61d57d9b76e5fac73bac587f103a",
+  "two_state_policy": "Mask exactly model-marked unspecified MISO; all known output bits/FIFO/status/flags/CRC checked. Icarus no-X check remains independent.",
+  "negative_annotation_check": {
+    "returncode": 1,
+    "reason": "bare tb_host.svh not found outside scratch test cwd",
+    "expected_failure": true
+  },
+  "note": "Fresh full-campaign .dat outputs, source/include signatures checked for reused builds, all normal runs and expected negative markers verified; no HDL behavior changed."
+}

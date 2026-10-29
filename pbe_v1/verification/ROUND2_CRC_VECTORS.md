@@ -107,6 +107,19 @@ establishes primitive capability, not a new dynamic-token feature in that progra
 - The selected set spans 3–16 bits but does not contain every catalogue variant
   or every possible polynomial. No new hardware feature is proposed or added.
 
-Tools: Python 3.10.14, cocotb 2.0.1, Icarus/vvp 12.0, crccheck 1.3.1.
+Tools: Python 3.10.12, cocotb 2.0.1, Icarus/vvp 12.0, crccheck 1.3.1.
 Evidence: `verification/evidence/round2/crc/results.json`, simulator log, result
 XML and provenance receipt. No RTL/spec disagreement was found by these vectors.
+
+
+## Python version provenance correction (BUG-073)
+
+The original receipt copied `3.10.14` from cocotb's startup banner. A live
+launcher query and a separate test executing `sys.version` inside cocotb instead
+report **3.10.12**. Both original banner logs and old receipts are preserved;
+the report now uses the independently measured runtime. No mechanism is claimed
+for the banner discrepancy. The corrected receipt captures the live value
+rather than hard-coding a version. Reproduction scripts, runtime JSON, logs and
+fail-before/pass-after receipt checks are under
+`verification/evidence/round2/python_runtime/`. This changes tool provenance,
+not any RTL, stimulus, comparison or recorded verification result.
