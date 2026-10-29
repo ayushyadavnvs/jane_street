@@ -1282,3 +1282,104 @@ The harness preserves model memory between seed resets for the same reason.
   fails before with TypeError, and passes after: stopped clocks have no side effects and
   starting the engine produces a descriptive error. See `model/ENGINE_FINDINGS.md`.
 - **RTL:** unchanged. No NOP replaces an instruction that would actually execute.
+
+## BUG-049 — Capture extractor lost the initial protocol edge (verification tool, fixed)
+
+- **Before:** a USB packet could begin at the phase-marker timestamp. Reading VCD
+  variable order as execution order, then using the first selected levels as the
+  initial state, started the extracted file already in USB K. The first SOP was
+  lost, and isolated valid SET_ADDRESS decoded as UNKNOWN. This was an extractor
+  bug and is distinct from the unfixed full-trace decoder limitations below.
+- **Code before** (`tools/sigrok_verify.py`, initial `crop_vcd`):
+
+  ```python
+  levels = selected[0][2]
+  samples = {0: levels}
+  for timestamp, _, values in selected:
+      samples[(timestamp-start)//10_000] = values
+  ```
+
+- **Code after:** coalesce VCD updates per timestamp; preserve the preceding pin
+  state and apply the first in-window event after a 1 us pre-roll:
+
+  ```python
+  grouped = {}
+  for event in changes:
+      grouped[event[0]] = event
+  # read_vcd returns list(grouped.values())
+  previous = [x for x in changes if x[0] < start]
+  levels = previous[-1][2] if previous else selected[0][2]
+  samples = {0: levels}
+  for timestamp, _, values in selected:
+      samples[(timestamp-start)//10_000+head_ns//10] = values
+  ```
+
+- **Fail-before/pass-after test:** `python3 -m unittest discover -s test -p
+  test_sigrok_extract.py`. Both marker/edge file orders fail if initial levels are
+  reverted to `selected[0][2]`; both pass now. Before-fix failure transcript is
+  checked in as `evidence/phase2/crop_before_fix.txt`. Valid USB request windows
+  then reconstruct all ten expected control requests with no state errors.
+
+## BUG-050 — Stock USB request decoder cannot recover DATA RECEIVED (external tool, unfixed)
+
+- **Version/component:** libsigrokdecode 0.5.3, `decoders/usb_request/pd.py`.
+- **Code before** (unchanged third-party code):
+
+  ```python
+  if self.transaction_state == 'TOKEN RECEIVED':
+      transaction_timeout = self.es_transaction
+      transaction_timeout += int((self.es_transaction - self.ss_transaction) / 2)
+      if ss > transaction_timeout:
+          self.es_transaction = transaction_timeout
+          self.handshake = 'timeout'
+          self.handle_transfer()
+          self.transaction_state = 'IDLE'
+  if self.transaction_state != 'IDLE':
+      # emits ERR and rejects the new token
+      return
+  ```
+
+- **Code after:** unchanged; no third-party decoder or RTL fix was made. A proper
+  external fix needs timeout/recovery for a data packet whose handshake never
+  arrives, with timing validated against USB semantics. That is not a design
+  modification authorized by this verification task.
+- **Reproduction:** `python3 tools/sigrok_verify.py --vcd-dir test --output
+  /tmp/pbe-sigrok-full --full-usb-request`. The full trace misses
+  `00 05 15 00 00 00 00 00` after intentionally malformed traffic; isolated
+  `usb_clean_address.vcd` reconstructs it, and full-trace `usb_packet` contains it.
+- **Regression state:** intentionally still FAIL for the full-trace check; there
+  is no claimed pass-after for an unfixed external tool. Before and after this
+  verification change, design behavior is identical.
+
+## BUG-051 — Stock USB request decoder counts unacknowledged retry twice (external tool, unfixed)
+
+- **Version/component:** libsigrokdecode 0.5.3, `decoders/usb_request/pd.py`.
+- **Code before** (unchanged third-party code):
+
+  ```python
+  elif request['type'] == 'SETUP IN' and self.transaction_type == 'IN':
+      request['data'] += self.transaction_data
+  ```
+
+- **Code after:** unchanged; no third-party decoder or RTL fix was made. An
+  external fix needs transfer/PID/ACK history to suppress duplicate retries,
+  with valid retransmission and timeout regressions. The verification code
+  keeps valid request windows and the full packet-level trace independently
+  checked and exposes this request-layer comparison as a strict failing option.
+- **Reproduction:** same full-trace command above. Two descriptor requests have
+  expected lengths `[18, 18]`; stock decoder produces `[18, 26]`. The extra eight
+  bytes are the duplicated DATA1 `12 01 10 01 ff 00 00 08`. The existing USB bench
+  explicitly checks identical retransmission and reports PASS.
+- **Regression state:** intentionally still FAIL for the full-trace check; no
+  claimed pass-after exists for the unfixed external tool. See
+  `evidence/phase2/full_results.json` and `full_usb_full_requests.stdout`.
+
+### BUG-046 additional external-tool exit check
+
+Stock sigrok-cli 0.7.2 can also return zero on a libusb initialization error in
+this restricted environment, emitting no version or decoded annotations. The
+verification driver now requires an actual version banner and nonempty decoder
+output before comparisons. Before: exit status alone could count this as success.
+After: `sigrok_verify.py` returns nonzero on empty output; running the offline
+command where libusb initialization is allowed produces 22 real passing checks.
+No decoder or system USB configuration was changed.

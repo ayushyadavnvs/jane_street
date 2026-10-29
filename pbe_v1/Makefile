@@ -61,6 +61,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
 	$(MAKE) test-model
+	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
 
 # only USB (tb_usb), a quicker loop while working on it
@@ -129,3 +130,15 @@ diff-line:
 .PHONY: diff-engine-line
 diff-engine-line:
 	$(PYTHON) model/check_engine_line_model.py
+
+SIGROK_CLI ?= sigrok-cli
+.PHONY: sigrok sigrok-full test-sigrok-extract
+sigrok:
+	$(PYTHON) tools/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)"
+
+# A strict comparison: libsigrokdecode 0.5.3 intentionally returns nonzero here.
+sigrok-full:
+	$(PYTHON) tools/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)" --full-usb-request
+
+test-sigrok-extract:
+	$(PYTHON) -m unittest discover -s test -p test_sigrok_extract.py -v

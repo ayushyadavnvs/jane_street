@@ -1,0 +1,21 @@
+
+======================================================================
+FAIL: test_start_edge_before_or_after_phase_marker (boundary_test.CaptureBoundary) (changes='0!\nb10 )\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/test_sigrok_extract.py", line 26, in test_start_edge_before_or_after_phase_marker
+    self.assertIn('#0\n1!\n', result)
+AssertionError: '#0\n1!\n' not found in '$timescale 10ns $end\n$scope module pins $end\n$var wire 1 ! p0 $end\n$var wire 1 " p1 $end\n$var wire 1 # p2 $end\n$var wire 1 $ p3 $end\n$var wire 1 % p4 $end\n$var wire 1 & p5 $end\n$var wire 1 \' p6 $end\n$var wire 1 ( p7 $end\n$upscope $end\n$enddefinitions $end\n#0\n0!\n1"\n1#\n1$\n1%\n1&\n1\'\n1(\n#110\n1!\n#10110\n'
+
+======================================================================
+FAIL: test_start_edge_before_or_after_phase_marker (boundary_test.CaptureBoundary) (changes='b10 )\n0!\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/test_sigrok_extract.py", line 26, in test_start_edge_before_or_after_phase_marker
+    self.assertIn('#0\n1!\n', result)
+AssertionError: '#0\n1!\n' not found in '$timescale 10ns $end\n$scope module pins $end\n$var wire 1 ! p0 $end\n$var wire 1 " p1 $end\n$var wire 1 # p2 $end\n$var wire 1 $ p3 $end\n$var wire 1 % p4 $end\n$var wire 1 & p5 $end\n$var wire 1 \' p6 $end\n$var wire 1 ( p7 $end\n$upscope $end\n$enddefinitions $end\n#0\n0!\n1"\n1#\n1$\n1%\n1&\n1\'\n1(\n#110\n1!\n#10110\n'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=2)

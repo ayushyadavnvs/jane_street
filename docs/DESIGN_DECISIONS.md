@@ -1144,3 +1144,22 @@ clean (0 design violations).
 - **Tools, results and limits:** see `pbe_v1/verification/REPORT.md` and phase-specific reports
   for exact versions, commands, measured coverage and decoder/library limitations. Evidence
   here is behavioral simulation only; it makes no new routed timing, silicon or board claim.
+
+## D52. Decode captured protocol pins with stock sigrok layers
+
+- **Decision:** add an off-by-default `PBE_SIGROK` testbench define for scalar
+  external pins and phase markers, then decode generated VCDs using unmodified
+  sigrok decoders. Preserve the existing optional full-design `+vcd` captures.
+- **Alternative:** writing another protocol decoder would repeat assumptions.
+  The stock UART/SPI/I2C/1-Wire/Modbus/WS2812/USB decoder stacks are independent.
+- **Extraction:** retain preceding idle levels and coalesce same-timestamp VCD
+  updates, with 10 ns sample spacing and fixed pre/post padding. Preserve original
+  hashes, boundaries, commands and decoder stdout. The capture-boundary regression
+  is part of the default test suite and requires no sigrok installation.
+- **USB limitation:** valid windows check ten control requests; the complete
+  packet trace independently checks corrupt traffic and identical retransmission.
+  An additional strict full-request target retains two known stock-decoder
+  failures (BUG-050/051). Neither those failures nor window selection changes RTL.
+- **Results:** 22/22 primary checks pass from fresh simulations; strict full-request
+  comparison is 22/24 on libsigrokdecode 0.5.3. Versions, commands and boundaries
+  are in `pbe_v1/verification/PHASE2.md` and its checked-in evidence.

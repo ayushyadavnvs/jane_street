@@ -26,6 +26,17 @@ module tb_proto;
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 
+  // Verification-only scalar pins and phase markers; disabled for normal tests.
+`ifdef PBE_SIGROK
+  integer sigrok_phase = 0;
+  wire p0 = bus[0], p1 = bus[1], p2 = bus[2], p3 = bus[3];
+  wire p4 = bus[4], p5 = bus[5], p6 = bus[6], p7 = bus[7];
+  initial begin
+    $dumpfile("tb_proto_pins.vcd");
+    $dumpvars(0, p0, p1, p2, p3, p4, p5, p6, p7, sigrok_phase);
+  end
+`endif
+
   `include "tb_host.svh"
 
   // Burst bytes into engine e's TX FIFO in one SPI transaction, pausing while the TX-full pin
@@ -266,15 +277,20 @@ module tb_proto;
   // ---------------- tests ----------------
   initial begin
     logic [7:0] got[$], exp[$];
+`ifndef PBE_SIGROK
     if ($test$plusargs("vcd")) begin
       $dumpfile("tb_proto.vcd");
       $dumpvars(0, tb_proto);
     end
+`endif
     repeat (5) @(posedge clk);
     rst_n = 1;
     repeat (5) @(posedge clk);
 
     // ===== Test 8: WS2812 =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 8;
+`endif
     $display("Test 8: WS2812 LED driver (engine 0, pin 0) at 800 kbit/s");
     load_program("ws2812_image.hex");
     reg_write(7'h10, 1);                 // tick = 2 clocks (41.7 ns)
@@ -309,6 +325,9 @@ module tb_proto;
     ws_en = 0;
 
     // ===== Test 9: SPI peripheral =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 9;
+`endif
     $display("Test 9: SPI peripheral (engine 0, pins 0..3), mode 0, SCLK 2 MHz");
     reg_write(7'h00, 8'b1100_0000);      // stop, flush FIFOs
     load_program("spi_periph_image.hex");
@@ -390,6 +409,9 @@ module tb_proto;
     $display("  3 transactions: replies queued, default 0xFF, a pause inside a transaction");
 
     // ===== Test 10: I2C target =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 10;
+`endif
     $display("Test 10: I2C target at 0x%02x (engines 0 + 1, pins 0-1), fast mode controller", TGT_ADDR);
     reg_write(7'h00, 8'b1100_0000);
     reg_write(7'h1C, 0);                 // timeout off

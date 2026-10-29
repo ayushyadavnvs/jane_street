@@ -1,0 +1,35 @@
+VCD info: dumpfile tb_pbe_pins.vcd opened for output.
+Test 0: NOP has no side effects
+Test 1: UART TX (engine 0) looped back into UART RX (engine 1)
+  sent 6 bytes, engine 1 and the monitor received them
+Test 2: SPI controller (engine 0) against a mode-0 peripheral
+  exchanged 3 bytes in both directions
+Test 3: I2C controller (engine 1, pins 4-5) running alongside UART TX (engine 0)
+  I2C write, read with repeated START, and NACK passed with 20 clock stretches;
+  UART sent 4 bytes at the same time
+  SCL min low 1500 ns, min high 813 ns, min period 2625 ns
+Test 4: 1-Wire controller (engine 1, pin 6) with two DS18B20-style devices
+  presence, absence and READ ROM ok
+  Search ROM found 2c000800003c5a28 and 1b000800003c5b28
+  hardware CRC-8 checked the ROM ID and the scratchpad
+  CONVERT T with strong pull-up: device read 25.0625 C
+  CONVERT T with the RX FIFO full: strong pull-up 6.0 us after the last slot
+  inverted CRC-16 checked by the host against the CRC unit's value
+  MATCH ROM + READ SCRATCHPAD ok; timing checked on 240 short, 164 long pulses and 5 resets
+Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 8E1, hardware CRC/parity/timeout
+  round 0 at 19200 baud 8E1: request with hardware CRC ok; response 0 parity error(s), CRC ok = 1
+  round 1 at 19200 baud 8E1: request with hardware CRC ok; response 1 parity error(s), CRC ok = 1
+  round 2 at 19200 baud 8E1: request with hardware CRC ok; response 0 parity error(s), CRC ok = 0
+  round 3 at 115200 baud 8E1: request with hardware CRC ok; response 0 parity error(s), CRC ok = 1
+  round 4 at 19200 baud 8N2: request with hardware CRC ok; response 0 parity error(s), CRC ok = 1
+  round 5 at 19200 baud: a 2-character pause inside the response: frame reported invalid
+  round 6 at 115200 baud: a 2-character pause inside the response: frame reported invalid
+  round 7 at 115200 baud 8E1: request with hardware CRC ok; response 0 parity error(s), CRC ok = 1
+  round 8 at 19200 baud 8E1: request with hardware CRC ok; response 0 parity error(s), CRC ok = 1
+  RX overflow (host not reading) reported in STATUS and by IRQ
+Test 6: 1-Wire Search ROM (engine 0, pin 6) and I2C (engine 1, pins 4-5) at the same time
+  Search ROM found both devices while I2C ran 62 write/read rounds; 406 1-Wire edges overlapped I2C traffic
+Test 7: SMBus PEC: I2C controller (engine 1) with its CRC unit as CRC-8 (poly 0x07)
+  Write Word and Read Word with PEC; the engine computes the PEC and checks the device's
+PASS
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_pbe.sv:1114: $finish called at 262219922019 (1ps)

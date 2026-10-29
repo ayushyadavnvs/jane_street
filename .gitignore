@@ -24,3 +24,4 @@ pbe_v1/build/
 pbe_v1/results.xml
 pbe_v1/model/results.xml
 pbe_v1/test/bus_models/sim_build/
+pbe_v1/test/sigrok_results/

@@ -1,0 +1,64 @@
+onewire_network-1: Reset/presence: false
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0x33 'Read ROM'
+onewire_network-1: ROM: 0x2c000800003c5a28
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0xf0 'Search ROM'
+onewire_network-1: ROM: 0x2c000800003c5a28
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0xf0 'Search ROM'
+onewire_network-1: ROM: 0x1b000800003c5b28
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0x55 'Match ROM'
+onewire_network-1: ROM: 0x1b000800003c5b28
+onewire_network-1: Data: 0xbe
+onewire_network-1: Data: 0x50
+onewire_network-1: Data: 0x05
+onewire_network-1: Data: 0x4b
+onewire_network-1: Data: 0x46
+onewire_network-1: Data: 0x7f
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0x0c
+onewire_network-1: Data: 0x10
+onewire_network-1: Data: 0x1c
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0x55 'Match ROM'
+onewire_network-1: ROM: 0x2c000800003c5a28
+onewire_network-1: Data: 0x44
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0x55 'Match ROM'
+onewire_network-1: ROM: 0x2c000800003c5a28
+onewire_network-1: Data: 0xbe
+onewire_network-1: Data: 0x91
+onewire_network-1: Data: 0x01
+onewire_network-1: Data: 0x4b
+onewire_network-1: Data: 0x46
+onewire_network-1: Data: 0x7f
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0x0c
+onewire_network-1: Data: 0x10
+onewire_network-1: Data: 0x70
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0xff
+onewire_network-1: Data: 0xff
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0x55 'Match ROM'
+onewire_network-1: ROM: 0x2c000800003c5a28
+onewire_network-1: Data: 0x44
+onewire_network-1: Reset/presence: true
+onewire_network-1: ROM command: 0x55 'Match ROM'
+onewire_network-1: ROM: 0x1b000800003c5b28
+onewire_network-1: Data: 0xaa
+onewire_network-1: Data: 0x11
+onewire_network-1: Data: 0x22
+onewire_network-1: Data: 0x33
+onewire_network-1: Data: 0x44
+onewire_network-1: Data: 0x55
+onewire_network-1: Data: 0x66
+onewire_network-1: Data: 0x77
+onewire_network-1: Data: 0x88
+onewire_network-1: Data: 0x1e
+onewire_network-1: Data: 0xb4

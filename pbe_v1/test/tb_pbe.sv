@@ -28,6 +28,17 @@ module tb_pbe;
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 
+  // Verification-only scalar pins and phase markers; disabled for normal tests.
+`ifdef PBE_SIGROK
+  integer sigrok_phase = 0;
+  wire p0 = bus[0], p1 = bus[1], p2 = bus[2], p3 = bus[3];
+  wire p4 = bus[4], p5 = bus[5], p6 = bus[6], p7 = bus[7];
+  initial begin
+    $dumpfile("tb_pbe_pins.vcd");
+    $dumpvars(0, p0, p1, p2, p3, p4, p5, p6, p7, sigrok_phase);
+  end
+`endif
+
   `include "tb_host.svh"
 
   // ---------------- independent UART monitor on pin 0 ----------------
@@ -490,10 +501,12 @@ module tb_pbe;
   // ---------------- tests ----------------
   initial begin
     logic [7:0] sent[$], got;
+`ifndef PBE_SIGROK
     if ($test$plusargs("vcd")) begin  // waveforms on request: vvp sim.vvp +vcd
       $dumpfile("tb_pbe.vcd");
       $dumpvars(0, tb_pbe);
     end
+`endif
 
     repeat (5) @(posedge clk);
     rst_n = 1;
@@ -505,6 +518,9 @@ module tb_pbe;
     check(got == 8'hA5, $sformatf("CLKDIV_L readback %02x", got));
 
     // ===== Test 0: NOP has no side effects (BUG-008) =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 0;
+`endif
     $display("Test 0: NOP has no side effects");
     load_program("nop_image.hex");
     reg_write(7'h10, 0);
@@ -519,6 +535,9 @@ module tb_pbe;
     reg_write(7'h00, 8'b0000_0000);
 
     // ===== Test 1: UART loopback =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 1;
+`endif
     $display("Test 1: UART TX (engine 0) looped back into UART RX (engine 1)");
     load_program("uart_image.hex");
     reg_write(7'h10, UART_BIT / 2 - 1);  // E0 tick = 1/2 bit
@@ -552,6 +571,9 @@ module tb_pbe;
     $display("  sent %0d bytes, engine 1 and the monitor received them", sent.size());
 
     // ===== Test 2: SPI controller =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 2;
+`endif
     $display("Test 2: SPI controller (engine 0) against a mode-0 peripheral");
     reg_write(7'h00, 8'b1100_0000);      // stop both, flush FIFOs
     uart_mon_en = 0;
@@ -584,6 +606,9 @@ module tb_pbe;
     $display("  exchanged %0d bytes in both directions", spi_got.size());
 
     // ===== Test 3: I2C on engine 1 while engine 0 sends UART =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 3;
+`endif
     $display("Test 3: I2C controller (engine 1, pins 4-5) running alongside UART TX (engine 0)");
     reg_write(7'h00, 8'b1100_0000);      // stop both, flush FIFOs
     spi_dev_en = 0;
@@ -653,6 +678,9 @@ module tb_pbe;
 
     // $fatal gives a non-zero exit code, so make and CI see the failure (BUG-007)
     // ===== Test 4: 1-Wire =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 4;
+`endif
     $display("Test 4: 1-Wire controller (engine 1, pin 6) with two DS18B20-style devices");
     reg_write(7'h00, 8'b1100_0000);      // stop both, flush FIFOs
     uart_mon_en = 0;
@@ -830,6 +858,9 @@ module tb_pbe;
     ow_en_b = 0;
 
     // ===== Test 5: Modbus RTU =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 5;
+`endif
     $display("Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 8E1, hardware CRC/parity/timeout");
     reg_write(7'h00, 8'b1100_0000);
     reg_write(7'h04, 8'h00);
@@ -851,6 +882,9 @@ module tb_pbe;
     // frame is invalid, BUG-039); 7, 8: a 1-character pause at 115200 and 19200 (allowed)
     for (int round = 0; round < 9; round++) begin
       bit invalid;
+`ifdef PBE_SIGROK
+      sigrok_phase = 50 + round;  // isolate each baud/parity/error scenario
+`endif
       mb_baud = (round == 3 || round == 6 || round == 7) ? 115200.0 : 19200.0;
       mb_npar = (round == 4);
       reg_write(7'h1E, mb_npar ? 8'h41 : 8'h01);  // LINE_CFG: even parity, or a second stop bit
@@ -930,6 +964,9 @@ module tb_pbe;
     reg_write(7'h1E, 8'h00);
 
     // ===== Test 6: two flag-using protocols at once (BUG-017) =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 6;
+`endif
     $display("Test 6: 1-Wire Search ROM (engine 0, pin 6) and I2C (engine 1, pins 4-5) at the same time");
     reg_write(7'h00, 8'b1100_0000);
     mb_en = 0;
@@ -1004,6 +1041,9 @@ module tb_pbe;
     i2c_en = 0;
 
     // ===== Test 7: SMBus PEC =====
+`ifdef PBE_SIGROK
+    sigrok_phase = 7;
+`endif
     $display("Test 7: SMBus PEC: I2C controller (engine 1) with its CRC unit as CRC-8 (poly 0x07)");
     begin
       logic [7:0] seen, ack, pec, lo, hi, st, c;

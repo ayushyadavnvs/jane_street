@@ -1,0 +1,4 @@
+usb_request-1: SETUP out: [ 00 09 01 00 00 00 00 00 ][ ] : ACK
+usb_request-1: SETUP in: [ 80 06 02 03 09 04 40 00 ][ ] : STALL
+usb_request-1: SETUP out: [ 40 01 00 00 00 00 03 00 ][ AA BB CC ] : ACK
+usb_request-1: SETUP in: [ C0 02 00 00 00 00 04 00 ][ CC BB AA 55 ] : ACK

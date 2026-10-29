@@ -1,0 +1,9 @@
+VCD info: dumpfile tb_proto_pins.vcd opened for output.
+Test 8: WS2812 LED driver (engine 0, pin 0) at 800 kbit/s
+  2 frames of 5 LEDs, every pulse within +/-150 ns of the datasheet
+Test 9: SPI peripheral (engine 0, pins 0..3), mode 0, SCLK 2 MHz
+  3 transactions: replies queued, default 0xFF, a pause inside a transaction
+Test 10: I2C target at 0x42 (engines 0 + 1, pins 0-1), fast mode controller
+  write 20 bytes, read 3 after a repeated START, ignore another device's transfer; hold >= 333 ns, setup >= 333 ns
+PASS
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_proto.sv:520: $finish called at 3839112431 (1ps)

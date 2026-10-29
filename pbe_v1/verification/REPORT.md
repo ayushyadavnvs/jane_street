@@ -85,3 +85,17 @@ line-coder safety; wider CRC vectors from the reveng catalogue; Verilator covera
 with coverage-directed generation for branches and simultaneous-event corners.
 The unmodified SPI programs support mode 0; testing modes 1–3 needs additional
 programs and is deliberately outside this no-design-change task.
+
+## Phase 2: external waveform decoding
+
+`make sigrok` captures external protocol pins with `PBE_SIGROK` and checks stock
+UART, SPI, I2C, 1-Wire, Modbus, WS2812 and USB decoder results: **22/22 pass**.
+The full USB request decoder has two reproducible disagreements on injected
+malformed traffic and lost-ACK retransmission; `make sigrok-full` exposes those
+as **22/24, nonzero exit**. Packet-level and isolated valid-request decoding
+agree. BUG-049 records the fixed capture extractor defect; BUG-050/051 retain
+unfixed decoder failures. See [PHASE2.md](PHASE2.md), with raw selected output
+and JSON receipts under `evidence/phase2/`.
+
+Install sigrok-cli separately; `SIGROK_CLI=/path/to/sigrok-cli` selects its binary.
+Normal `make test` needs no sigrok binary: only the extraction regression joins it.

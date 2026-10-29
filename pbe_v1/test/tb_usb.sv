@@ -34,6 +34,17 @@ module tb_usb;
       .ui_in, .uo_out, .uio_in(bus), .uio_out, .uio_oe, .ena(1'b1), .clk, .rst_n
   );
 
+  // Verification-only scalar pins and phase markers; disabled for normal tests.
+`ifdef PBE_SIGROK
+  integer sigrok_phase = 0;
+  wire p0 = bus[0], p1 = bus[1], p2 = bus[2], p3 = bus[3];
+  wire p4 = bus[4], p5 = bus[5], p6 = bus[6], p7 = bus[7];
+  initial begin
+    $dumpfile("tb_usb_pins.vcd");
+    $dumpvars(0, p0, p1, p2, p3, p4, p5, p6, p7, sigrok_phase);
+  end
+`endif
+
   `include "tb_host.svh"
 
   int contention = 0;
@@ -554,10 +565,12 @@ module tb_usb;
 
   // ---------------- the test ----------------
   initial begin
+`ifndef PBE_SIGROK
     if ($test$plusargs("vcd")) begin
       $dumpfile("tb_usb.vcd");
       $dumpvars(0, tb_usb);
     end
+`endif
     dev_desc = '{8'h12, 8'h01, 8'h10, 8'h01, 8'hFF, 8'h00, 8'h00, 8'h08, 8'h34, 8'h12,
                  8'h78, 8'h56, 8'h00, 8'h01, 8'h00, 8'h00, 8'h00, 8'h01};
     cfg_desc = '{8'h09, 8'h02, 8'h12, 8'h00, 8'h01, 8'h01, 8'h00, 8'h80, 8'h32,
@@ -575,6 +588,9 @@ module tb_usb;
       check(c == 16'h94DD && t == 16'h1000, $sformatf("testbench CRCs: %04x %04x", c, t));
     end
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 11;
+`endif
     $display("Test 11: USB low-speed device (engine 0, D- pin 0, D+ pin 1) enumerated by a host model");
     load_program("usb_image.hex");
     reg_write(7'h03, 8'h00);
@@ -617,6 +633,9 @@ module tb_usb;
     foreach (ctl_in[i]) if (i < 18) check(ctl_in[i] === dev_desc[i], $sformatf("USB: device descriptor byte %0d", i));
     $display("  GET_DESCRIPTOR(device) at address 0: 18 bytes in 3 packets");
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 110;
+`endif
     // a corrupted SETUP is not ACKed (the host model retries it), a stuffing error neither
     h_pct = -1.5;
     begin
@@ -664,6 +683,9 @@ module tb_usb;
       $display("  two records piled up while the firmware was busy: split apart from the end");
     end
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 111;
+`endif
     // SET_ADDRESS(0x15), then everything at the new address
     req = '{8'h00, 8'h05, 8'h15, 8'h00, 8'h00, 8'h00, 8'h00, 8'h00};
     ctl_write(0);
@@ -671,6 +693,9 @@ module tb_usb;
     dev_addr = 7'h15;
     $display("  SET_ADDRESS(0x15)");
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 112;
+`endif
     // tokens for the old address and with a bad CRC5 are ignored
     hs_token(8'h69, 0);
     hs_recv;
@@ -687,6 +712,9 @@ module tb_usb;
     end
     $display("  tokens for address 0 and with a bad CRC5: ignored");
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 113;
+`endif
     h_pct = 0;
     req = '{8'h80, 8'h06, 8'h00, 8'h01, 8'h00, 8'h00, 8'h12, 8'h00};
     ctl_read;
@@ -701,6 +729,9 @@ module tb_usb;
     foreach (ctl_in[i]) if (i < 18) check(ctl_in[i] === cfg_desc[i], $sformatf("USB: configuration byte %0d", i));
     $display("  GET_DESCRIPTOR(device, configuration 9 and 18 bytes) at the new address");
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 114;
+`endif
     hs_keepalive;
     hs_recv;
     check(!r_ok, "USB: device answered a keep-alive");
@@ -727,6 +758,9 @@ module tb_usb;
           "USB: vendor read did not return the written data");
     $display("  vendor write (OUT data) and read back");
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 115;
+`endif
     // the host's ACK for an IN data packet is lost (BUG-041): the firmware queues the same
     // packet again, and the device sends the same DATA1 packet when the host asks again
     begin
@@ -761,6 +795,9 @@ module tb_usb;
       $display("  a lost ACK: the firmware queued the packet again, the device resent the same DATA1");
     end
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 116;
+`endif
     // bus reset (BUG-042): 10 ms of SE0 puts the device back at address 0
     begin
       int resets0;

@@ -1,0 +1,294 @@
+{
+  "versions": "sigrok-cli 0.7.2\n\nLibraries and features:\n- libsigrok 0.5.2/5:1:1 (rt: 0.5.2/5:1:1).\n - Libs:\n  - glib 2.67.5 (rt: 2.72.4/7204:4)\n  - libzip 1.7.3\n  - libserialport 0.1.1/1:0:1 (rt: 0.1.1/1:0:1)\n  - libusb-1.0 1.0.25.11696 API 0x01000108\n  - hidapi 0.10.1\n  - bluez 5.56\n  - libftdi 1.5\n  - Host: x86_64-pc-linux-gnu, little-endian.\n  - SCPI backends: TCP, serial, USBTMC.\n- libsigrokdecode 0.5.3/6:1:2 (rt: 0.5.3/6:1:2).\n - Libs:\n  - glib 2.71.1 (rt: 2.72.4/7204:4)\n  - Python 3.10.2 / 0x30a02f0 (API 1013, ABI 3)\n  - Host: x86_64-pc-linux-gnu, little-endian.\n",
+  "checks": [
+    {
+      "check": "UART 480000 baud 8N1 bytes",
+      "status": "PASS",
+      "expected": "55a300ff0f80",
+      "actual": "55a300ff0f80"
+    },
+    {
+      "check": "spi_ctrl mosi bytes",
+      "status": "PASS",
+      "expected": "a55a7e",
+      "actual": "a55a7e"
+    },
+    {
+      "check": "spi_ctrl miso bytes",
+      "status": "PASS",
+      "expected": "3cc381",
+      "actual": "3cc381"
+    },
+    {
+      "check": "spi_periph mosi bytes",
+      "status": "PASS",
+      "expected": "11223344556061",
+      "actual": "11223344556061"
+    },
+    {
+      "check": "spi_periph miso bytes",
+      "status": "PASS",
+      "expected": "3ca5ff5ac3ffff",
+      "actual": "3ca5ff5ac3ffff"
+    },
+    {
+      "check": "i2c_ctrl data-write bytes",
+      "status": "PASS",
+      "expected": "10dead10",
+      "actual": "10dead10"
+    },
+    {
+      "check": "i2c_ctrl data-read bytes",
+      "status": "PASS",
+      "expected": "dead",
+      "actual": "dead"
+    },
+    {
+      "check": "i2c_target data-write bytes",
+      "status": "PASS",
+      "expected": "10deadbeef0135363738393a3b3c3d3e3f40414243117788",
+      "actual": "10deadbeef0135363738393a3b3c3d3e3f40414243117788"
+    },
+    {
+      "check": "i2c_target data-read bytes",
+      "status": "PASS",
+      "expected": "adbeef01",
+      "actual": "adbeef01"
+    },
+    {
+      "check": "1-Wire Read/Search/Match ROM IDs",
+      "status": "PASS",
+      "expected_substrings": [
+        "ROM: 0x2c000800003c5a28",
+        "ROM: 0x1b000800003c5b28"
+      ],
+      "missing": []
+    },
+    {
+      "check": "1-Wire powerup scratchpad",
+      "status": "PASS",
+      "expected_sequence": "be50054b467fff0c101c",
+      "actual": "be50054b467fff0c101c44be91014b467fff0c1070ffffffffffff44aa11223344556677881eb4"
+    },
+    {
+      "check": "1-Wire converted scratchpad",
+      "status": "PASS",
+      "expected_sequence": "be91014b467fff0c1070",
+      "actual": "be50054b467fff0c101c44be91014b467fff0c1070ffffffffffff44aa11223344556677881eb4"
+    },
+    {
+      "check": "1-Wire block with inverted CRC16",
+      "status": "PASS",
+      "expected_sequence": "aa11223344556677881eb4",
+      "actual": "be50054b467fff0c101c44be91014b467fff0c1070ffffffffffff44aa11223344556677881eb4"
+    },
+    {
+      "check": "Modbus 19200 baud 8E1 tx bytes",
+      "status": "PASS",
+      "expected": "010300000002c40b",
+      "actual": "010300000002c40b"
+    },
+    {
+      "check": "Modbus 19200 baud 8E1 rx bytes",
+      "status": "PASS",
+      "expected": "010304123456788107",
+      "actual": "010304123456788107"
+    },
+    {
+      "check": "Modbus stock decoder validates both CRC16 fields",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "check": "WS2812 two frames / ten GRB pixels",
+      "status": "PASS",
+      "expected": [
+        "#0100a5",
+        "#0210b4",
+        "#042087",
+        "#083096",
+        "#1040e1",
+        "#ff01a5",
+        "#cc11b4",
+        "#992187",
+        "#663196",
+        "#3341e1"
+      ],
+      "actual": [
+        "#0100a5",
+        "#0210b4",
+        "#042087",
+        "#083096",
+        "#1040e1",
+        "#ff01a5",
+        "#cc11b4",
+        "#992187",
+        "#663196",
+        "#3341e1"
+      ]
+    },
+    {
+      "check": "USB ten valid control requests: exact setup, data and handshake",
+      "status": "PASS",
+      "expected": [
+        [
+          "8006000100004000",
+          "12011001ff00000834127856000100000001",
+          "ACK"
+        ],
+        [
+          "0005150000000000",
+          "",
+          "ACK"
+        ],
+        [
+          "8006000100001200",
+          "12011001ff00000834127856000100000001",
+          "ACK"
+        ],
+        [
+          "8006000200000900",
+          "090212000101008032",
+          "ACK"
+        ],
+        [
+          "800600020000ff00",
+          "0902120001010080320904000000ff000000",
+          "ACK"
+        ],
+        [
+          "0009010000000000",
+          "",
+          "ACK"
+        ],
+        [
+          "8006020309044000",
+          "",
+          "STALL"
+        ],
+        [
+          "4001000000000300",
+          "aabbcc",
+          "ACK"
+        ],
+        [
+          "c002000000000400",
+          "ccbbaa55",
+          "ACK"
+        ],
+        [
+          "8006000100004000",
+          "12011001ff00000834127856000100000001",
+          "ACK"
+        ]
+      ],
+      "actual": [
+        [
+          "8006000100004000",
+          "12011001ff00000834127856000100000001",
+          "ACK"
+        ],
+        [
+          "0005150000000000",
+          "",
+          "ACK"
+        ],
+        [
+          "8006000100001200",
+          "12011001ff00000834127856000100000001",
+          "ACK"
+        ],
+        [
+          "8006000200000900",
+          "090212000101008032",
+          "ACK"
+        ],
+        [
+          "800600020000ff00",
+          "0902120001010080320904000000ff000000",
+          "ACK"
+        ],
+        [
+          "0009010000000000",
+          "",
+          "ACK"
+        ],
+        [
+          "8006020309044000",
+          "",
+          "STALL"
+        ],
+        [
+          "4001000000000300",
+          "aabbcc",
+          "ACK"
+        ],
+        [
+          "c002000000000400",
+          "ccbbaa55",
+          "ACK"
+        ],
+        [
+          "8006000100004000",
+          "12011001ff00000834127856000100000001",
+          "ACK"
+        ]
+      ]
+    },
+    {
+      "check": "USB valid windows have no request decoder state errors",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "check": "USB full trace SET_ADDRESS reconstruction (known stock decoder disagreement)",
+      "status": "FAIL",
+      "expected_substrings": [
+        "00 05 15 00 00 00 00 00"
+      ],
+      "missing": [
+        "00 05 15 00 00 00 00 00"
+      ]
+    },
+    {
+      "check": "USB lost ACK descriptor lengths (known stock decoder disagreement)",
+      "status": "FAIL",
+      "expected": [
+        18,
+        18
+      ],
+      "actual": [
+        18,
+        26
+      ]
+    },
+    {
+      "check": "USB packet decoder SET_ADDRESS and vendor payload",
+      "status": "PASS",
+      "expected_substrings": [
+        "DATA0 [ 00 05 15 00 00 00 00 00 ]",
+        "DATA1 [ CC BB AA 55 ]"
+      ],
+      "missing": []
+    },
+    {
+      "check": "USB packet decoder sees identical DATA1 retransmission",
+      "status": "PASS",
+      "expected_substrings": [
+        "DATA1 [ 12 01 10 01 FF 00 00 08 ]\nusb_packet-1: DATA1 [ 12 01 10 01 FF 00 00 08 ]"
+      ],
+      "missing": []
+    },
+    {
+      "check": "USB injected bad CRC5/CRC16 are visible independently",
+      "status": "PASS",
+      "expected_substrings": [
+        "CRC5 ERROR",
+        "CRC16 ERROR"
+      ],
+      "missing": []
+    }
+  ]
+}
