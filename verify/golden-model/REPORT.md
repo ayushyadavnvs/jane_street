@@ -1,6 +1,7 @@
 # PBE verification report — 2026-10-29
 
-Source baseline: `ea28f91` on `verify/golden-model`. Verification-only changes;
+Source baseline: `ea28f91` on the `verify/golden-model` branch (since merged; the files now
+live in this directory, `verify/golden-model/`). Verification-only changes;
 `src/`, protocol programs and workflow triggers are unchanged. No GDS, physical,
 synthesis or gate-level flow was invoked. Phase commits are deliberately separate.
 
@@ -8,7 +9,7 @@ synthesis or gate-level flow was invoked. Phase commits are deliberately separat
 
 ```sh
 python3 -m venv ../.venv
-../.venv/bin/python -m pip install -r test/differential/requirements.txt
+../.venv/bin/python -m pip install -r ../verify/golden-model/differential/requirements.txt
 make test                          # existing SV tests, model units, two-seed smoke
 make diff N=1000 SEED=0x504245      # long random top-level campaign
 make diff N=3 CYCLES=2000 SEED=0x504245 # saved model regression
@@ -20,7 +21,7 @@ Run these inside `pbe_v1/`, with `iverilog` and `vvp` in PATH. `PYTHON=...` can
 select an explicit interpreter; the Makefile detects the checkout's `.venv`.
 All cocotb runners inspect XML and return nonzero on failed or absent tests.
 Generated diagnostics live in `pbe_v1/build/` (ignored); selected result summaries
-are committed under `verification/`.
+are committed under `verify/golden-model/evidence/`.
 
 ## Phase 1: independent executable specification
 
@@ -30,7 +31,7 @@ SPI framing/pipeline, register reads/writes, two synchronized input stages, two
 engines, four 16-byte FIFOs, sticky IRQ/status, wraparound FLAG_BASE mappings,
 clear priority and per-pin ownership. It never reads RTL state to set predictions.
 
-`test/differential/run.py` loads programs and configurations through the host SPI
+`differential/run.py` loads programs and configurations through the host SPI
 pins and compares all three output buses every clock. The test initialises program
 memory to NOP before reset to define otherwise unspecified stopped-engine fetches;
 all program writes under test are through SPI. FIFO memory remains unreset.
@@ -102,7 +103,7 @@ Normal `make test` needs no sigrok binary: only the extraction regression joins 
 
 ## Phase 3: third-party pin-only bus tests
 
-Install `test/bus_models/requirements.txt`, then run:
+Install `bus_models/requirements.txt` (in this directory), then run from `pbe_v1/`:
 
 ```sh
 make test-buses CASES=3 BUS_SEED=20261029
@@ -113,7 +114,7 @@ Six endpoints (UART TX/RX, SPI controller/peripheral, I2C controller/target) pas
 and ±1% external clock error where applicable. The final SPI-gap rerun and six-test
 smoke pass too. SPI modes 1–3 explicitly report unsupported because the unchanged
 programs implement mode 0. [PHASE3.md](PHASE3.md) and
-[test results](../test/bus_models/results.json) detail settings and limitations.
+[test results](bus_models/results.json) detail settings and limitations.
 
 BUG-052/053 document local adapters for cocotbext-spi compatibility and I2C master
 stretch sampling. Stock failures remain reproducible; installed libraries are

@@ -25,6 +25,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install verification dependencies
-        run: python -m pip install -r pbe_v1/test/differential/requirements.txt
+        run: python -m pip install -r verify/golden-model/differential/requirements.txt
       - name: Run the test suite
         run: cd pbe_v1 && make test

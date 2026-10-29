@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location('sigrok_verify', Path(__file__).parents[1]/'tools'/'sigrok_verify.py')
+spec = importlib.util.spec_from_file_location('sigrok_verify', Path(__file__).parent/'sigrok_verify.py')
 sigrok_verify = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sigrok_verify)
 

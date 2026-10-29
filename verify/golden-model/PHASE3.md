@@ -12,8 +12,8 @@ From the repository root, with `iverilog` and `vvp` on `PATH`:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -r pbe_v1/test/bus_models/requirements.txt
-.venv/bin/python pbe_v1/test/bus_models/run.py --seed 20261029 --cases 3
+.venv/bin/python -m pip install -r verify/golden-model/bus_models/requirements.txt
+.venv/bin/python verify/golden-model/bus_models/run.py --seed 20261029 --cases 3
 ```
 
 `--test uart_tx`, `uart_rx`, `spi_controller`, `spi_peripheral`,
@@ -154,7 +154,7 @@ cocotb-bus 0.3.0; find_libpython 0.5.1; scapy 2.8.0.
 Default seed `20261029`, 3 cases per endpoint: **6 tests, 18 cases passed**;
 21.09738366 ms simulation in 59.27 s wall time. The later SPI spacing
 randomization is checked by a separate three-case SPI-peripheral rerun; see
-`pbe_v1/test/bus_models/results.json` for its recorded status and the expected-failure
+`verify/golden-model/bus_models/results.json` for its recorded status and the expected-failure
 regressions. These times are observations on this host, not CI runtime promises.
 The final source also passes all six endpoint tests with `--cases 1` in 19.61 s;
 the build directory is left with that successful `results.xml`.
@@ -170,4 +170,4 @@ and line coder invariants, catalogue-grounded CRC vectors, and Verilator coverag
 Final-source confirmation: `make test-buses CASES=3 BUS_SEED=20261029` passed
 all six tests / 18 cases, including the final randomized SPI gaps, in 61.18 s
 (command wall time), with 21.32120333 ms simulated. See
-`verification/evidence/phase3/results.json` for settings and summary.
+`verify/golden-model/evidence/phase3/results.json` for settings and summary.

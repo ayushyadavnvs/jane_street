@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3] / 'pbe_v1'  # the design
 SRC = [ROOT / 'src' / (x + '.sv') for x in
        ('pbe_fifo', 'pbe_host_spi', 'pbe_crc', 'pbe_line', 'pbe_engine', 'tt_um_pbe')]
 

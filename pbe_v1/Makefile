@@ -138,41 +138,43 @@ timing:
 	@grep -o 'Delay = *[0-9.]* ps' synth/timing.log | tail -1
 	@grep -o 'Start-point = .*' synth/timing.log | tail -1
 
-# Verification only. Install test/differential/requirements.txt into a virtual environment.
-PYTHON ?= $(if $(wildcard ../.venv/bin/python),../.venv/bin/python,python3)
+# Verification only (the golden model, sigrok decoding and bus models live in
+# ../verify/golden-model). Install its differential/requirements.txt into a virtual environment.
+GM := ../verify/golden-model
+PYTHON ?= $(if $(wildcard ../.venv/bin/python),$(abspath ../.venv/bin/python),python3)
 N ?= 1000
 SEED ?= 0x504245
 CYCLES ?= 1200
 .PHONY: diff test-model
 
 diff:
-	$(PYTHON) test/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES)
+	$(PYTHON) $(GM)/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES)
 
 test-model:
-	$(PYTHON) -m unittest discover -s model -p 'test_*.py' -v
+	cd $(GM) && $(PYTHON) -m unittest discover -s model -p 'test_*.py' -v
 
 .PHONY: diff-line
 diff-line:
-	$(PYTHON) model/check_line_model.py
+	$(PYTHON) $(GM)/model/check_line_model.py
 
 .PHONY: diff-engine-line
 diff-engine-line:
-	$(PYTHON) model/check_engine_line_model.py
+	$(PYTHON) $(GM)/model/check_engine_line_model.py
 
 SIGROK_CLI ?= sigrok-cli
 .PHONY: sigrok sigrok-full test-sigrok-extract
 sigrok:
-	$(PYTHON) tools/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)"
+	$(PYTHON) $(GM)/sigrok/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)"
 
 # A strict comparison: libsigrokdecode 0.5.3 intentionally returns nonzero here.
 sigrok-full:
-	$(PYTHON) tools/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)" --full-usb-request
+	$(PYTHON) $(GM)/sigrok/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)" --full-usb-request
 
 test-sigrok-extract:
-	$(PYTHON) -m unittest discover -s test -p test_sigrok_extract.py -v
+	$(PYTHON) -m unittest discover -s $(GM)/sigrok -p test_sigrok_extract.py -v
 
 BUS_SEED ?= 20261029
 CASES ?= 3
 .PHONY: test-buses
 test-buses:
-	$(PYTHON) test/bus_models/run.py --seed $(BUS_SEED) --cases $(CASES)
+	$(PYTHON) $(GM)/bus_models/run.py --seed $(BUS_SEED) --cases $(CASES)

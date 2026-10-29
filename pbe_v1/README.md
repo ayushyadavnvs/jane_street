@@ -349,7 +349,7 @@ ends the frame (3.5 characters in all), a start bit makes the frame invalid.
 
 The executable Python specification and cocotb 2 differential tests compare the
 unchanged RTL every clock, with reproducible seeds and saved failure diagnostics.
-Install `test/differential/requirements.txt` in a virtual environment first.
+Install `../verify/golden-model/differential/requirements.txt` in a virtual environment first.
 
 ```sh
 make test                         # includes model units and a short fixed-seed run
@@ -358,17 +358,17 @@ make diff-line                    # NRZ/NRZI/stuffing/pair/byte line oracle
 make diff-engine-line             # engine + coder + CRC composition
 ```
 
-See [verification/REPORT.md](verification/REPORT.md) for the approach, recorded
+See [verify/golden-model/REPORT.md](../verify/golden-model/REPORT.md) for the approach, recorded
 coverage, exact tools, bug records and additional decoder/bus test commands.
 These targets run behavioral simulation only and invoke no physical-design flow.
 
 ```sh
 make sigrok                       # stock waveform decoders; needs sigrok-cli
 make sigrok-full                  # strict full-USB request checks (known decoder failures)
-make test-buses CASES=3 BUS_SEED=20261029 # requires test/bus_models/requirements.txt
+make test-buses CASES=3 BUS_SEED=20261029 # requires ../verify/golden-model/bus_models/requirements.txt
 ```
 
 The bus models use the unmodified UART/SPI/I2C programs through external pins.
 Their documented compatibility adapters and unsupported SPI modes are described
-in [verification/PHASE3.md](verification/PHASE3.md); decoder disagreements are
-preserved in [verification/PHASE2.md](verification/PHASE2.md).
+in [verify/golden-model/PHASE3.md](../verify/golden-model/PHASE3.md); decoder disagreements are
+preserved in [verify/golden-model/PHASE2.md](../verify/golden-model/PHASE2.md).

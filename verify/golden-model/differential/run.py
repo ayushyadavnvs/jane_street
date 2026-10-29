@@ -7,7 +7,8 @@ import sys
 import xml.etree.ElementTree as ET
 from cocotb_tools.runner import get_runner
 
-PBE = Path(__file__).resolve().parents[2]
+GM = Path(__file__).resolve().parents[1]   # verify/golden-model (holds the model package)
+PBE = GM.parents[1] / 'pbe_v1'              # the design
 
 def main():
     p=argparse.ArgumentParser()
@@ -18,7 +19,7 @@ def main():
     a=p.parse_args()
     if a.n < 1 or a.cycles < 1: p.error('n and cycles must be positive')
     os.environ.update(PBE_N=str(a.n),PBE_SEED=str(a.seed),PBE_CYCLES=str(a.cycles))
-    sys.path[:0]=[str(PBE),str(Path(__file__).parent)]
+    sys.path[:0]=[str(GM),str(Path(__file__).parent)]
     r=get_runner('icarus')
     r.build(sources=list((PBE/'src').glob('*.sv')),hdl_toplevel='tt_um_ayushyadavnvs_pbe',
             build_dir=PBE/'build'/'differential',build_args=['-g2012'],timescale=('1ps','1ps'))

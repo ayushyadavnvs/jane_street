@@ -9,12 +9,12 @@ With Icarus Verilog 12, Python 3 and sigrok-cli on PATH:
 
 ```sh
 cd pbe_v1
-python3 tools/sigrok_verify.py
+python3 ../verify/golden-model/sigrok/sigrok_verify.py
 # Reuse captures produced with -DPBE_SIGROK:
-python3 tools/sigrok_verify.py --vcd-dir test --output /tmp/pbe-sigrok-valid
+python3 ../verify/golden-model/sigrok/sigrok_verify.py --vcd-dir test --output /tmp/pbe-sigrok-valid
 # Deliberately expose the stock USB request decoder's two disagreements:
-python3 tools/sigrok_verify.py --vcd-dir test --output /tmp/pbe-sigrok-full --full-usb-request
-python3 -m unittest discover -s test -p test_sigrok_extract.py
+python3 ../verify/golden-model/sigrok/sigrok_verify.py --vcd-dir test --output /tmp/pbe-sigrok-full --full-usb-request
+python3 -m unittest discover -s ../verify/golden-model/sigrok -p test_sigrok_extract.py
 ```
 
 `--sigrok-cli /absolute/path/sigrok-cli` or `SIGROK_CLI` selects the decoder binary.
@@ -27,7 +27,7 @@ known discrepancies are actual failed comparisons, not converted to passes.
 Artifacts include the exact subprocess arguments, stdout/stderr, compact and
 cropped VCDs, capture hashes, phase boundaries, tool versions and JSON comparison
 results. The default output directory is `test/sigrok_results/`. The checked-in
-`verification/evidence/phase2/` files are the dated execution receipt; fresh runs
+`verify/golden-model/evidence/phase2/` files are the dated execution receipt; fresh runs
 produce their own artifacts. Waveforms remain generated artifacts.
 
 ## Capture and independence

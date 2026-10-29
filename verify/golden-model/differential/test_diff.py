@@ -13,7 +13,7 @@ import cocotb
 from cocotb.triggers import Timer
 from model.top_model import PBEModel
 
-ROOT=Path(__file__).resolve().parents[2]
+ROOT=Path(__file__).resolve().parents[3]/'pbe_v1'
 
 
 def word(op,arg=0,dly=0): return op << 13 | (arg & 511) << 4 | dly

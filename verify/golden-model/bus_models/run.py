@@ -32,7 +32,7 @@ def main():
     sources = [ROOT/'src'/name for name in (
         'pbe_fifo.sv', 'pbe_host_spi.sv', 'pbe_crc.sv', 'pbe_line.sv',
         'pbe_engine.sv', 'tt_um_pbe.sv')]
-    build = ROOT/'pbe_v1/test/bus_models/sim_build'
+    build = HERE/'sim_build'
     runner.build(sources=sources+[HERE/'bus_top.sv'], hdl_toplevel='bus_top',
                  build_dir=build, build_args=['-g2012'], timescale=('1ns','1ps'))
     (build/'results.xml').unlink(missing_ok=True)

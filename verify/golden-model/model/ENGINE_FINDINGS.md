@@ -55,7 +55,7 @@ These are two initial catalogue checks, not an exhaustive CRC catalogue sweep.
 
 ## Line differential result
 
-`python model/check_line_model.py` uses cocotb 2.0.1 and Icarus 12.0, with an even
+`python verify/golden-model/model/check_line_model.py` uses cocotb 2.0.1 and Icarus 12.0, with an even
 20,832 ps full clock period and 1 ps simulation precision. The fixed seed is
 `0x504245`. The initial completed run compared 80,160 clocks (9.14 seconds),
 covering all 160 products of NRZ/NRZI, four stuffing modes, pair/no-pair,
@@ -64,7 +64,7 @@ frame ends, input pin changes and receive consumption vary reproducibly.
 Drive, both output levels, readiness, received-valid/data, frame-end and error
 are compared every clock. No RTL disagreement was observed in that run.
 
-`python model/check_engine_line_model.py` exercises the engine/coder composition,
+`python verify/golden-model/model/check_engine_line_model.py` exercises the engine/coder composition,
 CRC byte feed, random programs, pins/flags/FIFO interfaces, timeout settings,
 host clears, restarts, stopped cycles and program writes. Its completed run
 matched 64,064 clocks (16.28 seconds), with fixed seed `0x454c494e45` across 64
@@ -95,7 +95,7 @@ if not tests or failures:
     raise SystemExit(f'line model differential failed: {failures}/{tests} failures')
 ```
 
-Regression: `PBE_LINE_INJECT_FAILURE=1 python model/check_line_model.py` deliberately
+Regression: `PBE_LINE_INJECT_FAILURE=1 python verify/golden-model/model/check_line_model.py` deliberately
 fails in the simulator and must return nonzero. The ordinary invocation must
 pass. An explicit `timescale=('1ns', '1ps')` fixes the original precision error.
 This is an infrastructure mutation check, not a discovered RTL bug or failing

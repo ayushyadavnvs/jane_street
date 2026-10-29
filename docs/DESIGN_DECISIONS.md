@@ -1133,7 +1133,7 @@ clean (0 design violations).
   differential campaign, so failures can be localized before engine integration.
 - **Reproducibility:** `make diff N=1000 SEED=0x504245` runs consecutive seeds, logs the first
   mismatching clock/PC/instruction and both states, and writes coverage plus a failure JSON.
-  Saved model/tool regression seeds live in `test/differential/regressions.json`. The short
+  Saved model/tool regression seeds live in `verify/golden-model/differential/regressions.json`. The short
   fixed-seed smoke is part of `make test`; extensive campaigns remain explicit targets.
 - **Failure policy:** disagreements are classified as RTL, model, tool or underspecified
   text. Record before/after evidence and reproductions in `BUG_LOG.md`. Unfixed external-tool
@@ -1143,7 +1143,7 @@ clean (0 design violations).
 - **Parallel work:** separate agents own the engine/line model, sigrok tests, and third-party
   bus tests; the coordinator owns the top-level model, integration and phase commits. Shared
   source is inspected, and only verification files and the three VCD testbench opt-ins change.
-- **Tools, results and limits:** see `pbe_v1/verification/REPORT.md` and phase-specific reports
+- **Tools, results and limits:** see `verify/golden-model/REPORT.md` and phase-specific reports
   for exact versions, commands, measured coverage and decoder/library limitations. Evidence
   here is behavioral simulation only; it makes no new routed timing, silicon or board claim.
 
@@ -1164,7 +1164,7 @@ clean (0 design violations).
   failures (BUG-050/051). Neither those failures nor window selection changes RTL.
 - **Results:** 22/22 primary checks pass from fresh simulations; strict full-request
   comparison is 22/24 on libsigrokdecode 0.5.3. Versions, commands and boundaries
-  are in `pbe_v1/verification/PHASE2.md` and its checked-in evidence.
+  are in `verify/golden-model/PHASE2.md` and its checked-in evidence.
 
 ## D53. Third-party bus endpoints attach only to chip pins
 
@@ -1190,12 +1190,12 @@ clean (0 design violations).
   tests legitimate target clock stretching.
 - **Evidence:** six endpoints, 18 randomized cases pass; final randomized SPI gap
   rerun and six-endpoint smoke also pass. Full settings, versions, limits and
-  reproducible bugs are in `pbe_v1/verification/PHASE3.md` and bus `results.json`.
+  reproducible bugs are in `verify/golden-model/PHASE3.md` and bus `results.json`.
 
 ## D54. Bootstrap Python verification dependencies in GitHub regression
 
 - **Decision:** the existing regression workflow selects Python 3.11 and installs
-  `pbe_v1/test/differential/requirements.txt` before the expanded `make test`.
+  `verify/golden-model/differential/requirements.txt` before the expanded `make test`.
   The new model and differential smoke remain mandatory, with failures propagated.
 - **Alternative:** silently skipping the differential test when cocotb is absent
   would make local and CI verification differ and could produce misleading passes.
@@ -1272,3 +1272,22 @@ clean (0 design violations).
 - **To decide it:** a `gds` run by hand with `sram/flow.patch` (steps in
   `docs/SRAM_INVESTIGATION.md` §4), and the organisers' confirmation that a macro is accepted.
   When adopted, mark D4, D45 and D50 **Changed**.
+
+## D56. Independent verification lives in `verify/golden-model/`
+
+- **Chosen:** the golden model and everything that checks the design against outside
+  references sit in one top-level directory, `verify/golden-model/`: the Python model
+  (`model/`), the random differential harness (`differential/`), sigrok decoding (`sigrok/`), the
+  third-party bus models (`bus_models/`), the reports and the recorded evidence. Before this they
+  were spread over `pbe_v1/model`, `pbe_v1/test/differential`, `pbe_v1/test/bus_models`,
+  `pbe_v1/tools/sigrok_verify.py`, `pbe_v1/test/test_sigrok_extract.py` and `pbe_v1/verification`
+  (D51-D54). The owner asked for one place.
+- **Why:** one place to look for the independent checks, separate from the design's own
+  testbenches in `pbe_v1/test`. A reviewer can see which checks come from us and which come
+  from references we did not write. The make targets stay in `pbe_v1/Makefile` (`GM` points at the
+  directory), so the commands in the reports are unchanged.
+- **Alternatives:** `pbe_v1/verify/`: everything verification-related would stay under the
+  design's home, but the independent checks would be harder to find. Leaving the files where they
+  were: no move, but no clear split between our tests and the independent ones.
+- Recorded evidence (`evidence/`, `bus_models/results.json`) keeps the commands as they were run,
+  with the old paths: it is a dated record, not instructions.

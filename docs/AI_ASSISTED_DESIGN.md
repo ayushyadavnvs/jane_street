@@ -41,7 +41,7 @@ design. The repository shows that this work is separate, but it does not name th
 
 - the four commits `07f824d`, `aaa85b0`, `e2674a1` and `2d62b89` (phases 1–3 and the CI
   dependency) have a different author identity and time zone and no `Claude-Session` trailer;
-- `pbe_v1/verification/REPORT.md` gives the baseline as "`ea28f91` on `verify/golden-model`".
+- `verify/golden-model/REPORT.md` gives the baseline as "`ea28f91` on `verify/golden-model`".
   That branch was not pushed: its commits arrived on `main` directly, and `git ls-remote` shows
   no `verify/golden-model`;
 - D51 sets the rule: "no instruction, register, protocol program, or RTL behavior is changed".
@@ -52,7 +52,7 @@ design. The repository shows that this work is separate, but it does not name th
 The verification agent built its oracle from the written contract: the header comments of
 `src/pbe_engine.sv`, `src/tt_um_pbe.sv`, `src/pbe_crc.sv` and `src/pbe_line.sv`, the README and
 D50. It did not read the RTL's internal state to make its predictions (D51,
-`pbe_v1/model/ENGINE_FINDINGS.md`). This is the point of using a second vendor: an oracle
+`verify/golden-model/model/ENGINE_FINDINGS.md`). This is the point of using a second vendor: an oracle
 written by the same agent from the same reading would share that agent's mistakes.
 
 ## 2. The rules that keep AI work honest
@@ -101,7 +101,7 @@ simulators, synthesis, lint, CI configuration and third-party libraries or decod
 BUG-050 and BUG-051 are unfixed bugs in the stock sigrok USB request decoder. They stay as a
 strict check that is expected to fail (`make sigrok-full`). BUG-024, BUG-035 and BUG-045 are
 simulator or lint limits that were worked around. No independent check (phases 1–3) found an RTL
-bug in its finite runs (`pbe_v1/verification/REPORT.md`).
+bug in its finite runs (`verify/golden-model/REPORT.md`).
 
 ### 2.2 Representative entries: the AI's own mistakes, caught by the process
 
@@ -162,8 +162,8 @@ change). All three groups below are on `main`. "In CI" means the `regression` wo
 | Hand mutation checks | Features broken on purpose to show that a test fails, as listed in D34–D37, D42, D50 and `pbe_v1/README.md` (Status). Two of these exposed weak tests (BUG-004, BUG-026) | the same tests |
 | Testbench lint | `make test` fails on Icarus's static-initializer warning (BUG-023) | `pbe_v1/Makefile` `LINT` |
 | Verilator lint | `--lint-only -Wall` on the whole RTL (D46, BUG-045) | `regression.yaml` |
-| Python executable specification, unit tests | `make test-model`: 20 unit tests, engine, line coder, top level and FIFOs (REPORT.md) | `pbe_v1/model` |
-| Random differential smoke | `make diff N=2 CYCLES=600 SEED=0x504245`: random programs, host traffic and pin stimulus compared with the RTL every clock | `pbe_v1/test/differential` |
+| Python executable specification, unit tests | `make test-model`: 20 unit tests, engine, line coder, top level and FIFOs (REPORT.md) | `verify/golden-model/model` |
+| Random differential smoke | `make diff N=2 CYCLES=600 SEED=0x504245`: random programs, host traffic and pin stimulus compared with the RTL every clock | `verify/golden-model/differential` |
 | Capture-extraction regression | `make test-sigrok-extract` (BUG-049); needs no sigrok binary | `pbe_v1/test/test_sigrok_extract.py` |
 
 ### 3.2 On `main`, run by hand
@@ -244,14 +244,14 @@ From the repository root, with `iverilog`/`vvp` (12.0) and Python 3 on `PATH`:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -r pbe_v1/test/differential/requirements.txt   # cocotb 2.0.1
+.venv/bin/pip install -r verify/golden-model/differential/requirements.txt   # cocotb 2.0.1
 cd pbe_v1
 make test                                  # lint, 7 testbenches, model unit tests, extraction test, 2-seed smoke
 make diff N=32 SEED=0x504245 CYCLES=2000    # a longer differential campaign
 make diff-line && make diff-engine-line     # line coder, engine + coder + CRC
 make sigrok SIGROK_CLI=/path/to/sigrok-cli  # stock decoders; needs sigrok-cli
 make sigrok-full SIGROK_CLI=/path/to/sigrok-cli   # strict USB request check; expected to fail (BUG-050/051)
-../.venv/bin/pip install -r test/bus_models/requirements.txt
+../.venv/bin/pip install -r ../verify/golden-model/bus_models/requirements.txt
 make test-buses CASES=3 BUS_SEED=20261029   # third-party bus models
 make synth && make timing                   # area and logic-only timing estimates (D22)
 cd ../test && make                          # Tiny Tapeout cocotb test on the RTL
