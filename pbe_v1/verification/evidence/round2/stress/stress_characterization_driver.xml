@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1346520372" />
+    <testcase name="pin_stress" classname="test_stress" file="/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/stress/test_stress.py" lineno="83" time="115.17750525474548" sim_time_ns="28648760.481" ratio_time="248735.72680390754" />
+  </testsuite>
+</testsuites>

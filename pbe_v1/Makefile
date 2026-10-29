@@ -182,3 +182,15 @@ coverage:
 
 test-coverage-tools:
 	$(PYTHON) -m unittest discover -s coverage -p test_harness.py -v
+
+# Optional finite robustness campaign; characterization retains adverse FAIL labels.
+STRESS_SEED ?= 0x50424534
+.PHONY: stress stress-characterize stress-strict
+stress:
+	$(PYTHON) test/stress/run.py --seed $(STRESS_SEED) --required-only
+
+stress-characterize:
+	$(PYTHON) test/stress/run.py --seed $(STRESS_SEED) --characterize
+
+stress-strict:
+	$(PYTHON) test/stress/run.py --seed $(STRESS_SEED)

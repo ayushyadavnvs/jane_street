@@ -1,0 +1,10 @@
+[
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+  "/tmp/pbe_stress_diff_8mc0ka5b/pbe_v1/test/differential/run.py",
+  "--n",
+  "8",
+  "--cycles",
+  "5000",
+  "--seed",
+  "0x50424534"
+]

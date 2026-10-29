@@ -1,0 +1,39 @@
+{
+  "baseline": "2d62b89",
+  "sources": {
+    "src/pbe_crc.sv": {
+      "lexical_tokens_equal": true,
+      "baseline_sha256": "3b25526d688495d7aac6baa14f217fbf550dbbbf13250449dbde250260e8fc55",
+      "current_sha256": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f"
+    },
+    "src/pbe_engine.sv": {
+      "lexical_tokens_equal": true,
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "current_sha256": "68cbdbde6d69ef637d773a6fdadde14cc6fbedaf477c8348944c1c79cb27d99b"
+    },
+    "src/pbe_fifo.sv": {
+      "lexical_tokens_equal": true,
+      "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+      "current_sha256": "0dab5b2937704a236f43f8972991446d4e0dfa10894e86b1ef87d8cd3acf8898"
+    },
+    "src/pbe_host_spi.sv": {
+      "lexical_tokens_equal": true,
+      "baseline_sha256": "bccde5257da39f04b635086c6bc5c3ca1230b5293423aefc2c41fd625cd6b74b",
+      "current_sha256": "e797259e321c4344bad7d541ed13953f1fcd5361411b0620ad636f62d8841d94"
+    },
+    "src/pbe_line.sv": {
+      "lexical_tokens_equal": true,
+      "baseline_sha256": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+      "current_sha256": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+    },
+    "src/tt_um_pbe.sv": {
+      "lexical_tokens_equal": true,
+      "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+      "current_sha256": "d9e7c849262c8d242438654c108f8d9c7ba5a0372777ad1ef3d3e95cef98a0e9"
+    }
+  },
+  "programs_unchanged": true,
+  "workflows_unchanged": true,
+  "physical_flow_invoked": false,
+  "method": "Compared comment/string-aware lexical tokens to baseline. This checks source text preservation, not a synthesis equivalence proof."
+}

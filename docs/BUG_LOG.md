@@ -1916,3 +1916,34 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   runtime JSON/XML/logs, old receipts, and before/after comparison results are
   under `evidence/round2/python_runtime/`. Raw banner logs remain unchanged.
   No RTL, stimulus, comparison or verification result changed.
+
+## BUG-070 — Evidence launcher resolved the virtualenv interpreter into system Python (tool, fixed)
+
+- **Where:** the ad hoc Phase4 stress evidence-export/exit-reevaluation invocation.
+  Actual simulator runs had already used the correct virtualenv launcher; this
+  defect did not alter RTL, stimulus or recorded protocol outcomes.
+- **Before:**
+  ```python
+  command = [str(Path(sys.executable).resolve()),
+             'pbe_v1/test/stress/run.py', '--check-results', observations, *flags]
+  ```
+  Resolving the virtualenv symlink selected `/usr/bin/python3.10` and omitted
+  virtualenv packages. All three reevaluations exited 1 with
+  `ModuleNotFoundError: No module named 'cocotb_tools'`, including the required-only
+  and characterization cases that should complete successfully. Those are
+  environment-launch failures, not newly discovered DUT stress failures.
+- **After:** preserve the virtualenv interpreter path:
+  ```python
+  command = [sys.executable,
+             'pbe_v1/test/stress/run.py', '--check-results', observations, *flags]
+  ```
+- **Fail-before/pass-after:** repeat the identical saved 33-case evidence checks
+  with flags `[]`, `['--required-only']` and `['--characterize']`. The before
+  launcher fails the expected-exit regression with `[1, 1, 1]` and missing-module
+  stderr. The corrected launcher yields `[1, 0, 0]`: strict retains the five
+  adverse observations, required-only checks all 22 passing required cases, and
+  characterization completes while preserving five FAIL labels. Exact commands,
+  stdout/stderr and exit codes are in
+  `pbe_v1/verification/evidence/round2/stress/stress_bug070_before_launcher.json`
+  and `stress_exit_checks.json`. No dependency reinstall or failure waiver was
+  used; the code change concerns the evidence-export invocation only.

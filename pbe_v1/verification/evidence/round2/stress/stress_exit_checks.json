@@ -1,0 +1,37 @@
+[
+  {
+    "command": [
+      "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+      "pbe_v1/test/stress/run.py",
+      "--check-results",
+      "pbe_v1/build/stress/observations.json"
+    ],
+    "exit": 1,
+    "stdout": "{\n  \"cases\": 33,\n  \"passed\": 28,\n  \"failed\": 5,\n  \"failed_cases\": [\n    \"uart_rx_data_glitch_1clock\",\n    \"uart_rx_clock_-6%\",\n    \"uart_rx_clock_+6%\",\n    \"uart_rx_clock_-8%\",\n    \"uart_rx_clock_+8%\"\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+      "pbe_v1/test/stress/run.py",
+      "--check-results",
+      "pbe_v1/build/stress/observations.json",
+      "--required-only"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"cases\": 22,\n  \"passed\": 22,\n  \"failed\": 0,\n  \"failed_cases\": []\n}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+      "pbe_v1/test/stress/run.py",
+      "--check-results",
+      "pbe_v1/build/stress/observations.json",
+      "--characterize"
+    ],
+    "exit": 0,
+    "stdout": "{\n  \"cases\": 33,\n  \"passed\": 28,\n  \"failed\": 5,\n  \"failed_cases\": [\n    \"uart_rx_data_glitch_1clock\",\n    \"uart_rx_clock_-6%\",\n    \"uart_rx_clock_+6%\",\n    \"uart_rx_clock_-8%\",\n    \"uart_rx_clock_+8%\"\n  ]\n}\n",
+    "stderr": ""
+  }
+]

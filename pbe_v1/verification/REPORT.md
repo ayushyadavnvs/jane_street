@@ -69,7 +69,9 @@ branch/toggle coverage, and a finite seed campaign does not prove correctness.
 
 ## Tools
 
-- Python 3.10.14; Icarus Verilog/vvp 12.0 (stable).
+- Python startup banner reported 3.10.14; that historical runtime was not independently
+  probed. Round-2 launcher and embedded probes measure 3.10.12 (BUG-073).
+  Icarus Verilog/vvp 12.0 (stable).
 - cocotb 2.0.1, find_libpython 0.5.1.
 - Stock sigrok and third-party bus library versions/results are in the phase reports.
 - No external dependency is installed automatically by a test target.
@@ -188,6 +190,36 @@ separately. Physical-design/GDS/gate-level workflows remain untouched.
 - Run `make test`, long `make mutate`, `make sigrok`, strict `make sigrok-full`,
   or `python tools/usb_decoder_repro.py --decoder /path/to/usb_request/pd.py`.
   Long audits remain separate from the default gate.
+
+Mutation table from the initial campaign (the separate one-seed diff column
+keeps its original blind spots; M21 was caught by the added boundary rerun):
+
+| ID | Injected fault | First detecting `make test` check | Separate `make diff` |
+|---|---|---|---|
+| M01 | ALWAYS jump never taken | `tb_engine_ops`: 27 RX bytes vs 8 | Caught |
+| M02 | Invert X-nonzero jump | `tb_engine_ops`: wrong CRC/result byte | Caught |
+| M03 | Invert PIN_HI jump | `tb_proto`: SPI peripheral reply differs | Caught |
+| M04 | Load DLY + 1 | `tb_fetch`: edge gap 2 vs 1 clocks | Caught |
+| M05 | Tick uses `>` instead of `>=` | `tb_fetch`: edge gap 2 vs 1 clocks | Caught |
+| M06 | Invert FIFO empty | `tb_fetch`: RX count 2 vs 1 | Caught |
+| M07 | Invert FIFO pointer full comparison | `tb_fetch`: RX count 0 vs 1 | Caught |
+| M08 | FIFO count + 1 | `tb_fetch`: RX count 2 vs 1 | Caught |
+| M09 | Drop host FLAG_CLR | `tb_usb`: status stage is not DATA1 ZLP | Survives |
+| M10 | Drop both engines' flag clear | `tb_proto`: I2C target fails address ACK | Caught |
+| M11 | Swap OSR output MSB/LSB selection | `tb_engine_ops`: wrong result byte | Caught |
+| M12 | Swap ISR input shift direction | `tb_proto`: SPI RX 88 vs 11 | Caught |
+| M13 | Invert CRC initial all-ones/zero | `tb_engine_ops`: wrong CRC byte | Caught |
+| M14 | Complement CRC feedback top-bit reduction | `tb_engine_ops`: wrong CRC byte | Caught |
+| M15 | Drop D50 invalidation on PM write | `tb_fetch`: rewritten stopped instruction gives no RX byte | Caught |
+| M16 | Drop D50 PC rewind on PM write | `tb_fetch`: rewritten stopped instruction gives 00 vs 33 | Survives |
+| M17 | Exchange stuffing thresholds 5 and 6 | `tb_line`: wrong USB frame duration | Survives |
+| M18 | Disable TX stuffing | `tb_line`: wrong USB frame duration | Survives |
+| M19 | Timeout uses `>` instead of `>=` | `test_diff.random_differential` inside `make test`: flags diverge | Caught |
+| M20 | Reverse output pin ownership | `tb_fetch`: simulation watchdog (expected output edges absent) | Caught |
+| M21 | Allow FIFO pop while empty | **Initial suite survives; new `tb_fifo_robustness` catches** | Survives |
+| M22 | Allow exec during restart | `tb_engine_restart`: PULL pop during restart | Survives |
+| M23 | Invert transmit parity | `tb_pbe`: 72 Modbus parity errors | Survives |
+| M24 | Invert FIFO readiness | `tb_engine_ops`: RX count 0 vs 8 | Caught |
 
 Phase0 commit gate: `make test` **PASS**,151.42seconds, including24 model tests,
 standalone FIFO boundaries, retained spec-counterexample wrapper and fixed-seed
@@ -368,3 +400,125 @@ The default Icarus gate remains the four-state evidence: Verilator's two-state
 `$isunknown` behavior is not an X-freedom proof. D60 records assumptions,
 alternatives and versions. Phase-3 final `make test` passed in **128.23 s**, with
 all seven new coverage-tool tests; the coordinator retains its gate receipt.
+
+## Round 2 phase 4: optional stress and robustness
+
+The final required pin-stress run passes **22/22 observations** in **58.94 s**.
+Full characterization records **33 observations: 28 PASS and 5 FAIL**; its five
+adverse observations remain failures in strict mode. The isolated random
+supplement also passes **8 seeds and 276,039 compared clocks**, with 5,000 random
+stimulus iterations per seed, in 54.47 s. No RTL, program or canonical-bench
+behavior changed and no physical-design flow ran.
+
+[ROUND2_STRESS.md](ROUND2_STRESS.md) and `evidence/round2/stress/` preserve exact
+stimulus settings, data/status, source hashes, raw logs and strict evaluator exits.
+
+- UART RX/TX pass the required ±2% clock-error cases. RX also passes this seed's
+  independent ±2% per-bit jitter at ±2% average error, delayed digital rising
+  crossings of four chip clocks, and a one-clock idle glitch. The sampled RX
+  ±3%, ±4% and ±5% points pass; **±6% is the first tested clock-error failure**,
+  and ±8% fails too. This is a tested-pattern boundary, not a guaranteed margin.
+- A one-clock pulse centered in a data bit changes `00` to `08`. The simple
+  single-sample UART 8N1 program has no dedicated framing-error record/majority
+  vote, so this and the larger clock-error cases are exposed corruption
+  limitations. Generic engine parity/CRC bits are not treated as valid UART 8N1
+  framing diagnostics. They are not established RTL/spec disagreements.
+- Slow UART RX service preserves all 16 bytes at FIFO capacity. With 20 bytes
+  offered, the FIFO and blocked PUSH preserve the first 17 and lose the final
+  three; sticky overflow (`STATUS=0x0b`) and IRQ assert. A subsequent `42` byte
+  arrives correctly after draining without restart. Host service is withheld
+  through the burst plus another 1 ms, then delayed by 100 bit times per read.
+- Twelve rounds run UART TX and SPI controller on different engines/pins,
+  restart and flush both between complete transfers, and check UART/MOSI/MISO
+  bytes exactly. The final run measures 1,336 overlapping chip clocks each round.
+  The separate random-program differential adds restart/host/program-write
+  traffic; random programs are not claimed to implement named protocols.
+
+Run from `pbe_v1/`, using the existing pinned bus-model dependencies:
+
+```sh
+make stress                 # strict required-only campaign: 22 passing cases
+make stress-characterize    # all 33; retains five FAIL labels, collection exits 0
+make stress-strict          # all 33; expected nonzero on the five adverse cases
+# Reevaluate saved observations without simulating:
+../.venv/bin/python test/stress/run.py \
+  --check-results verification/evidence/round2/stress/stress_characterization.json
+```
+
+The final required run includes a 200 ms simulation-time whole-driver watchdog,
+1 ms caller read deadlines, bounded FIFO draining and measured mixed-protocol
+overlap. The earlier full characterization preceded the added whole-driver
+watchdog/overlap counter; stimulus and expected byte checks are unchanged.
+No caller deadline occurred in either completed campaign. A finite caller deadline
+or watchdog bounds the harness, and does not prove universal no-hang behavior or
+program self-recovery. Four-chip-clock delayed digital crossings approximate
+threshold timing; analog slew, metastability and pad electrical behavior remain
+outside this simulation. I2C, Modbus, USB, 1-Wire and WS2812 stress margins, every
+pulse phase/width and mid-byte restart atomicity remain unmeasured here.
+
+D61 records this approach, alternatives, actual tool versions and boundaries.
+BUG-070 records the corrected evidence-export launcher that had resolved the
+virtualenv Python symlink into system Python. Its before/after reevaluation
+receipts show expected strict/required/characterization exits of 1/0/0 after the
+fix; it did not change simulator outcomes. The stress targets remain separate
+from default `make test`.
+
+Final phase4 pre-commit `make test` **PASS**,128.68seconds, including all SV
+benches,24 model tests,3 formal metadata tests,7 coverage guards,5 decoder
+unit tests and49,010 differential clocks. Gate receipts/logs are in
+`evidence/round2/phase4_gate*`. The source audit confirms all six HDL lexical
+token streams, protocol programs and workflows unchanged from `2d62b89`; only
+RTL header comments changed. This is source preservation, not a synthesis
+equivalence proof. No physical-design or gate-level flow ran.
+
+Recommended next work:
+
+- Extend formal engine/line contracts across the currently restricted rates,
+  coder configurations, all blocking operations and stable/live configuration
+  cases. Preserve existing counterexamples and state assumptions explicitly;
+  FIFO/host induction does not extend bounded engine/line results automatically.
+- Close the remaining structural coverage points, including the reachable
+  second-page register default and missing branch/expression/toggle transitions.
+  The named-bin 100% result does not cover all operands, counter values or
+  every instance/outcome; D50 invalidation-event coverage is separate from
+  checking actual refill behavior.
+- Expand catalogue/payload testing while retaining native CRC seed limits:
+  zero/all-one initialization cannot express the three arbitrary-init catalogue
+  entries. Keep host XOR transformations distinct from native hardware support,
+  and extend primitive vectors through real program/engine integration.
+- Add protocol-by-protocol glitch-phase, framing, FIFO starvation and recovery
+  tests, checking exact data or documented error/timeout/NAK outcomes. Prioritize
+  UART framing/error handling, USB retransmission/recovery and bus-stall bounds.
+  Then measure physical pins and implementation timing independently; no
+  routed/GDS/gate-level, board or analog evidence was produced by this work.
+
+
+## Round 2 command reference
+
+Run in `pbe_v1/`. Session-local tool paths (install the recorded versions normally
+on another machine; these `/tmp` paths are not portable):
+
+```sh
+export PATH=/tmp/pbe_review_a70001b_00au7u71/bin:/tmp/pbe-round2-tools/oss-cad-suite/bin:$PATH
+make test
+make formal
+make test-crc-vectors test-protocol-vectors
+make coverage
+make stress
+# Extended characterization retains the five adverse labels:
+make stress-characterize
+# Supported long campaign, NOT executed as part of this report:
+make diff N=10000 SEED=0x504245 CYCLES=1200
+```
+
+Python dependencies are pinned in `test/differential/requirements.txt`,
+`test/reference_crc/requirements.txt`, `test/reference_protocols/requirements.txt`
+and `test/bus_models/requirements.txt`; install them explicitly in the virtual
+environment. No target installs dependencies. `make stress-strict` deliberately
+returns nonzero for the retained five adverse observations. `make sigrok` retains
+two verified USB decoder XFAILs; `make sigrok-full` remains strict and nonzero.
+
+All five phase commits remain on `verify/round2`; no main merge or push was
+performed for this round. D55–61 and BUG-058–073 record approach, corrections,
+limits and evidence; the adverse UART observations are operating-envelope
+limitations, not established RTL/spec defects.

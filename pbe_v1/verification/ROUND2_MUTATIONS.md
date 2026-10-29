@@ -36,7 +36,10 @@ kills the entire subprocess group. A testbench's intentional simulation watchdog
 is reported explicitly as that check's failure. Default timeout is 360 seconds
 per make target. Jobs run concurrently only against independent scratch copies.
 
-Tools: Python 3.10.14, Icarus Verilog/vvp 12.0, cocotb 2.0.1. The original
+Tools: Python startup banner reported 3.10.14; the historical campaign did not
+record an independent runtime probe. Current launcher/embedded probes report
+3.10.12 (BUG-073); original logs remain unchanged. Icarus Verilog/vvp 12.0 and
+cocotb 2.0.1. The original
 campaign used three workers. Baseline RTL commit: `2d62b89` (same HDL behavior as
 round 1); exact SHA-256 hashes and the comment-only audit are in
 `evidence/round2/mutations/summary.json`.

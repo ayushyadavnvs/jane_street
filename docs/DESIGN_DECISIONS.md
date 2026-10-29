@@ -1414,3 +1414,58 @@ clean (0 design violations).
   cause. The hardened complete campaign preserves 92/92 bins and all reported
   source metrics. Raw logs, data, hashes, annotations and old artifact-policy
   receipts are retained; no physical-design or synthesis flow is invoked.
+
+## D61. Stress observations preserve adverse results and distinguish deadlines from recovery
+
+- **Decision:** run the optional stress campaign separately from default `make
+  test`, using a new external-pin fixture, the existing host/program helpers,
+  and independent UART/SPI endpoints. Keep RTL, protocol programs and canonical
+  benches unchanged. Expected data comes from fixed or seeded bytes; only pin
+  and documented host-register observations determine the outcome.
+- **Exit contract:** `make stress` runs the 22 required observations strictly;
+  `make stress-characterize` runs all 33 and permits evidence collection to
+  complete while retaining five FAIL labels. `make stress-strict` runs all 33
+  with a nonzero result for any failed observation. Characterization is an
+  explicit alternative to aborting before collecting later margins; it never
+  converts an adverse observation into a PASS. Reevaluation of the saved full
+  evidence returns strict/required/characterization exits 1/0/0.
+- **Measured scope:** UART RX/TX at approximately 500 kbaud passes the required
+  ±2% clock-error cases. RX also passes this seed's ±2% independent per-bit
+  jitter at ±2% average error, a four-chip-clock delayed digital rising crossing,
+  and a one-chip-clock idle glitch. Sampled RX ±3%, ±4% and ±5% pass; the first
+  failing sampled points are ±6%, with failures also at ±8%. A centered
+  one-chip-clock data pulse changes `00` to `08`. These are finite observed
+  operating points, not guaranteed margins over all payloads/phases/rates.
+- **Host and concurrency:** 16 UART bytes survive a complete burst plus another
+  1 ms without host service and 100-bit pauses between subsequent reads. Of 20
+  incoming bytes, the FIFO plus blocked PUSH preserve the first 17; the last
+  three are lost while the engine cannot sample. Sticky RX overflow and IRQ
+  assert, and a new `42` byte is received after draining without a restart.
+  Twelve rounds run UART TX on E0 and SPI controller on E1 with disjoint pins,
+  restart/flush both between completed transfers, and compare all UART/MOSI/
+  MISO bytes. Each final round measures 1,336 overlapping chip clocks. An
+  isolated identical-source differential supplement passes eight seeds and
+  276,039 compared clocks with 5,000 stimulus iterations per seed.
+- **Deadlines and limits:** the final required run uses a 200 ms simulation-time
+  whole-driver watchdog, finite count-qualified drain loops and 1 ms caller
+  read deadlines. The earlier full characterization preceded the whole-driver
+  watchdog and overlap counter; its byte comparisons/stimulus are unchanged.
+  Neither run encounters a caller deadline. A watchdog only bounds the test;
+  it does not prove self-recovery or a universal no-hang property. UART's
+  single-sample 8N1 program has no dedicated framing-error record or majority
+  vote, so the adverse data/clock cases remain visible corruption limitations,
+  not asserted RTL defects or cleanly reported protocol failures.
+- **Alternatives and evidence boundary:** preserve incorrect bytes and status
+  rather than changing the program, relaxing expected data or presenting
+  injected corruption as success. A delayed digital threshold crossing is a
+  reproducible simulator approximation, not analog slew, metastability or pad
+  characterization. I2C, Modbus, USB, 1-Wire and WS2812 stress margins, systematic
+  pulse-phase sweeps and mid-byte restart atomicity remain unmeasured here.
+- **Tools/provenance:** Python launcher and independently probed embedded runtime
+  3.10.12 (startup banner says 3.10.14; see BUG-073), cocotb 2.0.1, cocotbext-uart 0.1.4, cocotbext-spi 0.5.0 with its
+  existing documented compatibility adapter, and Icarus/vvp 12.0 stable.
+  The clock uses the nearest even integer period, 20,834 ps. Seed `0x50424534`,
+  exact bytes/status, raw logs, XML, source hashes, evaluator exits and the
+  isolated differential receipt are retained under `evidence/round2/stress/`.
+  BUG-070 records a corrected evidence-export interpreter invocation. No
+  dependency installs occur in targets and no physical-design flow is invoked.

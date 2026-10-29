@@ -1,0 +1,37 @@
+[
+  {
+    "command": [
+      "/usr/bin/python3.10",
+      "pbe_v1/test/stress/run.py",
+      "--check-results",
+      "pbe_v1/build/stress/observations.json"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/stress/run.py\", line 9, in <module>\n    from cocotb_tools.runner import get_runner\nModuleNotFoundError: No module named 'cocotb_tools'\n"
+  },
+  {
+    "command": [
+      "/usr/bin/python3.10",
+      "pbe_v1/test/stress/run.py",
+      "--check-results",
+      "pbe_v1/build/stress/observations.json",
+      "--required-only"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/stress/run.py\", line 9, in <module>\n    from cocotb_tools.runner import get_runner\nModuleNotFoundError: No module named 'cocotb_tools'\n"
+  },
+  {
+    "command": [
+      "/usr/bin/python3.10",
+      "pbe_v1/test/stress/run.py",
+      "--check-results",
+      "pbe_v1/build/stress/observations.json",
+      "--characterize"
+    ],
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/stress/run.py\", line 9, in <module>\n    from cocotb_tools.runner import get_runner\nModuleNotFoundError: No module named 'cocotb_tools'\n"
+  }
+]
