@@ -42,16 +42,20 @@ IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_engine_restart tb_engine_ops tb_line tb_usb tb_proto tb_pbe; do \
+LINT = cd test && for tb in tb_engine_restart tb_engine_ops tb_fetch tb_line tb_usb tb_proto tb_pbe; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(addprefix ../,$(SRC)) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
 
 test/ops_image.hex: test/ops_test.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/ops_test.pbe@0
 
-test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex
+test/fetch_image.hex: test/fetch_timing.pbe test/fetch_host.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0 test/fetch_host.pbe@64
+
+test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	$(LINT)
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp
 	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(addprefix ../,$(SRC)) && vvp -n ops.vvp
+	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(addprefix ../,$(SRC)) && vvp -n fetch.vvp
 	cd test && iverilog -g2012 -o line.vvp tb_line.sv $(addprefix ../,$(SRC)) && vvp -n line.vvp
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
@@ -76,8 +80,9 @@ PDK_VLOG  = $(PDK_ROOT)/$(PDK)/libs.ref/$(PDK_CELL)_stdcell/verilog
 GL_SRC    = $(abspath $(GL_NETLIST)) $(wildcard $(PDK_VLOG)/$(PDK_CELL)_udp.v) $(PDK_VLOG)/$(PDK_CELL)_stdcell.v
 GL_FLAGS  = -DGL_TEST -DFUNCTIONAL -DSIM
 
-test-gl: $(IMAGES:%=test/%_image.hex)
+test-gl: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
 	test -f "$(GL_NETLIST)" && test -d "$(PDK_VLOG)"
+	cd test && iverilog -g2012 $(GL_FLAGS) -o fetch_gl.vvp tb_fetch.sv $(GL_SRC) && vvp -n fetch_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o proto_gl.vvp tb_proto.sv $(GL_SRC) && vvp -n proto_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o usb_gl.vvp tb_usb.sv $(GL_SRC) && vvp -n usb_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o sim_gl.vvp tb_pbe.sv $(GL_SRC) && vvp -n sim_gl.vvp

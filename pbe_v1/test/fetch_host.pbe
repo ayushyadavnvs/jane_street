@@ -1,0 +1,14 @@
+; Host writes to the program memory, for tb_fetch (engine 1, START_PC 64). The testbench
+; rewrites words of this program while the engine is stopped or blocked, and checks that the
+; engine runs the new words, not the copy in its instruction register.
+        SET  OSR, 0x11       ; word 0: rewritten to SET OSR, 0x44
+        MOV  ISR, OSR
+        PUSH
+park:   PULL                 ; word 3: the TX FIFO stays empty, so the engine parks here;
+        MOV  ISR, OSR        ;   rewritten to SET OSR, 0x33 while the engine is stopped
+        PUSH
+        WAIT FLAG 0, HIGH    ; word 6: blocks; its low byte is rewritten to make it
+        SET  OSR, 0x5A       ;   WAIT FLAG 0, LOW while the engine waits on it
+        MOV  ISR, OSR
+        PUSH
+end:    JMP  end

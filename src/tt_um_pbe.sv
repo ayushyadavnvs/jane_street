@@ -115,6 +115,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
 
   // engine-facing signals
   logic [13:0] pc;  // 7 bits per engine
+  logic [41:0] pc_copy;  // 3 x 7 bits per engine
   logic [31:0] instr;
   logic [15:0] e_out, e_oe, tx_data, rx_din, rx_dout;
   logic [1:0]  tx_empty, tx_full, tx_pop, rx_empty, rx_full, rx_push, e_irq;
@@ -274,16 +275,24 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
     endcase
   end
 
-  // ---- program memory: 64 x 16, written by the host, read by both engines ----
+  // ---- program memory: 128 x 16, written by the host, read by both engines ----
+  // Each engine reads the word after its current instruction into its instruction register
+  // (D50), so this read is a pipeline stage of its own.
   logic [15:0] pmem[128];
+  wire         pm_wr = wr_en && wr_addr == 7'h07;
   always_ff @(posedge clk) begin
-    if (wr_en && wr_addr == 7'h07) begin
+    if (pm_wr) begin
       if (pm_ptr[0]) pmem[pm_ptr[7:1]][7:0] <= wr_data;
       else pmem[pm_ptr[7:1]][15:8] <= wr_data;
     end
   end
-  assign instr[15:0]  = pmem[pc[6:0]];
-  assign instr[31:16] = pmem[pc[13:7]];
+  // Each engine reads its 16 bits as four 4-bit slices, each at its own copy of the address.
+  for (genvar e = 0; e < 2; e++) begin : g_rd
+    wire [27:0] ra = {pc_copy[e*21+:21], pc[e*7+:7]};
+    for (genvar k = 0; k < 4; k++) begin : g_slice
+      assign instr[e*16+k*4+:4] = pmem[ra[k*7+:7]][k*4+:4];
+    end
+  end
 
   // ---- engines and their FIFOs ----
   for (genvar e = 0; e < 2; e++) begin : g_eng
@@ -346,7 +355,9 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .status       (e_status[e*5+:5]),
         .crc_now      (e_crc[e*16+:16]),
         .pc           (pc[e*7+:7]),
+        .pc_copy      (pc_copy[e*21+:21]),
         .instr        (instr[e*16+:16]),
+        .pm_wr        (pm_wr),
         .pins_in      (pins_s2),
         .pins_out     (e_out[e*8+:8]),
         .pins_oe      (e_oe[e*8+:8]),

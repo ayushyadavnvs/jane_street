@@ -1,0 +1,17 @@
+; Instruction timing test for tb_fetch (engine 0, pin 0 toggles, pin 1 is an input).
+; The testbench times every edge of pin 0 in clocks and checks it against the rule in the
+; comment at the top of pbe_engine.sv, at CLKDIV = 0, 1 and 3. Edges E0..E11.
+        PIN  0, DRV0
+        SET  X, 1
+a:      PIN  0, TOG          ; E0, E4
+        PIN  0, TOG [2]      ; E1, E5
+        PIN  0, TOG          ; E2, E6
+        JMP  b [1]           ; a taken jump with a delay
+b:      PIN  0, TOG          ; E3, E7
+        JMP  X--, a          ; taken the first time, then not
+        PIN  0, TOG          ; E8
+        WAIT 1, HIGH         ; the testbench raises pin 1
+        PIN  0, TOG [1]      ; E9
+        PIN  0, TOG          ; E10
+        PIN  0, TOG          ; E11 (pin 0 ends low, as it started)
+end:    JMP  end
