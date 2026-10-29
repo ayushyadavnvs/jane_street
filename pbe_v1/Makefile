@@ -60,6 +60,8 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
+	$(MAKE) test-model
+	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
 
 # only USB (tb_usb), a quicker loop while working on it
 test-usb: $(IMAGES:%=test/%_image.hex)
@@ -106,3 +108,24 @@ timing:
 	  abc -liberty $(IHP_SLOW) -script +strash;dch,-f;map,-B,0.9;topo;buffer,-p;upsize;dnsize;stime,-p" >/dev/null
 	@grep -o 'Delay = *[0-9.]* ps' synth/timing.log | tail -1
 	@grep -o 'Start-point = .*' synth/timing.log | tail -1
+
+# Verification only. Install test/differential/requirements.txt into a virtual environment.
+PYTHON ?= $(if $(wildcard ../.venv/bin/python),../.venv/bin/python,python3)
+N ?= 1000
+SEED ?= 0x504245
+CYCLES ?= 1200
+.PHONY: diff test-model
+
+diff:
+	$(PYTHON) test/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES)
+
+test-model:
+	$(PYTHON) -m unittest discover -s model -p 'test_*.py' -v
+
+.PHONY: diff-line
+diff-line:
+	$(PYTHON) model/check_line_model.py
+
+.PHONY: diff-engine-line
+diff-engine-line:
+	$(PYTHON) model/check_engine_line_model.py

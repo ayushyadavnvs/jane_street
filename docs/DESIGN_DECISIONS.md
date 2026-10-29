@@ -1105,3 +1105,42 @@ clean (0 design violations).
     of the current word ((a) fails), a tick lost on a bubble (CLKDIV 0 fails), and a bubble
     after every instruction (CLKDIV 0 fails, and Test 9 fails). The old RTL fails exactly the
     three taken-jump gaps at CLKDIV 0.
+
+## D51. Independent verification without changing the design
+
+- **Decision (2026-10-29):** add a Python executable specification, clock-by-clock RTL
+  differential tests, stock sigrok decoding, and maintained third-party protocol models.
+  This is verification work: no instruction, register, protocol program, or RTL behavior is
+  changed. GDS, gate-level regression, synthesis and physical design are outside this work.
+- **Alternatives:** more checks inside the existing SystemVerilog protocol models are useful
+  but share assumptions with the design. A specification-driven Python model provides a
+  separate oracle; external decoders and bus libraries provide additional independent views.
+- **Model boundary:** instruction semantics come from `src/pbe_engine.sv`'s header, the
+  register map from `src/tt_um_pbe.sv`'s header, CRC/line framing from their headers and D50.
+  Reset, two-stage input synchronization, simultaneous events, pre-edge FIFO acceptance and
+  host read staging are explicit. Undefined unwritten storage is represented, not assigned
+  a convenient hardware reset value. No simulated engine state is copied into the oracle.
+- **Stimulus and observation:** real host SPI pins load programs and configurations, drive
+  FIFO traffic and modify memory while running. Each clock compares `uio_out`, `uio_oe`,
+  `uo_out`; completed runs also compare FIFO contents, flags, CRC and host status readbacks.
+  A test-only NOP initialization of program memory makes stopped-engine fetches deterministic;
+  subsequent program loads and modifications use the host port. FIFO storage is unreset.
+- **Timing:** cocotb 2 uses an even 20,832 ps period (approximately 48 MHz); exact real
+  48 MHz cannot be represented by an integer number of picoseconds. Directed engine tests
+  check D50 independently at dividers 0, 1 and larger values. The line coder has a separate
+  differential campaign, so failures can be localized before engine integration.
+- **Reproducibility:** `make diff N=1000 SEED=0x504245` runs consecutive seeds, logs the first
+  mismatching clock/PC/instruction and both states, and writes coverage plus a failure JSON.
+  Saved model/tool regression seeds live in `test/differential/regressions.json`. The short
+  fixed-seed smoke is part of `make test`; extensive campaigns remain explicit targets.
+- **Failure policy:** disagreements are classified as RTL, model, tool or underspecified
+  text. Record before/after evidence and reproductions in `BUG_LOG.md`. Unfixed external-tool
+  failures remain explicit failing commands; they do not justify changing RTL. Runner XML
+  must contain tests and no failures, since the simulator process's exit code alone is
+  insufficient with cocotb's Python runner.
+- **Parallel work:** separate agents own the engine/line model, sigrok tests, and third-party
+  bus tests; the coordinator owns the top-level model, integration and phase commits. Shared
+  source is inspected, and only verification files and the three VCD testbench opt-ins change.
+- **Tools, results and limits:** see `pbe_v1/verification/REPORT.md` and phase-specific reports
+  for exact versions, commands, measured coverage and decoder/library limitations. Evidence
+  here is behavioral simulation only; it makes no new routed timing, silicon or board claim.

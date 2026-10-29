@@ -342,3 +342,20 @@ ends the frame (3.5 characters in all), a start bit makes the frame invalid.
   - Tiny Tapeout `info.yaml` and docs;
   - a second USB endpoint (HID), which does not fit a 64-word program;
   - the USB electrical check (see `../docs/USB_NOTES.md`, section 5).
+
+## Independent verification
+
+The executable Python specification and cocotb 2 differential tests compare the
+unchanged RTL every clock, with reproducible seeds and saved failure diagnostics.
+Install `test/differential/requirements.txt` in a virtual environment first.
+
+```sh
+make test                         # includes model units and a short fixed-seed run
+make diff N=1000 SEED=0x504245     # extensive random programs/host/pin stimulus
+make diff-line                    # NRZ/NRZI/stuffing/pair/byte line oracle
+make diff-engine-line             # engine + coder + CRC composition
+```
+
+See [verification/REPORT.md](verification/REPORT.md) for the approach, recorded
+coverage, exact tools, bug records and additional decoder/bus test commands.
+These targets run behavioral simulation only and invoke no physical-design flow.

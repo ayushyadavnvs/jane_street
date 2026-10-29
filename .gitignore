@@ -18,3 +18,9 @@ __pycache__/
 /test/__pycache__/
 /test/results.xml
 /test/gate_level_netlist.v
+# Local verification tools and generated reports
+.venv*/
+pbe_v1/build/
+pbe_v1/results.xml
+pbe_v1/model/results.xml
+pbe_v1/test/bus_models/sim_build/

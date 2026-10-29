@@ -1,0 +1,32 @@
+{
+  "phase1_make_test": [
+    "PASS: restart suppresses instruction side effects",
+    "PASS: JEQ, JNE, MOV, OSRCRC INV and the CRC good value (USB CRC16 dd 94, residual 800d)",
+    "Test 12: instruction fetch: timing at CLKDIV 0, 1, 3 and host writes to the program memory",
+    "PASS",
+    "PASS: line coder",
+    "Test 11: USB low-speed device (engine 0, D- pin 0, D+ pin 1) enumerated by a host model",
+    "PASS",
+    "Test 8: WS2812 LED driver (engine 0, pin 0) at 800 kbit/s",
+    "Test 9: SPI peripheral (engine 0, pins 0..3), mode 0, SCLK 2 MHz",
+    "Test 10: I2C target at 0x42 (engines 0 + 1, pins 0-1), fast mode controller",
+    "PASS",
+    "Test 0: NOP has no side effects",
+    "Test 1: UART TX (engine 0) looped back into UART RX (engine 1)",
+    "Test 2: SPI controller (engine 0) against a mode-0 peripheral",
+    "Test 3: I2C controller (engine 1, pins 4-5) running alongside UART TX (engine 0)",
+    "Test 4: 1-Wire controller (engine 1, pin 6) with two DS18B20-style devices",
+    "Test 5: Modbus RTU master (engine 0, pins 0-2) with an RS-485 device model, 8E1, hardware CRC/parity/timeout",
+    "Test 6: 1-Wire Search ROM (engine 0, pin 6) and I2C (engine 1, pins 4-5) at the same time",
+    "Test 7: SMBus PEC: I2C controller (engine 1) with its CRC unit as CRC-8 (poly 0x07)",
+    "PASS",
+    "                                                         ** TESTS=1 PASS=1 FAIL=0 SKIP=0             1021101.31           7.33     139287.90  **",
+    "real 131.71"
+  ],
+  "line_checks": [
+    "1669913.95ns INFO     cocotb.pbe_line                    Line model matched 80160 clocks, seed=0x504245",
+    "                                                         ** TESTS=1 PASS=1 FAIL=0 SKIP=0                  1669913.95           9.33     179060.86  **",
+    "1334602.08ns INFO     cocotb.pbe_engine                  Engine/line composition matched 64064 clocks, seed=0x454c494e45",
+    "                                                         ** TESTS=1 PASS=1 FAIL=0 SKIP=0                                1334602.08          15.10      88355.84  **"
+  ]
+}

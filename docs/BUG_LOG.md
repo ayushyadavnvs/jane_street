@@ -1197,3 +1197,88 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   ```
 - **Test:** Verilator lint `-Wall` is clean; `tb_engine_restart` and `tb_engine_ops` pass
   unchanged.
+
+## BUG-046 — Python simulator runner can return success after a failed cocotb test (tool/harness, fixed)
+
+- **Where:** verification CLI runners using `cocotb_tools.runner` 2.0.1.
+- **Evidence:** the initial line-model run had no HDL timescale and the bus-model run had a
+  test-module import error; cocotb logged failures while the Python CLI returned zero.
+- **Before:**
+  ```python
+  runner.test(hdl_toplevel=top, test_module=module)
+  ```
+- **After (verification only):** require an XML result containing tests and no failure/error;
+  build with an explicit picosecond precision. The bus runner also removes stale results.
+  ```python
+  runner.build(..., timescale=('1ns', '1ps'))
+  runner.test(..., results_xml=str(result_path))
+  root = ET.parse(result_path).getroot()
+  if not root.findall('.//testcase') or root.findall('.//failure') or root.findall('.//error'):
+      raise SystemExit('simulation did not pass')
+  ```
+- **Regression:** `test/bus_models/run.py --stock-spi` reproduces an import failure. Before the
+  check the CLI falsely returned zero; after it returns nonzero. Successful simulations still
+  return zero. `test/differential/run.py` and `model/check_line_model.py` also validate results.
+- **RTL:** unchanged.
+
+## BUG-047 — Top model treated speculative empty-FIFO MISO as an integer and discarded unreset storage (model, fixed)
+
+- **Where:** `pbe_v1/model/top_model.py`, `test/differential/test_diff.py`.
+- **Evidence:** seed campaign `--seed 0x504245 --n 3 --cycles 2000`, seed 5259847,
+  cycle 22298. After an RX read the host read pipeline speculatively loads the following
+  byte. The FIFO may now be empty. Unwritten storage is undefined, and previously written
+  storage persists across reset; resetting pointers does not reset the storage array.
+- **Before:**
+  ```python
+  if old_load & 2: self.tx = rd_data  # None on unwritten storage
+  def miso(self): return self.tx >> 7  # TypeError
+  h = Harness(dut, seed + index)      # model storage lost between reset seeds
+  ```
+- **After (verification only):** retain known and unknown bits in the host shift register;
+  compare an expected unknown MISO bit with the RTL's four-state value while comparing every
+  other output bit normally. Carry FIFO backing memory between seed resets.
+  ```python
+  self.tx = 0 if rd_data is None else rd_data
+  self.tx_unknown = 255 if rd_data is None else 0
+  def miso(self):
+      return None if self.tx_unknown & 128 else self.tx >> 7
+  for fifo, memory in zip(h.model.tx + h.model.rx, retained_fifos):
+      fifo.mem = list(memory)
+  ```
+- **Regression:** the saved campaign in `test/differential/regressions.json` failed before
+  with `TypeError`, then with an incorrect unknown expectation when storage was discarded.
+  After the model corrections the same campaign is required to complete and compare FIFOs,
+  flags/status and all pin outputs. Empty data bytes outside a valid read are not interpreted
+  as received payload.
+- **RTL:** unchanged. This is an oracle/state-lifetime correction, not an RTL defect.
+
+### BUG-047 additional API regressions
+
+Independent review also reproduced the storage-lifetime defect via the public
+`PBEModel.reset()` API. It rebuilt FIFO objects and discarded their backing
+memory. The API now saves and restores the memory while clearing pointers.
+`test_reset_preserves_unreset_backing_storage` fails before and passes after;
+`test_host_prefetch_unknown_shift` independently checks unknown MISO and CS reset.
+The harness preserves model memory between seed resets for the same reason.
+
+## BUG-048 — Model decoded unspecified program RAM while stopped (model, fixed)
+
+- **Where:** `pbe_v1/model/pbe_model.py`, found by independent model API review.
+- **Before:** the second stopped clock of `PBEModel(); edge(); edge()` failed with
+  `TypeError`: program RAM legitimately contained `None`, which was shifted during decode.
+  ```python
+  word = self.instr_q
+  op, arg, delay = word >> 13, word >> 4 & 511, word & 15
+  ```
+- **After (model only):** preserve the unspecified instruction, use a placeholder only for
+  inactive decoding, and explicitly reject attempting to execute an unspecified word.
+  ```python
+  unknown_instruction = self.instr_q is None
+  word = 0xd800 if unknown_instruction else self.instr_q
+  if unknown_instruction and execute:
+      raise ValueError('uninitialized program instruction ...')
+  ```
+- **Regression:** `test_unwritten_program_is_harmless_while_stopped_and_rejected_when_run`
+  fails before with TypeError, and passes after: stopped clocks have no side effects and
+  starting the engine produces a descriptive error. See `model/ENGINE_FINDINGS.md`.
+- **RTL:** unchanged. No NOP replaces an instruction that would actually execute.

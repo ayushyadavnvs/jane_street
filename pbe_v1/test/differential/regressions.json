@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "regressions": [
+    {
+      "kind": "model/tool",
+      "name": "empty_fifo_speculative_miso_and_unreset_storage",
+      "seed": 5259845,
+      "n": 3,
+      "cycles": 2000,
+      "original_failure_seed": 5259847,
+      "original_failure_cycle": 22298,
+      "description": "After a last FIFO read the host prefetches empty storage. Represent its unknown bits, and preserve FIFO backing memory across reset. RTL unchanged."
+    }
+  ]
+}
