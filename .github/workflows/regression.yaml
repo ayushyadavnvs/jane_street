@@ -16,5 +16,11 @@ jobs:
           cd src
           verilator --lint-only -Wall -Wno-DECLFILENAME --top-module tt_um_ayushyadavnvs_pbe \
             pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_engine.sv tt_um_pbe.sv
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install verification dependencies
+        run: python -m pip install -r pbe_v1/test/differential/requirements.txt
       - name: Run the test suite
         run: cd pbe_v1 && make test

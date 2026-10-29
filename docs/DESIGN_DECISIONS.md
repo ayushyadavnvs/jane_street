@@ -1189,3 +1189,15 @@ clean (0 design violations).
 - **Evidence:** six endpoints, 18 randomized cases pass; final randomized SPI gap
   rerun and six-endpoint smoke also pass. Full settings, versions, limits and
   reproducible bugs are in `pbe_v1/verification/PHASE3.md` and bus `results.json`.
+
+## D54. Bootstrap Python verification dependencies in GitHub regression
+
+- **Decision:** the existing regression workflow selects Python 3.11 and installs
+  `pbe_v1/test/differential/requirements.txt` before the expanded `make test`.
+  The new model and differential smoke remain mandatory, with failures propagated.
+- **Alternative:** silently skipping the differential test when cocotb is absent
+  would make local and CI verification differ and could produce misleading passes.
+- **Scope:** dependency setup only. No RTL, protocol, GDS or gate-level workflow
+  change. The two physical-flow entry points retain their existing triggers.
+- **Evidence:** missing-dependency import fails with an unconfigured interpreter;
+  the pinned environment imports cocotb 2.0.1 and runs the suite. See BUG-057.

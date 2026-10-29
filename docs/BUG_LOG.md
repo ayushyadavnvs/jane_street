@@ -1497,3 +1497,33 @@ No decoder or system USB configuration was changed.
 - **Test:** `run.py --seed 20261029 --cases 1 --test i2c_controller` originally
   expected `1a31ca40`, saw `1a63ffff`; after correcting the stimulus it passes
   with 30 random low-phase stretches. Expected bytes and RTL remain unchanged.
+
+## BUG-057 — GitHub regression job omitted the new cocotb dependency (CI configuration, fixed)
+
+- **Found while publishing verification:** `.github/workflows/regression.yaml`
+  installed HDL tools and called the expanded `make test` target without installing
+  its pinned Python dependency. The local verification virtual environment had the
+  package; a fresh runner did not have an explicit installation step.
+- **Before:**
+  ```yaml
+  - name: Run the test suite
+    run: cd pbe_v1 && make test
+  ```
+- **After:** explicitly select Python and install the same requirement file used
+  locally before running the unchanged suite.
+  ```yaml
+  - name: Setup Python
+    uses: actions/setup-python@v6
+    with:
+      python-version: '3.11'
+  - name: Install verification dependencies
+    run: python -m pip install -r pbe_v1/test/differential/requirements.txt
+  - name: Run the test suite
+    run: cd pbe_v1 && make test
+  ```
+- **Fail-before/pass-after dependency check:** this host's unconfigured `python3
+  -c 'import cocotb_tools'` raises ModuleNotFoundError. The interpreter with the
+  pinned requirements installed imports it successfully and reports cocotb 2.0.1;
+  `make test` is rerun with that environment before publishing. This demonstrates
+  the dependency requirement locally, not a claim of an observed GitHub CI pass.
+- **RTL, GDS and GL workflows:** unchanged. GitHub CI results must be checked after push.
