@@ -48,6 +48,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-034 | Testbench | A pile-up test that overflowed the 16-byte RX FIFO | Full suite | Fixed |
 | BUG-035 | Tooling | More Icarus 12 limits: queue arguments, `return` in tasks, array ports, and others | Bring-up of tb_line, tb_usb | Worked around |
 | BUG-036 | CI | The gate-level regression job looked for the netlist one folder too deep | First CI run | Fixed |
+| BUG-037 | CI | The gate-level regression failed to build or run with Ubuntu's Icarus 12 (cause not yet confirmed) | Second CI run | Open |
 
 ---
 
@@ -920,4 +921,22 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
   PDK=$(jq -er '.PDK' pdk.json)
   ```
 - **Test:** the job's next run.
+
+## BUG-037 — The gate-level regression stopped within seconds (open)
+
+- **Where:** the gate-level regression job.
+- **Found by:** its second run. With BUG-036 fixed, the PDK installed, but `make test-gl` stopped
+  with exit code 2 about 40 seconds into the job. That is too early for a test failure, so it is
+  most likely a build error. The log cannot be read from this workspace, and the annotation gives
+  only the exit code.
+- **Likely cause:** Tiny Tapeout's own gate-level job installs its Icarus 13 build for the IHP
+  cell models; ours used Ubuntu's Icarus 12.
+- **Changes:**
+  - **Same simulator:** the job uses Tiny Tapeout's Icarus 13.
+  - **Readable failures:** on failure it writes the end of its output as an annotation, which
+    the public API returns, and it always writes a pass/fail summary.
+  - **Own workflow:** it moved to `gl_regression.yaml`, triggered by each `gds` run and by
+    testbench changes, using the netlist of the latest `gds` run. So a fix here does not need
+    a 2.5-hour rebuild.
+- **Test:** the next run of `gl_regression`. This entry is updated with the confirmed cause.
 

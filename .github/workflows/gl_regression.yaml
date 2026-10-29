@@ -1,0 +1,89 @@
+name: gl_regression
+# The design's full end-to-end testbenches (pbe_v1/test: every protocol, USB enumeration) on
+# the routed netlist from the Tiny Tapeout flow, not only the small cocotb test gl_test runs.
+# It runs after each gds run, and on changes to the testbenches, using the netlist of the latest
+# gds run, so a testbench change does not need a 2.5-hour rebuild.
+on:
+  workflow_run:
+    workflows: [gds]
+    types: [completed]
+  push:
+    paths:
+      - '.github/workflows/gl_regression.yaml'
+      - 'pbe_v1/test/**'
+      - 'pbe_v1/programs/**'
+      - 'pbe_v1/Makefile'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  gl_regression:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Find the gds run with the netlist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID=${{ github.event.workflow_run.id }}
+          else
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=tt_submission&per_page=1" \
+                       --jq '.artifacts[0].workflow_run.id')
+          fi
+          echo "Netlist from gds run $RUN_ID"
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+      # Into the workspace root, as gl_test does: the artifact holds its own tt_submission/
+      # folder (a `path: tt_submission` here nests it one level too deep: BUG-036).
+      - name: Download the netlist
+        uses: actions/download-artifact@v7
+        with:
+          name: tt_submission
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Read the PDK version
+        working-directory: tt_submission
+        run: |
+          set -euo pipefail
+          echo "PDK=$(jq -er '.PDK' pdk.json)" >> $GITHUB_ENV
+          echo "PDK_VERSION=$(jq -er '.PDK_VERSION' pdk.json)" >> $GITHUB_ENV
+          echo "PDK_ROOT=/home/runner/pdk" >> $GITHUB_ENV
+
+      - name: Install the PDK
+        uses: TinyTapeout/ciel-action@v1
+        with:
+          pdk_name: ${{ env.PDK }}
+          pdk_version: ${{ env.PDK_VERSION }}
+          pdk_root: ${{ env.PDK_ROOT }}
+
+      # The same Icarus build Tiny Tapeout's gl_test uses for the IHP cell models (BUG-037)
+      - name: Install iverilog
+        run: |
+          wget -q https://github.com/TinyTapeout/iverilog/releases/download/v13.0/iverilog_13.0-1_amd64.deb
+          sudo apt-get update -y
+          sudo apt-get install -y ./iverilog_13.0-1_amd64.deb
+
+      - name: Run the testbenches on the gate-level netlist
+        run: |
+          NETLIST=$(ls $GITHUB_WORKSPACE/tt_submission/*.v | head -1)
+          echo "::notice title=gl_regression::netlist $(basename $NETLIST), PDK $PDK $PDK_VERSION"
+          set +e
+          (cd pbe_v1 && make test-gl GL_NETLIST="$NETLIST") 2>&1 | grep -v "sorry: constant selects" | tee gl.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            # the end of the output as an annotation, which can be read without the full log
+            echo "::error title=test-gl failed (exit $rc)::$(tail -40 gl.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')"
+          fi
+          grep -E "^Test|PASS|FAIL" gl.log | head -60 > gl_summary.txt || true
+          echo "::notice title=gl_regression summary::$(sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g' gl_summary.txt)"
+          exit $rc

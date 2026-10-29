@@ -813,7 +813,9 @@ part I under-estimated most.
   the routed netlist. It checks a register write and read-back, then loads the UART programs
   and loops a byte stream from engine 0 to engine 1 through `uio[0]` → `uio[1]`. Without the
   loopback it fails ("received []"). The full suite stays in `pbe_v1/test`, on the RTL.
-- **Gate level:** the `gds` workflow has an extra job, `gl_regression`. It takes the routed
+- **Gate level:** a separate workflow, `gl_regression`. It runs after each `gds` run and on
+  testbench changes, using the netlist of the latest `gds` run. At first it was a job inside
+  `gds`, but then every testbench fix needed a 2.5-hour rebuild. It takes the routed
   netlist and the PDK's cell models, as Tiny Tapeout's `gl_test` does, and runs our full
   end-to-end testbenches (`tb_proto`, `tb_usb`, `tb_pbe`) on it: `make test-gl` in `pbe_v1`.
   The testbenches look only at the pins, except one I2C monitor that reads the flags register
