@@ -278,8 +278,25 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   // ---- program memory: 128 x 16, written by the host, read by both engines ----
   // Each engine reads the word after its current instruction into its instruction register
   // (D50), so this read is a pipeline stage of its own.
-  logic [15:0] pmem[128];
   wire         pm_wr = wr_en && wr_addr == 7'h07;
+  logic [13:0] pc_d;      // each engine's next read address (7 bits per engine)
+  logic        eng_pm_wr; // the engines' refetch
+`ifdef USE_SRAM
+  // One SRAM macro per engine, both written by the host (D55, a proposal). A write takes the
+  // macros' port for that clock, so the engines refetch at the write and once more one clock
+  // later. The reset value refetches once after reset, when the macros' output is unknown.
+  logic pm_wr_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) pm_wr_q <= 1'b1;
+    else pm_wr_q <= pm_wr;
+  end
+  assign eng_pm_wr = pm_wr || pm_wr_q;
+
+  pbe_pmem_sram u_pmem (.clk, .pm_wr, .pm_ptr, .wr_data, .pc_d, .instr);
+  wire _unused_pc = &{pc, pc_copy, 1'b0};
+`else
+  assign eng_pm_wr = pm_wr;
+  logic [15:0] pmem[128];
   always_ff @(posedge clk) begin
     if (pm_wr) begin
       if (pm_ptr[0]) pmem[pm_ptr[7:1]][7:0] <= wr_data;
@@ -293,6 +310,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       assign instr[e*16+k*4+:4] = pmem[ra[k*7+:7]][k*4+:4];
     end
   end
+  wire _unused_pc_d = &{pc_d, 1'b0};
+`endif
 
   // ---- engines and their FIFOs ----
   for (genvar e = 0; e < 2; e++) begin : g_eng
@@ -356,8 +375,9 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .crc_now      (e_crc[e*16+:16]),
         .pc           (pc[e*7+:7]),
         .pc_copy      (pc_copy[e*21+:21]),
+        .pc_d         (pc_d[e*7+:7]),
         .instr        (instr[e*16+:16]),
-        .pm_wr        (pm_wr),
+        .pm_wr        (eng_pm_wr),
         .pins_in      (pins_s2),
         .pins_out     (e_out[e*8+:8]),
         .pins_oe      (e_oe[e*8+:8]),

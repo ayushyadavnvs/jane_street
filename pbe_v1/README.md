@@ -32,7 +32,9 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 make test                                  # Icarus Verilog, all testbenches
 make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
 make test-usb                              # only tb_usb
+make test-sram                             # end-to-end testbenches on the SRAM program memory (D55, also in make test)
 make synth                                 # area, IHP library in ../ihp_lib
+make synth-sram                            # the same with USE_SRAM (macros as black boxes)
 make timing                                # critical path, slow corner
 ```
 

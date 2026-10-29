@@ -10,6 +10,7 @@ up to 6×4 tiles, due 18 January 2027).
 | `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test` and a Verilator lint) |
 | `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812 and a USB low-speed device, all tested |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
+| `macros/`, `sram/` | The proposed SRAM program memory (D55): IHP's macro views, and the flow change set (`docs/SRAM_INVESTIGATION.md`) |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
 `pbe_v1/README.md` has the register map, instruction set, host protocols and results.

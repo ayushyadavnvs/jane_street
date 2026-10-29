@@ -3,7 +3,13 @@
 SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_engine.sv src/tt_um_pbe.sv
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
-.PHONY: test test-proto test-usb test-gl synth timing clean
+.PHONY: test test-proto test-usb test-gl test-sram synth synth-sram timing clean
+
+# The SRAM program memory (D55, a proposal): the wrapper, IHP's model of the macro (FUNCTIONAL
+# selects its behavioural core) and, for synthesis, the macro as a black box.
+SRAM_DIR   := ../macros/RM_IHPSG13_1P_256x16_c2_bm_bist
+SRAM_MODEL := $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist.v $(SRAM_DIR)/RM_IHPSG13_1P_core_behavioral_bm_bist.v
+SRAM_SRC   := src/pbe_pmem_sram.sv
 
 test/uart_image.hex: programs/uart_tx.pbe programs/uart_rx.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/uart_tx.pbe@0 programs/uart_rx.pbe@8
@@ -60,9 +66,20 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
+	$(MAKE) test-sram
 	$(MAKE) test-model
 	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
+
+# The end-to-end testbenches on the SRAM program memory (USE_SRAM, D55). The engine-only
+# testbenches do not use the top level, so they are not repeated.
+SRAM_FLAGS = -DUSE_SRAM -DFUNCTIONAL
+SRAM_ALL   = $(addprefix ../,$(SRC) $(SRAM_SRC) $(SRAM_MODEL))
+test-sram: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
+	cd test && iverilog -g2012 $(SRAM_FLAGS) -o fetch_sram.vvp tb_fetch.sv $(SRAM_ALL) && vvp -n fetch_sram.vvp
+	cd test && iverilog -g2012 $(SRAM_FLAGS) -o usb_sram.vvp tb_usb.sv $(SRAM_ALL) && vvp -n usb_sram.vvp
+	cd test && iverilog -g2012 $(SRAM_FLAGS) -o proto_sram.vvp tb_proto.sv $(SRAM_ALL) && vvp -n proto_sram.vvp
+	cd test && iverilog -g2012 $(SRAM_FLAGS) -o sim_sram.vvp tb_pbe.sv $(SRAM_ALL) && vvp -n sim_sram.vvp
 
 # only USB (tb_usb), a quicker loop while working on it
 test-usb: $(IMAGES:%=test/%_image.hex)
@@ -95,6 +112,17 @@ synth:
 	sed 's#\$$LIB#$(IHP_LIB)#g' synth/synth.ys.in > synth/synth.ys
 	yosys -q -l synth/synth.log synth/synth.ys
 	@grep "Chip area" synth/synth.log | tail -1
+
+# Synthesis with the SRAM program memory; the macros are black boxes, so their area is not in
+# the total (2 x 28,127 um2, from the LEF).
+synth-sram:
+	mkdir -p synth
+	yosys -q -l synth/synth_sram.log -p "read_verilog -DUSE_SRAM -sv $(SRC) $(SRAM_SRC); \
+	  read_verilog $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v; \
+	  synth -top tt_um_ayushyadavnvs_pbe -flatten; dfflibmap -liberty $(IHP_LIB); abc -liberty $(IHP_LIB); \
+	  opt_clean -purge; stat -liberty $(IHP_LIB); select -list t:RM_IHPSG13_*"
+	@grep "Chip area" synth/synth_sram.log | tail -1
+	@grep "/u_pmem" synth/synth_sram.log
 
 clean:
 	rm -f test/*.vvp test/*.vcd synth/synth.ys synth/*.log synth/*_netlist.v

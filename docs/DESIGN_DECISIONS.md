@@ -107,6 +107,8 @@ mark the old one **Changed** instead of deleting it.
 - **Cost:** 164,095 → 262,618 µm² (18 % → 29 % of 6×4). I estimated +49,000 µm² beforehand; the
   real cost is about twice that, because doubling the words also doubles both engines'
   128-way read multiplexers. Worst logic path 3.97 ns.
+- **Proposal D55:** SRAM macros instead of flip-flops (one 256 × 16 per engine, written
+  together, so this shared image stays); not the design yet.
 - **Next option:** latches instead of flip-flops for program memory (31 µm² per bit instead of
   ~67 µm² for a flip-flop with its write multiplexer) could save about 70,000 µm². Program memory
   is written rarely by the host, which suits latches, but latch timing in the Tiny Tapeout flow
@@ -1201,3 +1203,72 @@ clean (0 design violations).
   change. The two physical-flow entry points retain their existing triggers.
 - **Evidence:** missing-dependency import fails with an unconfigured interpreter;
   the pinned environment imports cocotb 2.0.1 and runs the suite. See BUG-057.
+
+## D55. Program memory: flip-flops vs SRAM — **Proposal (prototype behind `USE_SRAM`, not the design yet)**
+
+- **Problem:** the 128 × 16 flip-flop memory is about half the chip. In the first routed run
+  (D45) it is 246,909 µm²: 55 % of the 452k µm² of standard cells and 27 % of the 6x4 die
+  (2,048 flip-flops 100k, write logic 78k, read multiplexers 50k, tie cells 15k, buffer trees
+  3k), and 2,048 of the 3,590 hold buffers sit on it, one per bit. Its read multiplexers are
+  D45's worst path. Programs are nearly full (USB 64 of 64 words in its window, Modbus 62),
+  and CAN, SWD and LIN are planned. The competition points to SRAM for instruction memory.
+- **Found:** IHP's SRAM macros are in the CMOS5L PDK (`sg13cmos5l_sram`, a symlink to the
+  SG13G2 library) at the commit our flow installs, use Metal1–Metal4 only (all a CMOS5L block
+  may use), and two CMOS5L Tiny Tapeout projects pass `gds`, `precheck` and `gl_test` with them,
+  one of them at 6x4. `RM_IHPSG13_1P_256x16_c2_bm_bist` is 236.8 × 118.78 µm (28,127 µm²), with
+  a 5.30 ns clock-to-output at the slow corner and a per-bit write mask. Full survey in
+  `docs/SRAM_INVESTIGATION.md`.
+- **Proposed: one `RM_IHPSG13_1P_256x16` per engine, both written by the host.**
+  1. **Mirrored writes** keep D4's shared image: the host writes the same word into both
+     macros, each engine reads its own. Programs, `START_PC`, the assembler and the host see
+     no difference. The byte writes use the write mask (`A_BM`): no read-modify-write.
+  2. **The macro is addressed with `pc_d`**, the value `pc` takes at the edge (a new engine
+     output, the existing `pc_next`). After that edge `DOUT` is the word at `pc`, which is what
+     D50's stage 1 delivered, so D50's prefetch, timing rule and `instr_q` are unchanged. Stage
+     1 becomes the macro's access time; stage 2 ends at the macro's address pins.
+  3. **A write takes the port for a clock**, so that clock's read is lost and `DOUT` is stale
+     for one clock. The engines refetch at the write (as in D50) and again one clock later
+     (`pm_wr_q`). Two bubbles per host write instead of one; only `CLKDIV` 0 engines notice
+     (a 2-clock slip). `pm_wr_q` resets to 1, so the first fetch after reset is also a refetch.
+  4. **The flip-flop build stays** the default; `USE_SRAM` selects the macros.
+  5. **Flow:** the macros on the bottom edge, flipped (`FS`), at x = 415.68 and 685.44; the
+     Metal4 stripe lattice (pitch 67.44 = 6 × 11.24 µm, offset 25.40, spacing 3.52) puts four
+     VPWR and four VGND stripes on each macro's supply columns, the only possible hookup on
+     CMOS5L (same layer, no via). `sram/pdn_cfg.tcl` lets pdngen draw through the macros and
+     checks the result; `sram/check_sram_floorplan.py` checks it from the LEF and GDS.
+- **Alternatives** (details and numbers in `docs/SRAM_INVESTIGATION.md` §3):
+  1. **Keep the flip-flops:** no flow risk, but half the area, most hold buffers, the worst
+     path, and a 128-word ceiling.
+  2. **One shared 2P (dual-port) macro**, `RM_IHPSG13_2P_256x16`: 57,521 µm², the same as two
+     1P macros, but only 256 words with no option to split, one port shared with the host
+     anyway, 420 µm wide, and no CMOS5L Tiny Tapeout precedent.
+  3. **One shared 1P macro, time-multiplexed** between the engines: 28k µm² less again, but
+     each engine reads every other clock, so at `CLKDIV` 0 every instruction takes 2 clocks.
+     That is D50's rejected alternative 1, which breaks the SPI peripheral at 2 MHz (BUG-043).
+  4. **SRAM plus a small flip-flop cache:** tags in the fetch path, misses at `CLKDIV` 0;
+     complexity without a need.
+  5. **Latches instead of flip-flops** (D4's "next option"): 30.8 instead of 49.0 µm² per bit,
+     about 37k µm² saved, the multiplexers and the timing problem stay.
+  6. **64×16 macros** (as TeslaCoilerOW): 15,240 µm² for 64 words; 2 per engine for 128 words
+     is 61k µm², more than two 256×16 for half the words.
+  7. **Two separate, not mirrored, memories:** 256 private words per engine, but the host
+     loads each engine separately and D4's shared image is gone. Kept as a later option (one
+     address bit), not the default.
+- **Program size:** the prototype keeps 128 words (macro address bit 7 tied to 0). 256 shared
+  words need an 8-bit `pc`, `START_PC` and host pointer (`PM_ADDR_H` at the free 0x0F), no
+  area. Programs longer than 64 words need wider jump targets, and no ARG bit is free (`JMP`
+  and the EXT jumps use `[8:6]` + `[5:0]`): proposed a `PAGE p` instruction on EXT sub-op 7,
+  the last free one (taken jumps go to `START_PC + {p, target}`; restart and the timeout reset
+  the page).
+- **Expected:** ≈ 185k µm² saved (≈ 50 % → ≈ 29 % utilization), ≈ 1,800 fewer hold buffers,
+  ≈ 9k fewer cells, D45's worst path gone. Not measured in the flow yet.
+- **Measured** (`make synth-sram`): 337,264 → 142,892 µm² of standard cells, plus 2 × 28,127 µm²
+  of macros; flip-flops 3,494 → 1,405.
+- **Tested:** `make test` runs `tb_fetch`, `tb_usb`, `tb_proto` and `tb_pbe` on both builds
+  (IHP's behavioural model for the SRAM build), and both builds pass Verilator `-Wall` lint.
+  The TT cocotb test passes on the SRAM build with `sram/flow.patch` applied. Mutations: a
+  single refetch (BUG-058) fails `tb_fetch` (a); no refetch after reset and a refetch only one
+  clock late are not caught (no test provokes them; see the investigation §3.7).
+- **To decide it:** a `gds` run by hand with `sram/flow.patch` (steps in
+  `docs/SRAM_INVESTIGATION.md` §4), and the organisers' confirmation that a macro is accepted.
+  When adopted, mark D4, D45 and D50 **Changed**.

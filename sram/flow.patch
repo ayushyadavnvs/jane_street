@@ -1,0 +1,109 @@
+--- a/info.yaml
++++ b/info.yaml
+@@ -22,6 +22,7 @@
+     - "pbe_crc.sv"
+     - "pbe_line.sv"
+     - "pbe_engine.sv"
++    - "pbe_pmem_sram.sv"
+     - "tt_um_pbe.sv"
+ 
+ # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
+--- a/test/Makefile
++++ b/test/Makefile
+@@ -6,13 +6,20 @@
+ FST ?= -fst # Use more efficient FST format
+ TOPLEVEL_LANG ?= verilog
+ SRC_DIR = $(PWD)/../src
+-PROJECT_SOURCES = pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_engine.sv tt_um_pbe.sv
++PROJECT_SOURCES = pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_engine.sv pbe_pmem_sram.sv tt_um_pbe.sv
++
++# The SRAM program memory (D55): IHP's model of the macro; FUNCTIONAL selects its behavioural core
++SRAM_DIR = $(PWD)/../macros/RM_IHPSG13_1P_256x16_c2_bm_bist
++SRAM_MODELS = $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist.v $(SRAM_DIR)/RM_IHPSG13_1P_core_behavioral_bm_bist.v
++VERILOG_SOURCES += $(SRAM_MODELS)
++COMPILE_ARGS    += -DFUNCTIONAL
+ 
+ ifneq ($(GATES),yes)
+ 
+ # RTL simulation:
+ SIM_BUILD				= sim_build/rtl
+ VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
++COMPILE_ARGS    += -DUSE_SRAM
+ 
+ else
+ 
+--- a/pbe_v1/Makefile
++++ b/pbe_v1/Makefile
+@@ -97,7 +97,8 @@
+ PDK      ?= ihp-sg13cmos5l
+ PDK_CELL  = $(patsubst ihp-%,%,$(PDK))
+ PDK_VLOG  = $(PDK_ROOT)/$(PDK)/libs.ref/$(PDK_CELL)_stdcell/verilog
+-GL_SRC    = $(abspath $(GL_NETLIST)) $(wildcard $(PDK_VLOG)/$(PDK_CELL)_udp.v) $(PDK_VLOG)/$(PDK_CELL)_stdcell.v
++GL_SRC    = $(abspath $(GL_NETLIST)) $(wildcard $(PDK_VLOG)/$(PDK_CELL)_udp.v) $(PDK_VLOG)/$(PDK_CELL)_stdcell.v \
++            $(abspath $(SRAM_MODEL))
+ GL_FLAGS  = -DGL_TEST -DFUNCTIONAL -DSIM
+ 
+ test-gl: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
+--- a/src/config.json
++++ b/src/config.json
+@@ -32,6 +32,47 @@
+   "//": "https://tinytapeout.com/faq/#how-can-i-map-an-additional-external-clock-to-one-of-the-gpios",
+   "CLOCK_PORT": "clk",
+ 
++  "//": "---- SRAM program memory (D55, a proposal; see sram/README.md). Copy this file to src/config.json to use it. ----",
++  "//": "USE_SRAM selects the macro path in tt_um_pbe.sv; the macro module comes from the nl view below (a black box).",
++  "VERILOG_DEFINES": ["USE_SRAM"],
++
++  "//": "Two RM_IHPSG13_1P_256x16 macros on the bottom edge, flipped (FS) so their pins face the core (the",
++  "//": "Tiny Tapeout pins are on the top edge). The x positions are 11.04 + 67.44 k (k = 6, 10): the PDN",
++  "//": "stripe lattice below then lands on their power columns. Check with sram/check_sram_floorplan.py.",
++  "MACROS": {
++    "RM_IHPSG13_1P_256x16_c2_bm_bist": {
++      "instances": {
++        "u_pmem.g_mem[0].u_sram": { "location": [415.68, 3.78], "orientation": "FS" },
++        "u_pmem.g_mem[1].u_sram": { "location": [685.44, 3.78], "orientation": "FS" }
++      },
++      "gds": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.gds"],
++      "lef": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.lef"],
++      "lib": {
++        "*_typ_*": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist_typ_1p20V_25C.lib"],
++        "*_slow_*": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist_slow_1p08V_125C.lib"],
++        "*_fast_*": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist_fast_1p32V_m55C.lib"]
++      },
++      "nl": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v"],
++      "spice": ["dir::../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.cdl"]
++    }
++  },
++  "PDN_MACRO_CONNECTIONS": [
++    "u_pmem.g_mem[0].u_sram VPWR VGND VDD! VSS!",
++    "u_pmem.g_mem[0].u_sram VPWR VGND VDDARRAY! VSS!",
++    "u_pmem.g_mem[1].u_sram VPWR VGND VDD! VSS!",
++    "u_pmem.g_mem[1].u_sram VPWR VGND VDDARRAY! VSS!"
++  ],
++  "PDN_CFG": "dir::../sram/pdn_cfg.tcl",
++
++  "//": "Magic's sg13cmos5l rules do not know the SRAM: extract it as a black box, and do not stop on its",
++  "//": "in-macro DRC (the precheck's KLayout deck has the SRAM rules). The VPWR stripes cross the macro's",
++  "//": "VDD!/VDDARRAY! split over a LEF obstruction with no metal under it (check_sram_floorplan.py --gds),",
++  "//": "which Magic reports as an illegal overlap.",
++  "MAGIC_EXT_ABSTRACT_CELLS": ["RM_IHPSG13_.*"],
++  "MAGIC_MACRO_STD_CELL_SOURCE": "PDK",
++  "ERROR_ON_MAGIC_DRC": false,
++  "ERROR_ON_ILLEGAL_OVERLAPS": false,
++
+   "//": "Configuration docs: https://librelane.readthedocs.io/en/latest/reference/configuration.html",
+ 
+   "//": "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+@@ -59,8 +100,11 @@
+   "FP_IO_HLENGTH": 2,
+   "FP_IO_VLENGTH": 2,
+ 
+-  "FP_PDN_VPITCH": 50.0,
++  "//": "SRAM (D55): pitch 6 x 11.24 um (the macro's power-column pitch), VPWR-VGND 5.62 um apart.",
++  "FP_PDN_VPITCH": 67.44,
+   "FP_PDN_VWIDTH": 2.1,
++  "FP_PDN_VSPACING": 3.52,
++  "FP_PDN_VOFFSET": 25.40,
+ 
+   "//": "Clock",
+   "RUN_CTS": 1,

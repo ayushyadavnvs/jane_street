@@ -52,6 +52,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-043 | Design (D50 draft) | A bubble after every instruction broke the SPI peripheral at 2 MHz | Timing review of the draft; Test 9 on it | Fixed (prefetch) |
 | BUG-044 | Tooling | Yosys merged the copies of the read address back into one register, `keep` on the variable notwithstanding | Flip-flop count after synthesis | Fixed |
 | BUG-045 | Tooling | Verilator 5.020 rejects a default value on a module input, which the unit testbenches needed for `pm_wr` | Lint before the first run | Worked around |
+| BUG-058 | Design (D55 prototype) | With the SRAM, one refetch after a host write took the macro's stale output | Timing review; `tb_fetch` (a) as a mutation | Fixed (second refetch) |
 
 ---
 
@@ -1527,3 +1528,33 @@ No decoder or system USB configuration was changed.
   `make test` is rerun with that environment before publishing. This demonstrates
   the dependency requirement locally, not a claim of an observed GitHub CI pass.
 - **RTL, GDS and GL workflows:** unchanged. GitHub CI results must be checked after push.
+
+## BUG-058 — SRAM prototype: one refetch after a host write read a stale word (design, D55 prototype)
+
+- **Where:** `src/tt_um_pbe.sv`, the `USE_SRAM` branch (D55), before its first commit.
+- **Found by:** design review of the macro's timing, then confirmed by running the reviewed
+  version as a mutation. The single-port macro cannot read in the clock it is written, so
+  after a host write its output still holds the word read before. With D50's refetch alone
+  (the engine's `pm_wr` = the write), the engine clears `iv` at the write and takes `DOUT` one
+  clock later, which is that stale word: a stopped engine whose word the host rewrote runs the
+  old instruction.
+- **Before (reviewed version):**
+  ```systemverilog
+  assign eng_pm_wr = pm_wr;  // as with the flip-flop memory
+  ```
+- **After:** refetch again one clock after the write, when the macro has read again. The reset
+  value refetches once after reset, when the macro's output is unknown.
+  ```systemverilog
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) pm_wr_q <= 1'b1;
+    else pm_wr_q <= pm_wr;
+  end
+  assign eng_pm_wr = pm_wr || pm_wr_q;
+  ```
+- **Test:** `make test-sram`, `tb_fetch` Test 12, check (a) (the host rewrites the word a stopped
+  engine is parked on, then runs it):
+  - Before: `FAIL: (a) stopped on a word the host rewrote, then run: byte 0 is 11, expected 33`.
+  - After: `PASS`.
+- **Not caught by any test** (D55, investigation §3.7): `pm_wr_q` resetting to 0 (every test
+  writes its program after reset, which refetches), and a refetch only one clock after the
+  write (an instruction would have to complete in exactly that clock).
