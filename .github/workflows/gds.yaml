@@ -1,13 +1,8 @@
 name: gds
 
 on:
-  push:
-    # The flow takes 2.5 to 4 hours: run it only when the design or its cocotb test changes.
-    # After editing this file, run it by hand (Actions, gds, Run workflow).
-    paths:
-      - 'src/**'
-      - 'info.yaml'
-      - 'test/**'
+  # Run by hand only (Actions, gds, Run workflow): the flow takes 2.5 to 4 hours, and the RTL is
+  # being finished before physical design starts again (D46).
   workflow_dispatch:
 
 jobs:

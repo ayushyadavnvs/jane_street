@@ -826,4 +826,10 @@ part I under-estimated most.
   `regression` workflow lints with `-Wall` on every push.
 - **Clock period:** 20.833 ns (48 MHz), not the template's 20 ns. The cocotb test runs at
   20.834 ns, because cocotb needs an even number of picoseconds.
+- **Changed: when the flow runs.** At first `gds` ran on every push to `src/`, `info.yaml` or
+  `test/`, and `gl_regression` ran after it and on every testbench push. Both are now run by
+  hand only (`gl_regression` still follows a `gds` run). The first full run passed; the RTL
+  is now being finished (reviewer fixes, the 48 MHz timing fix) before physical design
+  resumes. Otherwise each RTL push would start a 2.5-hour build, and each testbench push would
+  test new tests against an old netlist. RTL tests (`regression`) still run on every push.
 

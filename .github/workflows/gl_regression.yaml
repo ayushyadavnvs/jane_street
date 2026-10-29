@@ -1,18 +1,12 @@
 name: gl_regression
 # The design's full end-to-end testbenches (pbe_v1/test: every protocol, USB enumeration) on
 # the routed netlist from the Tiny Tapeout flow, not only the small cocotb test gl_test runs.
-# It runs after each gds run, and on changes to the testbenches, using the netlist of the latest
-# gds run, so a testbench change does not need a 2.5-hour rebuild.
+# It runs after each gds run, or by hand, using the netlist of the latest gds run. It does not
+# run on testbench pushes: while the RTL changes, the latest netlist is out of date (D46).
 on:
   workflow_run:
     workflows: [gds]
     types: [completed]
-  push:
-    paths:
-      - '.github/workflows/gl_regression.yaml'
-      - 'pbe_v1/test/**'
-      - 'pbe_v1/programs/**'
-      - 'pbe_v1/Makefile'
   workflow_dispatch:
 
 permissions:
