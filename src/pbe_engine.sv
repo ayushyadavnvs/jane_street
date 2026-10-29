@@ -99,6 +99,7 @@ module pbe_engine (
     // program memory
     output logic [6:0]  pc,           // program memory read address (absolute): the next word
     output logic [20:0] pc_copy,      // three more copies of pc, to share out its fan-out
+    output logic [6:0]  pc_d,         // the value pc takes at the next clock (an SRAM's address, D55)
     input  logic [15:0] instr,        // the program memory word at pc
     input  logic        pm_wr,        // the host is writing the program memory (any word)
     // pins
@@ -342,6 +343,8 @@ module pbe_engine (
   // pc drives the read multiplexers of all 16 bits of the program memory: thousands of inputs,
   // which place and route had to reach through long buffer chains (D50). Four copies each read
   // 4 bits. `keep` stops synthesis from merging them back into one register.
+  assign pc_d = pc_next;
+
   (* keep *)
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
