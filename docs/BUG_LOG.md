@@ -1662,3 +1662,132 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   `bug062_after_fix.txt` transcripts are in `evidence/round2/usb/`. Installed-stock
   replay covers both options and native exception. Default pins submit; no patch
   or passing first-ack full-trace result is claimed. RTL is unchanged.
+
+## BUG-063 — Host formal read observer wrapped and resurrected old bits (verification, fixed)
+
+- **Before:** the observer used a wrapping three-bit read index:
+  ```systemverilog
+  reg [2:0] f_read_bit = 7;
+  wire [7:0] f_shifted_read_word = f_read_word << (7-f_read_bit);
+  if (f_fall && f_bit != 0) f_read_bit <= f_read_bit - 1'b1;
+  ```
+  An arbitrary induction state could wrap 0 to 7 and predict old data again,
+  while the real host shifter correctly continued emitting zeroes.
+- **After:** count mathematical shifts with saturation:
+  ```systemverilog
+  reg [3:0] f_read_shift = 0;
+  wire [7:0] f_shifted_read_word = f_read_word << f_read_shift;
+  if (f_fall && f_bit != 0 && f_read_shift < 8)
+    f_read_shift <= f_read_shift + 1'b1;
+  assert(f_read_shift <= 8);
+  ```
+- **Fail-before/pass-after:** `formal/host.sby prove` originally passed its
+  24-step base case but failed induction, yielding UNKNOWN/exit 4. The corrected
+  observer passes base and temporal induction without additional environment
+  assumptions. Original trace/log:
+  `pbe_v1/verification/evidence/round2/formal/fifo_host-host-initial-*`.
+  Detailed contract and reproducer: `ROUND2_FORMAL_FIFO_HOST.md`. RTL unchanged.
+
+## BUG-064 — Restart observer ignored reset priority (verification, fixed)
+
+- **Before:**
+  ```systemverilog
+  if ($past(restart)) assert(pc == start_pc);
+  ```
+  Reset low with restart high properly resets the DUT to PC 0; the monitor
+  incorrectly required an arbitrary nonzero START_PC on the following edge.
+- **After:**
+  ```systemverilog
+  if ($past(rst_n && restart)) assert(pc == start_pc);
+  ```
+- **Fail-before/pass-after:** `formal/engine.sby invariants` originally failed
+  at step 2 with START_PC 1, reset low and restart high. The qualified monitor
+  passes BMC 40. The original transcript is
+  `evidence/round2/formal/engine/monitor_reset_before.log`; final evidence is
+  `aggregate_results.json` and `logs/engine_invariants.log.gz`. This is a monitor
+  correction, not an RTL reset change or a two-state proof of X freedom.
+
+## BUG-066 — Line receive-rate limitation was unstated (contract text, clarified)
+
+- **Before:** the pre-audit line header advertised `one bit every period_m1 + 1
+  clocks` and `Sampling is mid-bit` without an RX lower-rate boundary.
+  The actual unchanged comparator/timer are:
+  ```systemverilog
+  sample = rcnt == {1'b0, period_m1[15:1]} + 16'd1;
+  rcnt <= (a_in != a_d || rcnt == period_m1) ? 16'd0 : rcnt + 16'd1;
+  ```
+- **After (comment only, already in phase 0):**
+  ```systemverilog
+  // At period_m1=0 RX cannot sample (its count remains 0);
+  // there is no universal receive guarantee at that rate.
+  ```
+- **Regression:** `formal/line.sby original_period0` deliberately retains the
+  original all-period reception claim. It fails at step 161: two bytes sent,
+  zero received, RX counter/sample always 0 after reset. The corresponding
+  framed period-3 tasks pass BMC 164. The original assertion remains an expected
+  failure; no hardware change or claim that all other periods work is made.
+  `line_original_period0.vcd`, `line_counterexample_summary.json` and
+  `ROUND2_FORMAL_LINE.md` retain the evidence.
+
+## BUG-067 — Formal receipt read the first option rather than its override (metadata, fixed)
+
+- **Before (reproduced first-value defect):**
+  ```python
+  return values[0] if values else None
+  ```
+  Expanded SBY task settings can contain general mode/depth followed by
+  task-specific overrides. This mislabeled cover jobs as BMC and overstated
+  some depths; solver results themselves were unchanged.
+- **After:**
+  ```python
+  return values[-1] if values else None
+  ```
+- **Fail-before/pass-after:** `FormalReceiptTests.test_task_override_is_effective_mode_and_depth`
+  supplies mode bmc/depth 164 followed by mode cover/depth 48. A temporary
+  first-value copy fails (`bmc != cover`); the corrected helper passes. The
+  before/after transcripts and explicitly incorrect old receipt are under
+  `evidence/round2/formal/engine/metadata_*` and `receipt_before_option_fix.json`.
+  Final collection validates effective options and current inputs for all jobs.
+
+## BUG-068 — Stuff observer asked for impossible cover events (verification, fixed)
+
+- **Before:**
+  ```systemverilog
+  cover(f_saw_violation && err);
+  if (!pair) cover(f_saw_idle_end && frame_end);
+  ```
+  Pair mode retained a disabled unreachable cover cell. A wrong NRZ ones-style
+  stuff bit on a single wire is necessarily idle-high, which ends a frame
+  without err, making the first goal impossible in those configurations.
+- **After:**
+  ```systemverilog
+  cover(f_saw_violation && (err || (!pair && frame_end)));
+  ```
+- **Fail-before/pass-after:** eight original cover jobs fail, including
+  `cover_stuff_nrz_s1_pair` and `cover_stuff_nrz_s1_single`; all 12 corrected
+  cover jobs pass. `line_cover_pilot_results.json` preserves the original
+  failures. Every final line task was rerun with the final observer, and source
+  collection confirms identical final inputs/configuration. The actual reaction
+  assertions are unchanged, and six original unconditional-error assertions
+  still fail as expected. RTL unchanged; details: `ROUND2_FORMAL_LINE.md`.
+
+## BUG-071 — Formal receipt omitted reached cover locations (metadata, fixed)
+
+- **Before:** both collectors searched for text not emitted by SMTBMC:
+  ```python
+  re.findall(r'Reached cover statement at (.+)', logtext)
+  ```
+  Real logs contain `Reached cover statement in step 3 at ...`, so the lists
+  were empty despite valid cover results. This did not change solver status.
+- **After:**
+  ```python
+  re.findall(r'Reached cover statement in step \d+ at (.+)', logtext)
+  ```
+- **Fail-before/pass-after:** new regression
+  `FormalReceiptTests.test_cover_locations_include_smtbmc_step_text` originally
+  fails with `[]` versus two locations; all three collector unit tests pass
+  after the fix. Exact transcripts: `evidence/round2/formal/bug071_before.txt`
+  and `bug071_after.txt`. Collection reran against all 108 completed jobs with
+  exact input/configuration checks; no solver rerun was needed. The 15 successful
+  cover jobs reach 22 reached statement events across jobs. Corrected aggregate receipt
+  and compressed raw logs are retained under `evidence/round2/formal/`.

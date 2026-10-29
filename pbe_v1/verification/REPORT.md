@@ -194,3 +194,66 @@ standalone FIFO boundaries, retained spec-counterexample wrapper and fixed-seed
 clock comparisons. The optional installed-stock replay was also run separately
 with all5 extraction/decoder tests passing. `evidence/round2/phase0_gate.json`
 records the gate and unchanged HDL token comparison for all six source files.
+
+## Round 2 phase 1: formal properties and explicit counterexamples
+
+The final source-aware collection matches **108/108 expected outcomes**, with
+the following actual results kept distinct:
+
+| Evidence | Jobs | Scope |
+|---|---:|---|
+| Unbounded temporal k-induction PASS | 2 | 16-byte FIFO and synchronized host SPI |
+| BMC assertions PASS | 79 | 64 line compositions, 12 line reactions, 3 engine tasks |
+| Cover PASS | 15 | 22 reached statements across FIFO/host/line/engine |
+| Original properties FAIL, expected | 12 | 10 line boundaries and 2 PC fences |
+
+Expected failures remain failed assertions with counterexample traces. The
+108/108 number means expectation matches; it does not mean every requested
+unconditional property was proved. No behavioral RTL repair was made.
+
+- [ROUND2_FORMAL_FIFO_HOST.md](ROUND2_FORMAL_FIFO_HOST.md): FIFO occupancy,
+  ignored boundary operations, flush and arbitrary selected-item ordering prove
+  inductively at depth 32. Host framing/write/read/address properties prove at
+  depth 24 under legal synchronized mode-0 timing (SCK ≤ clk/8), including
+  arbitrary pauses and partial-byte aborts. Cover-only fixed clock spacing is
+  separately disclosed; proof assumptions allow longer pauses.
+- [ROUND2_FORMAL_ENGINE.md](ROUND2_FORMAL_ENGINE.md): safety/reset/restart and
+  correctly sampled D50 memory equality pass BMC 40. Timeout passes BMC 50 for
+  TIMEOUT 1–5/CLKDIV 0–3 and a permanently blocked WAIT with stable run/config.
+  A deadline forces actual timeout progress. Physical prefetch PC leaves the
+  proposed region at step 66; the current instruction leaves at step 67. Both
+  original assertions fail explicitly. Four-state known-output simulation
+  supplements the two-state engine checks; it is not inferred from formal PASS.
+- [ROUND2_FORMAL_LINE.md](ROUND2_FORMAL_LINE.md): all 32 functional modes with
+  both shift orders pass 64 BMC cases at depth 164, two arbitrary bytes/16 bit
+  transfers, detectable sync and period 3. Pair mode checks exact length;
+  single-wire checks a payload prefix and allows idle suffix; unstuffed single
+  payloads additionally require regular zero bits. Twelve stuff-reaction cases
+  and 12 nonvacuity covers pass depth 48. Original all-rate/no-sync/exact-length
+  and unconditional-error claims retain ten failures. Period 0 never samples
+  receive data (BUG-066); single-wire idle-high stuffing violations are normal
+  frame ends, as specified. These limits are not repaired by changing hardware.
+- BUG-063 fixes a wrapping induction observer, BUG-064 qualifies restart with
+  prior reset, BUG-067 reads effective SBY option overrides, BUG-068 corrects
+  unreachable cover goals and BUG-071 extracts actual cover locations. Before
+  failures and corrected results remain in evidence; metadata corrections do
+  not change solver outcomes. Independent read-only review found no blocking
+  engine/property-source soundness issue and identified BUG-071 before commit.
+
+Run from `pbe_v1/`, with the D55 formal tools on PATH:
+
+```sh
+make formal
+make formal FORMAL_BLOCK=engine
+make formal FORMAL_ARGS=--collect
+python3 -m unittest discover -s formal -p 'test_*.py'
+```
+
+The aggregate receipt is `evidence/round2/formal/aggregate_results.json`, with
+compressed per-job logs under `formal/logs/` in that evidence directory.
+Collection checks expanded configurations and every copied input hash, so
+pre-fix observer/pilot results cannot silently substitute for final jobs.
+D58 records assumptions, alternatives and evidence boundaries. Phase1 pre-commit `make test` **PASS**,132.07seconds: all SV benches,24 model
+unit tests,3 formal-receipt tests,5 decoder/extraction unit tests (optional stock
+replay explicitly skipped when absent), and49,010 differential clocks. Raw gate
+log and source provenance are retained in `evidence/round2/phase1_gate*`.

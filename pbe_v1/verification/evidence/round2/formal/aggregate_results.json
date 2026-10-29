@@ -1,0 +1,3425 @@
+{
+  "results": [
+    {
+      "block": "engine",
+      "task": "activity",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_activity",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 20,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 0.067,
+      "failed_assertions": [],
+      "covers": [
+        "engine_formal: engine_formal.sv:51.5-51.19 (_witness_.cover_cover_engine_formal_sv_51_39)",
+        "engine_formal: engine_formal.sv:52.5-52.20 (_witness_.cover_cover_engine_formal_sv_52_40)"
+      ],
+      "workdir": "build/formal/engine_activity"
+    },
+    {
+      "block": "engine",
+      "task": "fetch",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_fetch",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 40,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_fetch"
+    },
+    {
+      "block": "engine",
+      "task": "instruction_window",
+      "tags": [],
+      "expected_status": "FAIL",
+      "folder": "engine_instruction_window",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 70,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 0.088,
+      "failed_assertions": [
+        "engine_formal.dut: engine_instrumented.sv:588.25-588.73 (_witness_.assert_assert_engine_instrumented_sv_588_516)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/engine_instruction_window"
+    },
+    {
+      "block": "engine",
+      "task": "invariants",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_invariants",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 40,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 0.077,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_invariants"
+    },
+    {
+      "block": "engine",
+      "task": "pc_window",
+      "tags": [],
+      "expected_status": "FAIL",
+      "folder": "engine_pc_window",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 70,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 0.066,
+      "failed_assertions": [
+        "engine_formal.dut: engine_instrumented.sv:587.19-587.58 (_witness_.assert_assert_engine_instrumented_sv_587_515)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/engine_pc_window"
+    },
+    {
+      "block": "engine",
+      "task": "timeout",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_timeout",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 50,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 0.087,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_timeout"
+    },
+    {
+      "block": "fifo",
+      "task": "prove",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "fifo",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "prove",
+      "depth": 32,
+      "unbounded_k_induction": true,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/fifo_formal.sv": "b868f1592103b796b8d08202e3a29d25d04cbea2ff7916747737eb5ef790888e"
+      },
+      "seconds": 0.076,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/fifo"
+    },
+    {
+      "block": "fifo",
+      "task": "cover",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "fifo_cover",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 64,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/fifo_formal.sv": "b868f1592103b796b8d08202e3a29d25d04cbea2ff7916747737eb5ef790888e"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [
+        "pbe_fifo: fifo_formal.sv:113.5-113.71 (_witness_.cover_cover_fifo_formal_sv_113_227)",
+        "pbe_fifo: fifo_formal.sv:112.5-112.53 (_witness_.cover_cover_fifo_formal_sv_112_223)",
+        "pbe_fifo: fifo_formal.sv:110.5-110.54 (_witness_.cover_cover_fifo_formal_sv_110_216)",
+        "pbe_fifo: fifo_formal.sv:111.5-111.86 (_witness_.cover_cover_fifo_formal_sv_111_219)"
+      ],
+      "workdir": "build/formal/fifo_cover"
+    },
+    {
+      "block": "host",
+      "task": "prove",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "host",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "prove",
+      "depth": 24,
+      "unbounded_k_induction": true,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/host_formal.sv": "f895576ebd1fc8cd78ec8581dc7e71c7ba2008dff362220cc430c2a3e8e862f2"
+      },
+      "seconds": 0.083,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/host"
+    },
+    {
+      "block": "host",
+      "task": "cover",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "host_cover",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 224,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/host_formal.sv": "f895576ebd1fc8cd78ec8581dc7e71c7ba2008dff362220cc430c2a3e8e862f2"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [
+        "pbe_host_spi: host_formal.sv:228.5-228.33 (_witness_.cover_cover_host_formal_sv_228_144)",
+        "pbe_host_spi: host_formal.sv:229.5-229.35 (_witness_.cover_cover_host_formal_sv_229_146)",
+        "pbe_host_spi: host_formal.sv:227.5-227.44 (_witness_.cover_cover_host_formal_sv_227_141)",
+        "pbe_host_spi: host_formal.sv:226.5-226.42 (_witness_.cover_cover_host_formal_sv_226_138)"
+      ],
+      "workdir": "build/formal/host_cover"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrz_s1_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s1",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrz_s1_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_335)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrz_s1_pair"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrz_s1_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s1",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrz_s1_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_333)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrz_s1_single"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrz_s2_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s2",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrz_s2_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.074,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_335)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrz_s2_pair"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrz_s2_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s2",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrz_s2_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_333)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrz_s2_single"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrz_s3_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s3",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrz_s3_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.091,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_335)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrz_s3_pair"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrz_s3_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s3",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrz_s3_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.094,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_333)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrz_s3_single"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrzi_s1_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s1",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrzi_s1_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_335)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s1_pair"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrzi_s1_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s1",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrzi_s1_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_333)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s1_single"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrzi_s2_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s2",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrzi_s2_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.068,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_335)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s2_pair"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrzi_s2_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s2",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrzi_s2_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.091,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_333)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s2_single"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrzi_s3_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s3",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrzi_s3_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.074,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_335)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s3_pair"
+    },
+    {
+      "block": "line",
+      "task": "cover_stuff_nrzi_s3_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s3",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_cover_stuff_nrzi_s3_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [
+        "line_stuff.rx: line_formal.sv:343.7-343.62 (_witness_.cover_cover_line_formal_sv_343_333)"
+      ],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s3_single"
+    },
+    {
+      "block": "line",
+      "task": "original_no_sync",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o0",
+        "nosync",
+        "forceones"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_no_sync",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.101,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:69.7-69.81 (_witness_.assert_assert_line_roundtrip_sv_69_551)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_no_sync"
+    },
+    {
+      "block": "line",
+      "task": "original_period0",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o0",
+        "period0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_period0",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:69.7-69.81 (_witness_.assert_assert_line_roundtrip_sv_69_487)",
+        "line_roundtrip: line_roundtrip.sv:70.17-70.32 (_witness_.assert_assert_line_roundtrip_sv_70_495)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_period0"
+    },
+    {
+      "block": "line",
+      "task": "original_single_bit_suffix",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s2",
+        "p0",
+        "b0",
+        "o0",
+        "forceones"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_single_bit_suffix",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.074,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:65.9-65.21 (_witness_.assert_assert_line_roundtrip_sv_65_473)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_single_bit_suffix"
+    },
+    {
+      "block": "line",
+      "task": "original_single_idle",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s0",
+        "p0",
+        "b1",
+        "o0",
+        "forceones"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_single_idle",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:69.7-69.81 (_witness_.assert_assert_line_roundtrip_sv_69_507)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_single_idle"
+    },
+    {
+      "block": "line",
+      "task": "original_stuff_nrz_s1",
+      "tags": [
+        "stuff",
+        "original",
+        "m1",
+        "s1",
+        "p0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_stuff_nrz_s1",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrz_s1"
+    },
+    {
+      "block": "line",
+      "task": "original_stuff_nrz_s2",
+      "tags": [
+        "stuff",
+        "original",
+        "m1",
+        "s2",
+        "p0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_stuff_nrz_s2",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.074,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrz_s2"
+    },
+    {
+      "block": "line",
+      "task": "original_stuff_nrz_s3",
+      "tags": [
+        "stuff",
+        "original",
+        "m1",
+        "s3",
+        "p0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_stuff_nrz_s3",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.09,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrz_s3"
+    },
+    {
+      "block": "line",
+      "task": "original_stuff_nrzi_s1",
+      "tags": [
+        "stuff",
+        "original",
+        "m2",
+        "s1",
+        "p0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_stuff_nrzi_s1",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrzi_s1"
+    },
+    {
+      "block": "line",
+      "task": "original_stuff_nrzi_s2",
+      "tags": [
+        "stuff",
+        "original",
+        "m2",
+        "s2",
+        "p0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_stuff_nrzi_s2",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.098,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrzi_s2"
+    },
+    {
+      "block": "line",
+      "task": "original_stuff_nrzi_s3",
+      "tags": [
+        "stuff",
+        "original",
+        "m2",
+        "s3",
+        "p0"
+      ],
+      "expected_status": "FAIL",
+      "folder": "line_original_stuff_nrzi_s3",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.098,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrzi_s3"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.075,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.076,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s0_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s0_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.088,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.076,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.087,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.088,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s1_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s1_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.078,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.089,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.084,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s2_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s2_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.091,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.074,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.076,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.094,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrz_s3_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrz_s3_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.077,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.068,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.079,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.09,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s0_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s0_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.076,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.076,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.089,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.069,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.08,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.09,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s1_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s1_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.086,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.09,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.077,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s2_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s2_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.068,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_pair_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.077,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_pair_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_pair_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.075,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_pair_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_single_bit_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.079,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_bit_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_single_bit_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.082,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_bit_msb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_single_byte_lsb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_byte_lsb"
+    },
+    {
+      "block": "line",
+      "task": "rt_nrzi_s3_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_rt_nrzi_s3_single_byte_msb",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 164,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_byte_msb"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrz_s1_pair",
+      "tags": [
+        "stuff",
+        "m1",
+        "s1",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrz_s1_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.074,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s1_pair"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrz_s1_single",
+      "tags": [
+        "stuff",
+        "m1",
+        "s1",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrz_s1_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.08,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s1_single"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrz_s2_pair",
+      "tags": [
+        "stuff",
+        "m1",
+        "s2",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrz_s2_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s2_pair"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrz_s2_single",
+      "tags": [
+        "stuff",
+        "m1",
+        "s2",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrz_s2_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.095,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s2_single"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrz_s3_pair",
+      "tags": [
+        "stuff",
+        "m1",
+        "s3",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrz_s3_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s3_pair"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrz_s3_single",
+      "tags": [
+        "stuff",
+        "m1",
+        "s3",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrz_s3_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.072,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s3_single"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrzi_s1_pair",
+      "tags": [
+        "stuff",
+        "m2",
+        "s1",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrzi_s1_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.093,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s1_pair"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrzi_s1_single",
+      "tags": [
+        "stuff",
+        "m2",
+        "s1",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrzi_s1_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.096,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s1_single"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrzi_s2_pair",
+      "tags": [
+        "stuff",
+        "m2",
+        "s2",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrzi_s2_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s2_pair"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrzi_s2_single",
+      "tags": [
+        "stuff",
+        "m2",
+        "s2",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrzi_s2_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.071,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s2_single"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrzi_s3_pair",
+      "tags": [
+        "stuff",
+        "m2",
+        "s3",
+        "p1"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrzi_s3_pair",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.07,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s3_pair"
+    },
+    {
+      "block": "line",
+      "task": "stuff_nrzi_s3_single",
+      "tags": [
+        "stuff",
+        "m2",
+        "s3",
+        "p0"
+      ],
+      "expected_status": "PASS",
+      "folder": "line_stuff_nrzi_s3_single",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 48,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/line_formal.sv": "f49dc6bd0ccf076b79fa8ba144a79acb92ffc1a9d1badbe4a1de1bab3fa9ab36",
+        "pbe_v1/formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+        "pbe_v1/formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a"
+      },
+      "seconds": 0.101,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s3_single"
+    }
+  ],
+  "total": 108,
+  "matched": 108,
+  "proven": 2,
+  "bounded_pass": 79,
+  "expected_counterexamples": 12,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven.",
+  "cover_jobs": 15,
+  "reached_cover_statements": 22
+}

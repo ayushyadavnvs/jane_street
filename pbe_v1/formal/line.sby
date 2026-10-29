@@ -1,0 +1,139 @@
+# Bounded line-coder conformance; see verification/ROUND2_FORMAL_LINE.md.
+[tasks]
+rt_nrz_s0_single_bit_lsb rt m1 s0 p0 b0 o0
+rt_nrz_s0_single_bit_msb rt m1 s0 p0 b0 o1
+rt_nrz_s0_single_byte_lsb rt m1 s0 p0 b1 o0
+rt_nrz_s0_single_byte_msb rt m1 s0 p0 b1 o1
+rt_nrz_s0_pair_bit_lsb rt m1 s0 p1 b0 o0
+rt_nrz_s0_pair_bit_msb rt m1 s0 p1 b0 o1
+rt_nrz_s0_pair_byte_lsb rt m1 s0 p1 b1 o0
+rt_nrz_s0_pair_byte_msb rt m1 s0 p1 b1 o1
+rt_nrz_s1_single_bit_lsb rt m1 s1 p0 b0 o0
+rt_nrz_s1_single_bit_msb rt m1 s1 p0 b0 o1
+rt_nrz_s1_single_byte_lsb rt m1 s1 p0 b1 o0
+rt_nrz_s1_single_byte_msb rt m1 s1 p0 b1 o1
+rt_nrz_s1_pair_bit_lsb rt m1 s1 p1 b0 o0
+rt_nrz_s1_pair_bit_msb rt m1 s1 p1 b0 o1
+rt_nrz_s1_pair_byte_lsb rt m1 s1 p1 b1 o0
+rt_nrz_s1_pair_byte_msb rt m1 s1 p1 b1 o1
+rt_nrz_s2_single_bit_lsb rt m1 s2 p0 b0 o0
+rt_nrz_s2_single_bit_msb rt m1 s2 p0 b0 o1
+rt_nrz_s2_single_byte_lsb rt m1 s2 p0 b1 o0
+rt_nrz_s2_single_byte_msb rt m1 s2 p0 b1 o1
+rt_nrz_s2_pair_bit_lsb rt m1 s2 p1 b0 o0
+rt_nrz_s2_pair_bit_msb rt m1 s2 p1 b0 o1
+rt_nrz_s2_pair_byte_lsb rt m1 s2 p1 b1 o0
+rt_nrz_s2_pair_byte_msb rt m1 s2 p1 b1 o1
+rt_nrz_s3_single_bit_lsb rt m1 s3 p0 b0 o0
+rt_nrz_s3_single_bit_msb rt m1 s3 p0 b0 o1
+rt_nrz_s3_single_byte_lsb rt m1 s3 p0 b1 o0
+rt_nrz_s3_single_byte_msb rt m1 s3 p0 b1 o1
+rt_nrz_s3_pair_bit_lsb rt m1 s3 p1 b0 o0
+rt_nrz_s3_pair_bit_msb rt m1 s3 p1 b0 o1
+rt_nrz_s3_pair_byte_lsb rt m1 s3 p1 b1 o0
+rt_nrz_s3_pair_byte_msb rt m1 s3 p1 b1 o1
+rt_nrzi_s0_single_bit_lsb rt m2 s0 p0 b0 o0
+rt_nrzi_s0_single_bit_msb rt m2 s0 p0 b0 o1
+rt_nrzi_s0_single_byte_lsb rt m2 s0 p0 b1 o0
+rt_nrzi_s0_single_byte_msb rt m2 s0 p0 b1 o1
+rt_nrzi_s0_pair_bit_lsb rt m2 s0 p1 b0 o0
+rt_nrzi_s0_pair_bit_msb rt m2 s0 p1 b0 o1
+rt_nrzi_s0_pair_byte_lsb rt m2 s0 p1 b1 o0
+rt_nrzi_s0_pair_byte_msb rt m2 s0 p1 b1 o1
+rt_nrzi_s1_single_bit_lsb rt m2 s1 p0 b0 o0
+rt_nrzi_s1_single_bit_msb rt m2 s1 p0 b0 o1
+rt_nrzi_s1_single_byte_lsb rt m2 s1 p0 b1 o0
+rt_nrzi_s1_single_byte_msb rt m2 s1 p0 b1 o1
+rt_nrzi_s1_pair_bit_lsb rt m2 s1 p1 b0 o0
+rt_nrzi_s1_pair_bit_msb rt m2 s1 p1 b0 o1
+rt_nrzi_s1_pair_byte_lsb rt m2 s1 p1 b1 o0
+rt_nrzi_s1_pair_byte_msb rt m2 s1 p1 b1 o1
+rt_nrzi_s2_single_bit_lsb rt m2 s2 p0 b0 o0
+rt_nrzi_s2_single_bit_msb rt m2 s2 p0 b0 o1
+rt_nrzi_s2_single_byte_lsb rt m2 s2 p0 b1 o0
+rt_nrzi_s2_single_byte_msb rt m2 s2 p0 b1 o1
+rt_nrzi_s2_pair_bit_lsb rt m2 s2 p1 b0 o0
+rt_nrzi_s2_pair_bit_msb rt m2 s2 p1 b0 o1
+rt_nrzi_s2_pair_byte_lsb rt m2 s2 p1 b1 o0
+rt_nrzi_s2_pair_byte_msb rt m2 s2 p1 b1 o1
+rt_nrzi_s3_single_bit_lsb rt m2 s3 p0 b0 o0
+rt_nrzi_s3_single_bit_msb rt m2 s3 p0 b0 o1
+rt_nrzi_s3_single_byte_lsb rt m2 s3 p0 b1 o0
+rt_nrzi_s3_single_byte_msb rt m2 s3 p0 b1 o1
+rt_nrzi_s3_pair_bit_lsb rt m2 s3 p1 b0 o0
+rt_nrzi_s3_pair_bit_msb rt m2 s3 p1 b0 o1
+rt_nrzi_s3_pair_byte_lsb rt m2 s3 p1 b1 o0
+rt_nrzi_s3_pair_byte_msb rt m2 s3 p1 b1 o1
+stuff_nrz_s1_single stuff m1 s1 p0
+cover_stuff_nrz_s1_single stuff cover m1 s1 p0
+stuff_nrz_s1_pair stuff m1 s1 p1
+cover_stuff_nrz_s1_pair stuff cover m1 s1 p1
+stuff_nrz_s2_single stuff m1 s2 p0
+cover_stuff_nrz_s2_single stuff cover m1 s2 p0
+stuff_nrz_s2_pair stuff m1 s2 p1
+cover_stuff_nrz_s2_pair stuff cover m1 s2 p1
+stuff_nrz_s3_single stuff m1 s3 p0
+cover_stuff_nrz_s3_single stuff cover m1 s3 p0
+stuff_nrz_s3_pair stuff m1 s3 p1
+cover_stuff_nrz_s3_pair stuff cover m1 s3 p1
+stuff_nrzi_s1_single stuff m2 s1 p0
+cover_stuff_nrzi_s1_single stuff cover m2 s1 p0
+stuff_nrzi_s1_pair stuff m2 s1 p1
+cover_stuff_nrzi_s1_pair stuff cover m2 s1 p1
+stuff_nrzi_s2_single stuff m2 s2 p0
+cover_stuff_nrzi_s2_single stuff cover m2 s2 p0
+stuff_nrzi_s2_pair stuff m2 s2 p1
+cover_stuff_nrzi_s2_pair stuff cover m2 s2 p1
+stuff_nrzi_s3_single stuff m2 s3 p0
+cover_stuff_nrzi_s3_single stuff cover m2 s3 p0
+stuff_nrzi_s3_pair stuff m2 s3 p1
+cover_stuff_nrzi_s3_pair stuff cover m2 s3 p1
+original_period0 rt original m1 s0 p1 b1 o0 period0
+original_no_sync rt original m1 s0 p1 b1 o0 nosync forceones
+original_single_idle rt original m1 s0 p0 b1 o0 forceones
+original_single_bit_suffix rt original m1 s2 p0 b0 o0 forceones
+original_stuff_nrz_s1 stuff original m1 s1 p0
+original_stuff_nrz_s2 stuff original m1 s2 p0
+original_stuff_nrz_s3 stuff original m1 s3 p0
+original_stuff_nrzi_s1 stuff original m2 s1 p0
+original_stuff_nrzi_s2 stuff original m2 s2 p0
+original_stuff_nrzi_s3 stuff original m2 s3 p0
+
+[options]
+mode bmc
+depth 164
+stuff: depth 48
+cover: mode cover
+original: expect fail
+timeout 120
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal -sv line_formal.sv line_roundtrip.sv line_stuff.sv
+m1: chparam -set MODE 1 line_roundtrip line_stuff
+m2: chparam -set MODE 2 line_roundtrip line_stuff
+s0: chparam -set STYLE 0 line_roundtrip line_stuff
+s1: chparam -set STYLE 1 line_roundtrip line_stuff
+s2: chparam -set STYLE 2 line_roundtrip line_stuff
+s3: chparam -set STYLE 3 line_roundtrip line_stuff
+p0: chparam -set PAIR 0 line_roundtrip line_stuff
+p1: chparam -set PAIR 1 line_roundtrip line_stuff
+b0: chparam -set BYTES 0 line_roundtrip
+b1: chparam -set BYTES 1 line_roundtrip
+o0: chparam -set MSB 0 line_roundtrip
+o1: chparam -set MSB 1 line_roundtrip
+original: chparam -set ORIGINAL 1 line_roundtrip line_stuff
+period0: chparam -set PERIOD 0 line_roundtrip
+nosync: chparam -set NO_SYNC 1 line_roundtrip
+forceones: chparam -set FORCE_ONES 1 line_roundtrip
+rt: prep -top line_roundtrip
+stuff: prep -top line_stuff
+async2sync
+dffunmap
+
+[files]
+../build/formal/generated/line_formal.sv
+line_roundtrip.sv
+line_stuff.sv

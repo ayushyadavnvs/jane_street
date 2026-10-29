@@ -54,6 +54,7 @@ test/fetch_image.hex: test/fetch_timing.pbe test/fetch_host.pbe tools/pbe_asm.py
 test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	$(LINT)
 	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
+	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(addprefix ../,$(SRC)) && vvp -n known_reset.vvp
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp
 	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(addprefix ../,$(SRC)) && vvp -n ops.vvp
 	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(addprefix ../,$(SRC)) && vvp -n fetch.vvp
@@ -63,6 +64,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
 	$(PYTHON) tools/check_spec_boundaries.py
 	$(MAKE) test-model
+	$(PYTHON) -m unittest discover -s formal -p test_runner.py -v
 	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
 
@@ -155,3 +157,10 @@ test-buses:
 .PHONY: mutate
 mutate:
 	$(PYTHON) tools/mutate.py --jobs $(or $(JOBS),2) --n 1 --cycles 600 --seed $(SEED)
+
+FORMAL_BLOCK ?= all
+FORMAL_JOBS ?= 3
+FORMAL_ARGS ?=
+.PHONY: formal
+formal:
+	$(PYTHON) formal/run.py --block $(FORMAL_BLOCK) --jobs $(FORMAL_JOBS) $(FORMAL_ARGS)

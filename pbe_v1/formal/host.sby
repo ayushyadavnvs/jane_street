@@ -1,0 +1,22 @@
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 24
+cover: mode cover
+cover: depth 224
+
+[engines]
+smtbmc yices
+
+[script]
+prove: read -formal -sv host_formal.sv
+cover: read -formal -D FORMAL_COVER -sv host_formal.sv
+prep -top pbe_host_spi
+async2sync
+dffunmap
+
+[files]
+../build/formal/generated/host_formal.sv

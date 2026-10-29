@@ -1,0 +1,16 @@
+{
+  "command": "make -C pbe_v1 test",
+  "exit": 0,
+  "seconds": 132.07,
+  "differential_clocks": 49010,
+  "log_sha256": "fe93eec3ec1d10a0a4ed4d98c4fac612735ace8fa4335152f6832c2881fa6327",
+  "rtl_sha256": {
+    "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+    "src/pbe_engine.sv": "68cbdbde6d69ef637d773a6fdadde14cc6fbedaf477c8348944c1c79cb27d99b",
+    "src/pbe_fifo.sv": "0dab5b2937704a236f43f8972991446d4e0dfa10894e86b1ef87d8cd3acf8898",
+    "src/pbe_host_spi.sv": "e797259e321c4344bad7d541ed13953f1fcd5361411b0620ad636f62d8841d94",
+    "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1",
+    "src/tt_um_pbe.sv": "d9e7c849262c8d242438654c108f8d9c7ba5a0372777ad1ef3d3e95cef98a0e9"
+  },
+  "note": "Before Phase1 commit; later-phase harnesses present but default behavior unchanged. No physical-design flow."
+}

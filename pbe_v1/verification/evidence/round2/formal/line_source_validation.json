@@ -1,0 +1,10 @@
+{
+  "total": 98,
+  "matched": 98,
+  "proven": 0,
+  "bounded_pass": 76,
+  "expected_counterexamples": 10,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven.",
+  "command": "python3 formal/run.py --block line --collect --jobs 3",
+  "resolved_config_and_copied_inputs_match_current_checkout": true
+}

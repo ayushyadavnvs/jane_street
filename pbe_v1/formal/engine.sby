@@ -1,0 +1,39 @@
+[tasks]
+activity
+invariants
+fetch
+pc_window
+instruction_window
+timeout
+
+[options]
+mode bmc
+activity: mode cover
+activity: depth 20
+invariants: depth 40
+fetch: depth 40
+pc_window: depth 70
+instruction_window: depth 70
+timeout: depth 50
+pc_window: expect fail
+instruction_window: expect fail
+
+[engines]
+smtbmc yices
+
+[script]
+activity: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+invariants: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+fetch: read -formal -D F_KIND=1 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+pc_window: read -formal -D F_KIND=2 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+instruction_window: read -formal -D F_KIND=3 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+timeout: read -formal -D F_KIND=4 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+prep -top engine_formal
+async2sync
+dffunmap
+
+[files]
+../build/formal/generated/engine_instrumented.sv
+engine_formal.sv
+../../src/pbe_crc.sv
+../../src/pbe_line.sv

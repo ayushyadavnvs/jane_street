@@ -1269,3 +1269,53 @@ clean (0 design violations).
   editing RTL to fit a decoder would hide faults. Exact independently reproduced
   signatures retain negative evidence. Reject stderr tracebacks even with nonempty
   stdout and exit0; installed decoder source remains unchanged (BUG-062).
+
+## D58. Formal evidence keeps assumptions, bounded checks and failed claims separate
+
+- **Decision:** use one SBY configuration per block, assertion-only generated
+  copies in ignored `pbe_v1/build/formal/generated/`, and a source-aware runner.
+  Tracked RTL transitions are unchanged. `make formal` is a separate long target;
+  the default simulation gate does not install tools or run proofs.
+- **Unbounded proofs:** 16-byte FIFO occupancy/boundaries/flush and arbitrary
+  selected-item order pass temporal k-induction; synchronized mode-0 host SPI
+  framing, addresses, bus strobes and staged read data also pass induction.
+  FIFO inputs are arbitrary after one initial reset. Host assumptions enforce
+  SCK high/low phases of at least four clocks and legal CS/SCK transitions;
+  arbitrary pauses and partial-byte CS aborts remain allowed. Cover-only host
+  timing fixes phases to four clocks to accelerate search; proof timing is not
+  restricted to that single rate.
+- **Bounded checks:** engine safety and coupled pre-edge D50 RAM equality use
+  BMC 40, coder off/divider 0. Timeout BMC 50 covers a permanently blocked WAIT,
+  TIMEOUT 1–5, CLKDIV 0–3, stable run/config and no host refetch/restart; its
+  independent tick-age and clock deadline prevent a vacuous never-issuing pass.
+  Four-state reset/restart simulation supplements two-state formal checking.
+- **Line scope:** 64 mode/order combinations send two symbolic bytes or 16 bit
+  transfers, matched shift direction, detectable nonzero sync and period 3;
+  BMC 164 includes a completion deadline at cycle 160. Pair modes assert exact
+  length for arbitrary payload. Stuffed single-wire modes assert payload-prefix
+  delivery and allow idle suffixes; unstuffed single-wire payload additionally
+  has a zero every fourth bit. Twelve arbitrary-input stuff-reaction BMC jobs
+  and 12 reachable-response cover jobs use depth 48. Shared encoder/decoder
+  composition does not independently prove the stuffing algorithm's merits.
+- **Retained failures:** original physical/actual PC fences, period-0 reception,
+  no-sync/idle-high/exact-length single-wire claims and unconditional stuff-error
+  claims remain explicit failed properties with traces. Twelve expected failures
+  are not counted as proofs or passing assertions. No RTL restriction was added
+  to hide them. Host/engine/cover monitor corrections and receipt metadata bugs
+  are recorded separately (BUG-063/064/066/067/068/071).
+- **Alternatives:** BMC alone cannot replace induction for FIFO/host safety;
+  assuming away all original failing assertions would misstate the request;
+  changing source behavior to satisfy a test would defeat verification. A global
+  all-rate/all-protocol claim is rejected in favor of named contracts/depths.
+- **Provenance and tools:** `formal/run.py --collect` compares every expanded
+  task configuration and copied source against the checkout, rejects missing
+  statuses, unrelated expected-failure errors, timeouts and stale inputs, checks
+  induction evidence, and records effective last-option overrides. SBY
+  v0.67-4-gfea6e46, Yosys 0.67+94 and Yices 2.7.0 produced the results; Icarus
+  supplies the separate four-state simulation. Existing D55 records bundle and
+  alternate-solver versions. No physical-design/gate-level flow was invoked.
+- **Result:** 108 jobs match their explicit expectation: 2 induction proofs,
+  79 bounded assertion passes, 15 successful cover jobs reaching 22 statement events across jobs,
+  and 12 failed original properties. Contracts, raw compressed logs, exact
+  hashes, counterexample VCDs and aggregate receipt accompany the three block
+  reports. This is finite/assumption-qualified verification, not tapeout sign-off.
