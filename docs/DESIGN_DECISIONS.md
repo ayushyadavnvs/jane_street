@@ -257,6 +257,9 @@ mark the old one **Changed** instead of deleting it.
   50 MHz (1 % error). UART and I2C rates divide well from 48 MHz too.
 - **Margin:** worst path ~4.9 ns at the slow corner (logic plus flip-flop overhead) vs 20.8 ns
   per cycle, roughly 4×.
+- **Changed (first routed run, D45):** the routed worst setup path is ~20.3 ns at the slow
+  corner, so the real margin is 0.586 ns (about 3 %), not 4×. The clock stays at 48 MHz; an
+  instruction-fetch register is being added to restore margin.
 
 ## D19. Protocol host conventions
 
@@ -772,7 +775,7 @@ mark the old one **Changed** instead of deleting it.
 - **Why:** the first page (+0..+F) was full (D32). The free +7 slot alone could not hold four
   bytes of new settings.
 
-## D45. Area and timing after USB
+## D45. Area and timing after USB — **Changed (first routed run: timing)**
 
 | | Area | Share of 6×4 tiles | Worst logic path (slow corner) |
 |---|---|---|---|
@@ -789,6 +792,52 @@ Breakdown of the +71,223 µm²:
 
 My estimate was about +50k µm²: 40 % low, as with the 128-word memory (D4). The coder was the
 part I under-estimated most.
+
+### Routed results (first full Tiny Tapeout run, commit df2e881)
+
+| | Estimate (Yosys + ABC, above) | Routed (LibreLane, measured in CI) |
+|---|---|---|
+| Area / utilization | 333,841 µm², 36.4 % of 6×4 tiles | 44.3 % utilization (instance utilization 0.501) |
+| Cells | — | 21,745 without fill; 73,420 instances with fill |
+| Hold-fix delay cells | not estimated | 3,590 (about +14.9 % area) |
+| Worst setup path, slow corner | 4.33 ns logic, ~5.2 ns with flip-flop overheads | ~20.3 ns |
+| Setup worst slack, slow corner (budget 20.833 ns) | ~15.6 ns (implied) | 0.586 ns |
+
+Static timing at a 20.833 ns clock, all corners:
+
+| Corner | Setup worst slack | Hold worst slack |
+|---|---|---|
+| slow (1.08 V, 125 °C) | 0.586 ns | 0.602 ns |
+| typ (1.20 V, 25 °C) | 7.95 ns | 0.284 ns |
+| fast (1.32 V, −40 °C) | 12.344 ns | 0.106 ns |
+
+Design-rule warnings (not failures): 277 max fanout; max slew 114 at the slow corner and 11 at
+typ; max capacitance about 60–70. Antenna violations are 0 after repair, and DRC and LVS are
+clean (0 design violations).
+
+- **Area:** the estimate held up reasonably. Most of the gap to 44.3 % is the hold-fix cells,
+  which a logic-only synthesis cannot see; the rest is placement buffering and resizing.
+- **Hold cells: expected, kept.** Tiny Tapeout's 0.25 ns clock uncertainty plus the 0.1 ns hold
+  margin apply to every direct flop-to-flop path (program memory, FIFO memories, shift
+  registers, synchronizers), and those paths have almost no logic between flops, so the flow
+  pads them with delay cells. Hold is met at every corner.
+- **Timing estimate — Changed (first routed run):** the estimate was optimistic by about 4×.
+  The worst routed path runs from `g_eng[1].u_eng.pc` through buffer chains into the mux4 tree
+  that reads the 128 × 16 program memory, then through decode to the next state: ~20.3 ns at
+  the slow corner against our ~5 ns. The method (D22) leaves out wire delay, and that path is
+  dominated by it: the PC drives the select lines of the whole 128-way read multiplexer, a
+  huge fan-out that place and route must buffer into long chains spread across the die. ABC's
+  `stime` sees only the logic depth. Setup is still met at every corner, but with 0.586 ns
+  at the slow corner, not the ~4× margin assumed in D18.
+
+  This is a limit of the method, which D22 already stated ("wire delay and clock skew are not
+  included"), not a tool bug, so it has no `BUG_LOG` entry. From now on, the routed STA report
+  is the timing figure; the ABC estimate is only for comparing RTL changes with each other.
+- **Follow-up:**
+  - A separate change adds an instruction-fetch register to cut the program-memory path; the
+    clock stays at 48 MHz.
+  - The physical-design flow is paused (`gds` and `gl_regression` by hand only, D46) until the
+    RTL is final.
 
 ## D46. Tiny Tapeout packaging
 
@@ -832,4 +881,11 @@ part I under-estimated most.
   is now being finished (reviewer fixes, the 48 MHz timing fix) before physical design
   resumes. Otherwise each RTL push would start a 2.5-hour build, and each testbench push would
   test new tests against an old netlist. RTL tests (`regression`) still run on every push.
+- **First full run (commit df2e881), measured in CI:**
+  - **`gds`:** success in 2 h 18 min, of which detailed routing took 1 h 30 min and Magic DRC
+    25 min. Precheck 9/9 passed; `gl_test` (the cocotb test on the routed netlist) passed 2/2.
+  - **`gl_regression`** (run 40810602581, `make test-gl`: `tb_proto`, `tb_usb`, `tb_pbe` on the
+    routed netlist with the PDK cell models): all passed, in 3 h 05 min, inside GitHub's 6-hour
+    job limit.
+  - Area, timing and the comparison with the estimates are in D45.
 
