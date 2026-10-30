@@ -1,0 +1,39 @@
+{
+  "id": "M21",
+  "category": "FIFO-accept",
+  "file": "src/pbe_fifo.sv",
+  "before": "if (pop && !empty) rptr <= rptr + 1'b1;",
+  "after": "if (pop) rptr <= rptr + 1'b1;",
+  "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+  "scratch": "/tmp/pbe-mutation-M21-mrvm5hpv/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 0,
+      "seconds": 195.993,
+      "status": "survived",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M21-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 6.851,
+      "status": "survived",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M21-diff.log.gz"
+    }
+  },
+  "caught_by": []
+}

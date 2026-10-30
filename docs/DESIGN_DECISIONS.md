@@ -107,7 +107,7 @@ mark the old one **Changed** instead of deleting it.
 - **Cost:** 164,095 → 262,618 µm² (18 % → 29 % of 6×4). I estimated +49,000 µm² beforehand; the
   real cost is about twice that, because doubling the words also doubles both engines'
   128-way read multiplexers. Worst logic path 3.97 ns.
-- **Proposal D55:** SRAM macros instead of flip-flops (one 256 × 16 per engine, written
+- **Proposal D62:** SRAM macros instead of flip-flops (one 256 × 16 per engine, written
   together, so this shared image stays); not the design yet.
 - **Next option:** latches instead of flip-flops for program memory (31 µm² per bit instead of
   ~67 µm² for a flip-flop with its write multiplexer) could save about 70,000 µm². Program memory
@@ -1204,8 +1204,277 @@ clean (0 design violations).
 - **Evidence:** missing-dependency import fails with an unconfigured interpreter;
   the pinned environment imports cocotb 2.0.1 and runs the suite. See BUG-057.
 
-## D55. Program memory: flip-flops vs SRAM — **Proposal (prototype behind `USE_SRAM`, not the design yet)**
+## D55. Round-2 verification records contracts, negative checks and tool versions
 
+- **Scope:** branch `verify/round2` starts at `verify/golden-model` commit `2d62b89`.
+  Complete the round-1 audit before formal/vector/coverage phases. Run `make test`
+  successfully before each phase commit; long jobs stay separate. Do not merge
+  to main or invoke physical-design/GDS/gate-level flows.
+- **Model independence:** distinguish original specified ISA rules from exact
+  cycle priorities learned from implementation. The rule inventory in
+  `verify/golden-model/ROUND2_MODEL_AUDIT.md` preserves that provenance. Header
+  additions document existing behavior; they do not retrospectively make a
+  shared model assumption independent. Behavioral HDL remains unchanged.
+- **Alternatives:** calling every model agreement an independent specification
+  check would overstate evidence. Tightening RTL or restricting formal inputs to
+  hide the original stronger window/write claims would conceal counterexamples.
+  Retain those assertions as explicit expected failures and document the observed
+  contract separately (BUG-058/059).
+- **Tools installed locally:** OSS CAD Suite archive `20260727`; Yosys
+  `0.67+94 (7defa5186-dirty)`; SBY `v0.67-4-gfea6e46`; Yices `2.7.0` revision
+  `05178c03ddf49c6bba63c5c7153774c11a5da12d`; Bitwuzla `0.9.1`;
+  Verilator `5.051 devel v5.050-99-gf8fb1d664 (mod)`. The bundle is extracted in
+  `/tmp/pbe-round2-tools/oss-cad-suite`, not installed into the system. Downloading
+  the suite does not invoke its physical-design tools. Icarus12/cocotb2.0.1 and
+  the pinned round-1 libraries remain available; receipts record each actual tool.
+- **Limits:** finite simulation, BMC, induction proofs, decoder agreement and RTL
+  coverage are different evidence. Report assumptions, depth, result and traces
+  separately. A two-state formal model alone cannot establish absence of X values
+  in a four-state simulator. A failed requested property remains visible.
+
+## D56. Mutation sensitivity is measured using isolated fault copies
+
+- **Decision:** mutate one exact RTL site at a time in an immutable scratch-copy
+  baseline, run actual `make test` and `make diff` for every fault, retain raw
+  compressed logs plus source hashes and per-check receipts. Never commit a mutant.
+- **Alternatives:** compilation errors, infrastructure failures and wall-time
+  timeouts do not demonstrate a test detecting a hardware fault. They are recorded
+  separately. A simulation watchdog is specifically identified rather than called
+  a byte-level assertion failure. Mutant jobs use separate directories.
+- **Result:** 24 faults tested; initial suite catches23, separate one-seed diff
+  catches17. The sole combined survivor is empty-FIFO pop guard removal. Add an
+  independent boundary test and rerun that mutant; it now fails with count31.
+  Preserve the original survivor and correction rather than rewriting history.
+- **Provenance:** the first aggregate source-hash guard correctly rejected a
+  concurrent comment-only audit edit after all48 make invocations finished. Its
+  summary is explicitly reconstructed from receipts; it is not claimed as a
+  successful original runner exit. The revised runner freezes a baseline and
+  offers opt-in comment-only equivalence, with literal hashes strict by default.
+- **Evidence:** `ROUND2_MUTATIONS.md` and `evidence/round2/mutations/`. Keep `make
+  mutate` separate from the short default gate. BUG-061 records the new boundary
+  test, without modifying the correct FIFO RTL.
+
+## D57. Keep full USB decoder disagreements as exact expected failures
+
+- **Decision:** always run full low-speed request decode in `make sigrok`, pin both
+  signalling/packet low-speed options and `in_request_start=submit`, distinguish
+  PASS/verified exact XFAIL/unexpected FAIL, and keep `sigrok-full` strict. Changed
+  versions/results, absent signatures and exceptions are not expected failures.
+- **Evidence:** USB1.1 chapters7/8, original PDF hash and source references are in
+  `ROUND2_USB.md`. Synthetic packets sent to the unchanged stock request class
+  reproduce both defects without PBE waveforms. Both request-start options fail;
+  first-ack adds BUG-062. This characterizes tools, not complete PBE conformance.
+- **Root cause:** missing DATA/handshake timeout leaves DATA RECEIVED stuck. A
+  retry IN is rejected; its NAK finishes stale data, unconditionally appended to
+  control IN before an acknowledged retry appends it again. This refines BUG-051.
+- **Alternatives:** suppressing traces, treating every failure as expected, or
+  editing RTL to fit a decoder would hide faults. Exact independently reproduced
+  signatures retain negative evidence. Reject stderr tracebacks even with nonempty
+  stdout and exit0; installed decoder source remains unchanged (BUG-062).
+
+## D58. Formal evidence keeps assumptions, bounded checks and failed claims separate
+
+- **Decision:** use one SBY configuration per block, assertion-only generated
+  copies in ignored `pbe_v1/build/formal/generated/`, and a source-aware runner.
+  Tracked RTL transitions are unchanged. `make formal` is a separate long target;
+  the default simulation gate does not install tools or run proofs.
+- **Unbounded proofs:** 16-byte FIFO occupancy/boundaries/flush and arbitrary
+  selected-item order pass temporal k-induction; synchronized mode-0 host SPI
+  framing, addresses, bus strobes and staged read data also pass induction.
+  FIFO inputs are arbitrary after one initial reset. Host assumptions enforce
+  SCK high/low phases of at least four clocks and legal CS/SCK transitions;
+  arbitrary pauses and partial-byte CS aborts remain allowed. Cover-only host
+  timing fixes phases to four clocks to accelerate search; proof timing is not
+  restricted to that single rate.
+- **Bounded checks:** engine safety and coupled pre-edge D50 RAM equality use
+  BMC 40, coder off/divider 0. Timeout BMC 50 covers a permanently blocked WAIT,
+  TIMEOUT 1–5, CLKDIV 0–3, stable run/config and no host refetch/restart; its
+  independent tick-age and clock deadline prevent a vacuous never-issuing pass.
+  Four-state reset/restart simulation supplements two-state formal checking.
+- **Line scope:** 64 mode/order combinations send two symbolic bytes or 16 bit
+  transfers, matched shift direction, detectable nonzero sync and period 3;
+  BMC 164 includes a completion deadline at cycle 160. Pair modes assert exact
+  length for arbitrary payload. Stuffed single-wire modes assert payload-prefix
+  delivery and allow idle suffixes; unstuffed single-wire payload additionally
+  has a zero every fourth bit. Twelve arbitrary-input stuff-reaction BMC jobs
+  and 12 reachable-response cover jobs use depth 48. Shared encoder/decoder
+  composition does not independently prove the stuffing algorithm's merits.
+- **Retained failures:** original physical/actual PC fences, period-0 reception,
+  no-sync/idle-high/exact-length single-wire claims and unconditional stuff-error
+  claims remain explicit failed properties with traces. Twelve expected failures
+  are not counted as proofs or passing assertions. No RTL restriction was added
+  to hide them. Host/engine/cover monitor corrections and receipt metadata bugs
+  are recorded separately (BUG-063/064/066/067/068/071).
+- **Alternatives:** BMC alone cannot replace induction for FIFO/host safety;
+  assuming away all original failing assertions would misstate the request;
+  changing source behavior to satisfy a test would defeat verification. A global
+  all-rate/all-protocol claim is rejected in favor of named contracts/depths.
+- **Provenance and tools:** `verify/formal/run.py --collect` compares every expanded
+  task configuration and copied source against the checkout, rejects missing
+  statuses, unrelated expected-failure errors, timeouts and stale inputs, checks
+  induction evidence, and records effective last-option overrides. SBY
+  v0.67-4-gfea6e46, Yosys 0.67+94 and Yices 2.7.0 produced the results; Icarus
+  supplies the separate four-state simulation. Existing D55 records bundle and
+  alternate-solver versions. No physical-design/gate-level flow was invoked.
+- **Result:** 108 jobs match their explicit expectation: 2 induction proofs,
+  79 bounded assertion passes, 15 successful cover jobs reaching 22 statement events across jobs,
+  and 12 failed original properties. Contracts, raw compressed logs, exact
+  hashes, counterexample VCDs and aggregate receipt accompany the three block
+  reports. This is finite/assumption-qualified verification, not tapeout sign-off.
+
+## D59. Reference vectors use external CRC and protocol encoders against captured RTL traffic
+
+- **Decision:** test the real `pbe_crc` public ports with fixed primary RevEng
+  catalogue records and independent `crccheck`; test USB and Modbus through the
+  chip pins using packets generated by maintained external libraries. Keep
+  these longer vector targets separate from default `make test`. Targets never
+  install dependencies automatically or modify RTL/protocol programs.
+- **CRC contract:** pin poly/width/init/refin/refout/xorout/check/residue metadata
+  for 25 catalogue entries, including every CRC family used by the programs and
+  at least ten extra configurations across widths 3–16. Twenty-two native
+  configurations pass ASCII `123456789`, empty data, eight seeded random payloads
+  each, exact-width appended checksum/residue, raw CRC_GOOD and corrupted-checksum
+  checks. Three arbitrary-init configurations are explicitly unsupported and
+  not counted as RTL passes. Feed bit order and raw/reflected output remain
+  distinct; xorout is an explicit software transformation, not a new register.
+  USB catalogue residue B001 corresponds to raw CRC_GOOD 800D; CRC5 residue 06
+  corresponds to raw good 0C. CRC-12/UMTS exercises unequal input/output reflection.
+- **CRC boundary:** direct-unit testing establishes primitive behavior, not
+  automatic configuration in an unchanged program. USB's program checks its
+  supported token CRC5 pattern rather than adding dynamic arbitrary-token CRC5
+  logic. The primitive accepts only zero/all-one native seeds; arbitrary xorout
+  values may require host/software work. No internal CRC state is forced.
+- **USB vectors:** LUNA packet helpers generate PID/token/data/handshake bytes
+  and CRC5/CRC16; usb-protocol additionally validates PID complement nibbles.
+  The latter release lacks a raw CRC packet encoder, so using LUNA is an
+  explicit alternative to writing a local encoder. Retain the existing bus
+  serializer/receiver and firmware model, while expected complete packet bytes
+  come from the external helpers. Two seeds each pass 38 host packets and 13
+  final DUT responses, including rejection, descriptors, vendor data and STALL.
+- **Modbus vectors:** PyModbus FramerRTU builds request/response ADUs and checks
+  actual captured frames independently. Seven pin-level cases cover varied
+  addresses/counts/data, 19,200/115,200 baud, 8E1/8N2, a corrupt CRC and a two-
+  character mid-frame gap. The electrical gap assertion belongs to the wire
+  bench/program status; PyModbus has no electrical-time input.
+- **Alternatives and limits:** handwritten CRC/PID generators or golden-model
+  self-comparison would share more implementation assumptions. Independent
+  packet bytes do not independently validate the retained serializer, receiver,
+  firmware behavior or analog pads, nor establish complete USB/Modbus conformance.
+  No unsupported hardware feature is introduced to fit a catalogue entry.
+- **Tools/provenance:** primary RevEng catalogue accessed 2026-10-29; crccheck
+  1.3.1, cocotb 2.0.1, Icarus/vvp 12.0; measured Python 3.10.12 for CRC and
+  protocol runs. The earlier CRC 3.10.14 entry came from the cocotb banner and
+  is corrected by launcher/embedded probes in phase 3 (BUG-073), with old
+  receipts/logs preserved. Protocol pins use luna-usb 0.2.3, usb-protocol 0.9.2 and pymodbus
+  3.11.3. Requirements, catalogue anchors, commands, generated tasks, hashes,
+  raw outputs and before/after BUG-065 evidence are checked in with the two
+  vector reports. Only simulation runs; no physical-design flow is invoked.
+
+## D60. Coverage reports logical obligations separately from raw tool instances
+
+- **Decision:** build/run the normal SV benches under Verilator with coverage,
+  then reuse the same per-clock top differential oracle and independent line
+  sweep. Add observation-only cover instrumentation in ignored scratch sources;
+  never change tracked RTL, protocol programs or assertions to obtain a hit.
+  Keep `make coverage` as a separate long target and `make test-coverage-tools`
+  as seven fast harness regressions. The ordinary gate remains Icarus/four-state.
+- **Functional obligations:** aggregate 92 named bins by logical name across
+  engines and test roots: 8 opcodes, 22 sub-ops, 8 JMP conditions, 8 pin/flag
+  WAIT conditions, 3 timeout/overflow/D50 events, 10 STATUS set/clear transitions,
+  32 active line modes and simultaneous running engines. Initial 89/92 gaps
+  close with observable WAIT FLAG RISE/FALL and overflow-clear tests. A hit does
+  not imply every engine, operand or taken/not-taken outcome was exercised.
+  D50's bin observes an invalidation request; separate fetch assertions check
+  the refill. Final functional coverage is 92/92.
+- **Structural aggregation:** coalesce identical original RTL source points
+  across hierarchies/benches, excluding testbench and appended instrumentation.
+  A source point is covered if any instance hits it. Final counts are line
+  190/191, toggle 3,186/4,062, branch 278/292, expression 443/461. Preserve the
+  raw vendor report separately because it includes testbenches, instrumentation
+  and per-hierarchy copies with different denominators. Neither denominator is
+  silently substituted for the other. The remaining line is a reachable unused-
+  address no-op, not an exclusion or declaration of unreachability.
+- **Artifact/provenance rules:** every successful simulation must create a new
+  regular nonempty data file. Clear old dumps before launch and before full
+  aggregation; propagate compile, assertion, XML and missing-data failures.
+  Refresh existing program-image make dependencies before snapshotting hex;
+  require source/include signatures for reused builds; isolate differential
+  diagnostics by build. Negative regressions retain failure evidence (BUG-072).
+  Scratch diagnostic-format and annotation-cwd adaptations are explicit tool
+  fixes (BUG-069), with failed originals retained.
+- **Alternatives/limits:** a raw per-copy percentage alone obscures logical
+  obligations, while reporting only 100% bins hides unexercised structural
+  behavior. Keep both. Verilator is two-state: `$isunknown` cannot prove X
+  freedom there. Only the model-marked unspecified empty-FIFO MISO bit is masked;
+  known outputs remain checked, and the separate Icarus four-state gate remains
+  authoritative for those X checks. Preserve three negative contract runs as
+  expected failures, not successful assertion traces used to improve coverage.
+- **Tools and outcome:** Verilator/verilator_coverage 5.051 devel
+  (`v5.050-99-gf8fb1d664`), GCC/G++ 11.4.0, cocotb 2.0.1 and measured Python
+  3.10.12. Launcher and embedded Icarus/Verilator probes resolve the misleading
+  3.10.14 banner as a metadata discrepancy (BUG-073), without asserting its
+  cause. The hardened complete campaign preserves 92/92 bins and all reported
+  source metrics. Raw logs, data, hashes, annotations and old artifact-policy
+  receipts are retained; no physical-design or synthesis flow is invoked.
+
+## D61. Stress observations preserve adverse results and distinguish deadlines from recovery
+
+- **Decision:** run the optional stress campaign separately from default `make
+  test`, using a new external-pin fixture, the existing host/program helpers,
+  and independent UART/SPI endpoints. Keep RTL, protocol programs and canonical
+  benches unchanged. Expected data comes from fixed or seeded bytes; only pin
+  and documented host-register observations determine the outcome.
+- **Exit contract:** `make stress` runs the 22 required observations strictly;
+  `make stress-characterize` runs all 33 and permits evidence collection to
+  complete while retaining five FAIL labels. `make stress-strict` runs all 33
+  with a nonzero result for any failed observation. Characterization is an
+  explicit alternative to aborting before collecting later margins; it never
+  converts an adverse observation into a PASS. Reevaluation of the saved full
+  evidence returns strict/required/characterization exits 1/0/0.
+- **Measured scope:** UART RX/TX at approximately 500 kbaud passes the required
+  ±2% clock-error cases. RX also passes this seed's ±2% independent per-bit
+  jitter at ±2% average error, a four-chip-clock delayed digital rising crossing,
+  and a one-chip-clock idle glitch. Sampled RX ±3%, ±4% and ±5% pass; the first
+  failing sampled points are ±6%, with failures also at ±8%. A centered
+  one-chip-clock data pulse changes `00` to `08`. These are finite observed
+  operating points, not guaranteed margins over all payloads/phases/rates.
+- **Host and concurrency:** 16 UART bytes survive a complete burst plus another
+  1 ms without host service and 100-bit pauses between subsequent reads. Of 20
+  incoming bytes, the FIFO plus blocked PUSH preserve the first 17; the last
+  three are lost while the engine cannot sample. Sticky RX overflow and IRQ
+  assert, and a new `42` byte is received after draining without a restart.
+  Twelve rounds run UART TX on E0 and SPI controller on E1 with disjoint pins,
+  restart/flush both between completed transfers, and compare all UART/MOSI/
+  MISO bytes. Each final round measures 1,336 overlapping chip clocks. An
+  isolated identical-source differential supplement passes eight seeds and
+  276,039 compared clocks with 5,000 stimulus iterations per seed.
+- **Deadlines and limits:** the final required run uses a 200 ms simulation-time
+  whole-driver watchdog, finite count-qualified drain loops and 1 ms caller
+  read deadlines. The earlier full characterization preceded the whole-driver
+  watchdog and overlap counter; its byte comparisons/stimulus are unchanged.
+  Neither run encounters a caller deadline. A watchdog only bounds the test;
+  it does not prove self-recovery or a universal no-hang property. UART's
+  single-sample 8N1 program has no dedicated framing-error record or majority
+  vote, so the adverse data/clock cases remain visible corruption limitations,
+  not asserted RTL defects or cleanly reported protocol failures.
+- **Alternatives and evidence boundary:** preserve incorrect bytes and status
+  rather than changing the program, relaxing expected data or presenting
+  injected corruption as success. A delayed digital threshold crossing is a
+  reproducible simulator approximation, not analog slew, metastability or pad
+  characterization. I2C, Modbus, USB, 1-Wire and WS2812 stress margins, systematic
+  pulse-phase sweeps and mid-byte restart atomicity remain unmeasured here.
+- **Tools/provenance:** Python launcher and independently probed embedded runtime
+  3.10.12 (startup banner says 3.10.14; see BUG-073), cocotb 2.0.1, cocotbext-uart 0.1.4, cocotbext-spi 0.5.0 with its
+  existing documented compatibility adapter, and Icarus/vvp 12.0 stable.
+  The clock uses the nearest even integer period, 20,834 ps. Seed `0x50424534`,
+  exact bytes/status, raw logs, XML, source hashes, evaluator exits and the
+  isolated differential receipt are retained under `evidence/round2/stress/`.
+  BUG-070 records a corrected evidence-export interpreter invocation. No
+  dependency installs occur in targets and no physical-design flow is invoked.
+
+## D62. Program memory: flip-flops vs SRAM — **Proposal (prototype behind `USE_SRAM`, not the design yet)**
+
+- **Number:** made as D55; renumbered D62 when round 2's D55-D61 were merged (D64).
 - **Problem:** the 128 × 16 flip-flop memory is about half the chip. In the first routed run
   (D45) it is 246,909 µm²: 55 % of the 452k µm² of standard cells and 27 % of the 6x4 die
   (2,048 flip-flops 100k, write logic 78k, read multiplexers 50k, tie cells 15k, buffer trees
@@ -1267,13 +1536,13 @@ clean (0 design violations).
 - **Tested:** `make test` runs `tb_fetch`, `tb_usb`, `tb_proto` and `tb_pbe` on both builds
   (IHP's behavioural model for the SRAM build), and both builds pass Verilator `-Wall` lint.
   The TT cocotb test passes on the SRAM build with `sram/flow.patch` applied. Mutations: a
-  single refetch (BUG-058) fails `tb_fetch` (a); no refetch after reset and a refetch only one
+  single refetch (BUG-074) fails `tb_fetch` (a); no refetch after reset and a refetch only one
   clock late are not caught (no test provokes them; see the investigation §3.7).
 - **To decide it:** a `gds` run by hand with `sram/flow.patch` (steps in
   `docs/SRAM_INVESTIGATION.md` §4), and the organisers' confirmation that a macro is accepted.
   When adopted, mark D4, D45 and D50 **Changed**.
 
-## D56. Independent verification lives in `verify/golden-model/`
+## D63. Independent verification lives in `verify/golden-model/`
 
 - **Chosen:** the golden model and everything that checks the design against outside
   references sit in one top-level directory, `verify/golden-model/`: the Python model
@@ -1281,7 +1550,8 @@ clean (0 design violations).
   third-party bus models (`bus_models/`), the reports and the recorded evidence. Before this they
   were spread over `pbe_v1/model`, `pbe_v1/test/differential`, `pbe_v1/test/bus_models`,
   `pbe_v1/tools/sigrok_verify.py`, `pbe_v1/test/test_sigrok_extract.py` and `pbe_v1/verification`
-  (D51-D54). The owner asked for one place.
+  (D51-D54). The owner asked for one place. (Numbered D56 when it was made; renumbered D63
+  when round 2's D55-D61 were merged, D64.)
 - **Why:** one place to look for the independent checks, separate from the design's own
   testbenches in `pbe_v1/test`. A reviewer can see which checks come from us and which come
   from references we did not write. The make targets stay in `pbe_v1/Makefile` (`GM` points at the
@@ -1291,3 +1561,50 @@ clean (0 design violations).
   were: no move, but no clear split between our tests and the independent ones.
 - Recorded evidence (`evidence/`, `bus_models/results.json`) keeps the commands as they were run,
   with the old paths: it is a dated record, not instructions.
+- **Extended by D64:** round 2's verification (D55-D61: formal, reference vectors, coverage,
+  stress, mutation testing and the specification-boundary checks) arrived after this move, still
+  under `pbe_v1/`. It now lives beside `verify/golden-model/` under `verify/`; D64 has the layout.
+
+## D64. Round 2's verification lives under `verify/`, beside the golden model
+
+- **Chosen:** when `verify/round2` was merged, its new verification was moved out of `pbe_v1`,
+  following D63:
+
+  | Before (round 2) | Now |
+  |---|---|
+  | `pbe_v1/formal/` | `verify/formal/` |
+  | `pbe_v1/coverage/` | `verify/coverage/` |
+  | `pbe_v1/test/reference_crc/` | `verify/vectors/crc/` |
+  | `pbe_v1/test/reference_protocols/` | `verify/vectors/protocols/` |
+  | `pbe_v1/test/stress/` | `verify/stress/` |
+  | `pbe_v1/tools/mutate.py` | `verify/mutation/mutate.py` |
+  | `pbe_v1/tools/check_spec_boundaries.py`, `pbe_v1/test/tb_spec_boundaries.sv` | `verify/spec_boundaries/` |
+  | `pbe_v1/tools/usb_decoder_repro.py` | `verify/golden-model/sigrok/` (it serves the sigrok checks) |
+  | `pbe_v1/verification/ROUND2_*.md`, `COVERAGE.md`, `evidence/round2/` | `verify/golden-model/` |
+
+  Every make target stays in `pbe_v1/Makefile` and points into `../verify` (`V`, like `GM`), so
+  `make formal`, `make coverage`, `make stress`, `make mutate`, `make test-crc-vectors` and
+  `make test-protocol-vectors` are run as before. Generated files (solver runs, coverage data,
+  scratch copies) still go to the ignored `pbe_v1/build/`.
+- **Round 2's reports sit next to `REPORT.md`, not in a `verify/round2/`:** `REPORT.md` is one
+  report for both rounds (round 2 appended its sections to it), its links to the `ROUND2_*.md`
+  files are relative, and `evidence/` is one dated tree (`phase1`-`phase3`, `round2`). Splitting
+  them would break those links for no gain.
+- **What stays in `pbe_v1/`:** `tb_fifo_robustness.sv` and `tb_engine_known_reset.sv` are plain
+  unit benches of the design's blocks, run by `make test` like `tb_engine_ops.sv`; the FIFO one
+  is the regression for a mutation the old benches missed (BUG-061). The design tools
+  (`pbe_asm.py`) stay too. `tb_spec_boundaries.sv` moved, because it exists only to keep
+  counterexamples to the old, stronger specification text (BUG-058/059) and is driven only by
+  `check_spec_boundaries.py`.
+- **Alternatives:** everything under `verify/golden-model/` (one directory, but formal and
+  coverage are not part of the golden model and would bury it); leaving round 2 in `pbe_v1/`
+  (no move, but D63's split between our design and the independent checks would be undone).
+- **Paths fixed:** the scripts' `Path(...).parents[N]` roots, the `.sby` `[files]` sections
+  (`../../pbe_v1/build/formal/generated/...`), the mutation scratch copy (which now copies
+  `pbe_v1`, `src`, `macros` and `verify`, BUG-076), the stress bench's import of the bus models
+  (BUG-075), and the commands and links in the reports and READMEs. Recorded evidence keeps the
+  commands and paths it was run with (D63). `docs/BUG_LOG.md` entries keep the paths in force
+  when each bug was found; this table maps them.
+- **Numbering:** main and round 2 both used D55-D56 and BUG-058. Round 2's numbers are kept
+  (its evidence cites them); main's were renumbered: SRAM proposal D55 → D62, directory move
+  D56 → D63, SRAM refetch bug BUG-058 → BUG-074.

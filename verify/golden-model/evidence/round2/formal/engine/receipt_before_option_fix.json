@@ -1,0 +1,170 @@
+{
+  "results": [
+    {
+      "block": "engine",
+      "task": "activity",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_activity",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 20,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 1.073,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_activity"
+    },
+    {
+      "block": "engine",
+      "task": "fetch",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_fetch",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 40,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 63.02,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_fetch"
+    },
+    {
+      "block": "engine",
+      "task": "instruction_window",
+      "tags": [],
+      "expected_status": "FAIL",
+      "folder": "engine_instruction_window",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 70,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 5.144,
+      "failed_assertions": [
+        "engine_formal.dut: engine_instrumented.sv:588.25-588.73 (_witness_.assert_assert_engine_instrumented_sv_588_516)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/engine_instruction_window"
+    },
+    {
+      "block": "engine",
+      "task": "invariants",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_invariants",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 40,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 12.348,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_invariants"
+    },
+    {
+      "block": "engine",
+      "task": "pc_window",
+      "tags": [],
+      "expected_status": "FAIL",
+      "folder": "engine_pc_window",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 70,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 4.952,
+      "failed_assertions": [
+        "engine_formal.dut: engine_instrumented.sv:587.19-587.58 (_witness_.assert_assert_engine_instrumented_sv_587_515)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/engine_pc_window"
+    },
+    {
+      "block": "engine",
+      "task": "timeout",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "engine_timeout",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 50,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/engine_instrumented.sv": "7043144d1e85107c95d1ba02c7eb0ef854d28cc9ed6601e771a7d946ee36952b",
+        "pbe_v1/formal/engine_formal.sv": "74719158dce101cbec72b100025a1008e6284fc3587789d68a103a4f8f380768",
+        "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+        "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+      },
+      "seconds": 3.776,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/engine_timeout"
+    }
+  ],
+  "total": 6,
+  "matched": 6,
+  "proven": 0,
+  "bounded_pass": 4,
+  "expected_counterexamples": 2,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven."
+}

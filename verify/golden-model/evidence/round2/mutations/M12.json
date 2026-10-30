@@ -1,0 +1,42 @@
+{
+  "id": "M12",
+  "category": "MSB-LSB",
+  "file": "src/pbe_engine.sv",
+  "before": "in_msb_first ? {isr[6:0], pin_now} : {pin_now, isr[7:1]}",
+  "after": "in_msb_first ? {pin_now, isr[7:1]} : {isr[6:0], pin_now}",
+  "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+  "scratch": "/tmp/pbe-mutation-M12-pa007iht/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 14.523,
+      "status": "caught",
+      "first_failure": "FAIL: SPI peripheral received 88, controller sent 11",
+      "log": "M12-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 2,
+      "seconds": 5.736,
+      "status": "caught",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M12-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test",
+    "diff"
+  ]
+}

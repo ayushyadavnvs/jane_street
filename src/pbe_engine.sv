@@ -14,9 +14,11 @@
 //                tick is at least 2 clocks away, and the bubble fits in between).
 //   CLKDIV = 0, and the line coder (instructions run every clock): DLY + 1 clocks, plus 1 for
 //                a taken jump. The first instruction after a restart starts 1 clock later.
-// A host write to the program memory refetches the current instruction (one bubble), so a
-// program the host changes is never run from a stale copy; with CLKDIV = 0 the engine slips
-// by that clock.
+// A host write to any program word invalidates the next-to-run instruction (one bubble).
+// It does not cancel an instruction already ready to execute on that same edge: that
+// instruction uses the old registered word. If blocked/stopped, the current word is fetched
+// again; after an executing instruction, its successor (or taken target) is fetched again.
+// The memory write commits at the edge, so the subsequent refill sees the updated word.
 //
 //  OP   name        ARG
 //  000  PIN p, act  [8:6] pin, [5:3] act: 0 DRV0, 1 DRV1, 2 REL, 3 TOG, 4 OUT, 5 OUTOD, 6 OUTPAR,
@@ -69,8 +71,40 @@
 //
 // Pin numbers are relative to pin_base (mod 8); the JMP pin is jmp_pin + pin_base.
 // Program addresses are relative to start_pc: a program starts at its own word 0, and every
-// jump (JMP, JCRCBAD, the timeout) goes to start_pc + target, so each engine works in its own
-// 64-word window of the 128-word program memory.
+// jump (JMP, JCRCBAD, JEQ, JNE, JLINE, the timeout) goes to (start_pc + target) mod 128.
+// A target is 6 bits; this is a branch-offset window, not a memory-protection boundary.
+// Sequential execution increments the full 7-bit PC and can leave that window or wrap 127->0.
+//
+// Cycle contract, clarified by the round-2 model audit (existing behavior, no RTL change):
+// - All decisions use pre-edge inputs/state. Reset zeros engine state and CRC; restart
+//   cancels execution, resets registers/counters/status/parity, releases all enables,
+//   preserves the output latch and previous sampled pins/flags, and initializes CRC.
+//   The 16-bit divider is due when count >= clkdiv; changing CLKDIV live can make a tick
+//   immediately due. Delay counts are 4 bits, timeout and divider counts are 16 bits.
+// - An empty fetch register fills even while stopped. run=0 freezes instruction/divider/
+//   timeout execution, but previous pins/flags, host clears, line events, byte CRC feed,
+//   and the line coder continue. A restart/disabled coder clears the line coder.
+// - WAIT RISE/FALL compares this clock's synchronized value with the preceding clock,
+//   including clocks while stopped or fetching; edges are not latched until a WAIT sees them.
+// - X-- tests old X and decrements only if nonzero. OUTOD latches 0 and enables only for a
+//   zero bit. REL preserves the latch. END with coder off and reserved EXT7 do nothing.
+//   Byte-mode OUT/OUTOD do not shift OSR. Every OSR load resets transmit parity; MOV/PUSH
+//   writes to ISR do not reset receive parity. An IN released by frame end keeps ISR but
+//   still XORs the coder data bit into receive parity (CRC is not fed without valid data).
+// - Timeout counts ticks after the first blocked issue, tests the old count every clock,
+//   and can affect any not-ready instruction (including coder/CRC stalls). Ready completion
+//   wins over timeout. A fetch bubble cannot time out. Bounds require run to stay set,
+//   no restart/PM writes/config changes, and a permanently unmet condition.
+// - RX-full IRQ pulses only on the first observed overflow until overflow is cleared.
+//   Host overflow/line-error clears win over their corresponding new events. A new line
+//   end wins over JLINE consumption. Without a host clear, CRCRST preserves a coincident
+//   coder error; STAT reads
+//   old status then clears parity/timeout. Host CRC init wins over CRC feed but does not
+//   cancel an already pending byte-feed queue. Byte feeds advance while stopped.
+// - Restart wins over PM invalidation; a taken branch/timeout retains its target on a PM
+//   write. Other writes refetch pc-1 if valid and not executing, else pc. Delays survive
+//   PM invalidation. Fetch validity describes a snapshot, not equality to live RAM after
+//   a write; a host write does not suppress same-edge instruction/FIFO/flag side effects.
 module pbe_engine (
     input  logic        clk,
     input  logic        rst_n,
@@ -99,7 +133,7 @@ module pbe_engine (
     // program memory
     output logic [6:0]  pc,           // program memory read address (absolute): the next word
     output logic [20:0] pc_copy,      // three more copies of pc, to share out its fan-out
-    output logic [6:0]  pc_d,         // the value pc takes at the next clock (an SRAM's address, D55)
+    output logic [6:0]  pc_d,         // the value pc takes at the next clock (an SRAM's address, D62)
     input  logic [15:0] instr,        // the program memory word at pc
     input  logic        pm_wr,        // the host is writing the program memory (any word)
     // pins

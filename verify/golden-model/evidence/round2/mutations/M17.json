@@ -1,0 +1,41 @@
+{
+  "id": "M17",
+  "category": "stuff-5-vs-6",
+  "file": "src/pbe_line.sv",
+  "before": "(st == 2'd1) ? 3'd6 : 3'd5",
+  "after": "(st == 2'd1) ? 3'd5 : 3'd6",
+  "baseline_sha256": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+  "scratch": "/tmp/pbe-mutation-M17-6o7xivb_/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 1.245,
+      "status": "caught",
+      "first_failure": "FAIL: USB TX: driven for 2336 clocks, expected 72 bits x 32",
+      "log": "M17-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 5.135,
+      "status": "survived",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M17-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test"
+  ]
+}

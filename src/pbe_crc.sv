@@ -6,6 +6,11 @@
 // first (CAN CRC-15) read it plain. A frame followed by its own correct CRC leaves the
 // register at zero for every CRC without a final inversion, and at a fixed residual for CRCs
 // sent inverted (USB CRC16: 0x800d). "CRC ok" means the register equals `good`.
+// Reset sets the register to zero regardless of init_ones. init wins over a coincident
+// step and loads zero/all width bits set; each step XORs bit_in with the old top bit,
+// shifts left with zero at bit 0, conditionally XORs poly, then masks to the width.
+// out_rev reverses only width bits and zero-extends; good compares the raw 16-bit state.
+// Live width/poly/good changes do not themselves initialize or mask the stored state.
 //
 //   Modbus CRC-16: poly 0x8005, 16 bits, init all ones, reversed output
 //   1-Wire CRC-8:  poly 0x31,    8 bits, init zero,     reversed output

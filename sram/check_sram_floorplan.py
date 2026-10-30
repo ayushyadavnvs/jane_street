@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the SRAM floorplan in sram/config.json against the macro LEF, without EDA tools (D55).
+"""Check the SRAM floorplan in sram/config.json against the macro LEF, without EDA tools (D62).
 
 For every macro instance in MACROS it computes the Metal4 PDN stripes that cross it, from the
 FP_PDN_* keys, and checks that

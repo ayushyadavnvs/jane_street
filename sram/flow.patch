@@ -17,7 +17,7 @@
 -PROJECT_SOURCES = pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_engine.sv tt_um_pbe.sv
 +PROJECT_SOURCES = pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_engine.sv pbe_pmem_sram.sv tt_um_pbe.sv
 +
-+# The SRAM program memory (D55): IHP's model of the macro; FUNCTIONAL selects its behavioural core
++# The SRAM program memory (D62): IHP's model of the macro; FUNCTIONAL selects its behavioural core
 +SRAM_DIR = $(PWD)/../macros/RM_IHPSG13_1P_256x16_c2_bm_bist
 +SRAM_MODELS = $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist.v $(SRAM_DIR)/RM_IHPSG13_1P_core_behavioral_bm_bist.v
 +VERILOG_SOURCES += $(SRAM_MODELS)
@@ -50,7 +50,7 @@
    "//": "https://tinytapeout.com/faq/#how-can-i-map-an-additional-external-clock-to-one-of-the-gpios",
    "CLOCK_PORT": "clk",
  
-+  "//": "---- SRAM program memory (D55, a proposal; see sram/README.md). Copy this file to src/config.json to use it. ----",
++  "//": "---- SRAM program memory (D62, a proposal; see sram/README.md). Copy this file to src/config.json to use it. ----",
 +  "//": "USE_SRAM selects the macro path in tt_um_pbe.sv; the macro module comes from the nl view below (a black box).",
 +  "VERILOG_DEFINES": ["USE_SRAM"],
 +
@@ -99,7 +99,7 @@
    "FP_IO_VLENGTH": 2,
  
 -  "FP_PDN_VPITCH": 50.0,
-+  "//": "SRAM (D55): pitch 6 x 11.24 um (the macro's power-column pitch), VPWR-VGND 5.62 um apart.",
++  "//": "SRAM (D62): pitch 6 x 11.24 um (the macro's power-column pitch), VPWR-VGND 5.62 um apart.",
 +  "FP_PDN_VPITCH": 67.44,
    "FP_PDN_VWIDTH": 2.1,
 +  "FP_PDN_VSPACING": 3.52,

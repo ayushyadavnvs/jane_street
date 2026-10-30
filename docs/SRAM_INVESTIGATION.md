@@ -1,6 +1,6 @@
 # Program memory: flip-flops or SRAM? (investigation, October 2026)
 
-Branch `investigate/sram`. Decision entry: D55 in `docs/DESIGN_DECISIONS.md` (a proposal).
+Branch `investigate/sram`. Decision entry: D62 in `docs/DESIGN_DECISIONS.md` (a proposal).
 Proof of concept: `src/pbe_pmem_sram.sv`, the `USE_SRAM` branch of `src/tt_um_pbe.sv`,
 `macros/RM_IHPSG13_1P_256x16_c2_bm_bist/`, and the flow change set in `sram/`. The default
 build (no `USE_SRAM`) is unchanged; `make test` runs both.
@@ -283,7 +283,7 @@ The 64-word window comes from the instruction format, not from the memory:
 - `make test` now also runs `test-sram`: `tb_fetch`, `tb_usb`, `tb_proto` and `tb_pbe` on the
   SRAM build (IHP's model). All pass, as do both builds' Verilator lint and the TT cocotb test
   with `sram/flow.patch` applied (2 of 2). The engine-only testbenches do not use the top level.
-- Mutations of the SRAM path (BUG-058):
+- Mutations of the SRAM path (BUG-074):
 
   | Mutation | Caught |
   |---|---|

@@ -1,0 +1,11 @@
+[
+  "/tmp/pbe-sigrok-root/usr/bin/sigrok-cli",
+  "-i",
+  "/tmp/pbe-round2-usb/usb.vcd",
+  "-I",
+  "vcd",
+  "-P",
+  "usb_signalling:dp=p1:dm=p0:signalling=low-speed,usb_packet:signalling=low-speed,usb_request:in_request_start=first-ack",
+  "-A",
+  "usb_request"
+]

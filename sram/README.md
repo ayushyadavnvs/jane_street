@@ -1,4 +1,4 @@
-# SRAM program memory: the flow change set (D55, a proposal)
+# SRAM program memory: the flow change set (D62, a proposal)
 
 Nothing in this folder is used by the default build or by the `gds` workflow until
 `flow.patch` is applied. The findings are in `docs/SRAM_INVESTIGATION.md`.

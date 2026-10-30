@@ -74,6 +74,10 @@ written by the same agent from the same reading would share that agent's mistake
 The log has 57 entries, BUG-001 to BUG-057. Its own summary table stops at BUG-045 and leaves
 out BUG-038–042, so the classification below comes from the entries themselves.
 
+The tables below count BUG-001 to BUG-057, the log when this was written. Round 2 of the
+verification added BUG-058 to BUG-073, and merging it added BUG-074 (the SRAM prototype's
+refetch, logged on `main` as BUG-058) to BUG-076 (D64); they are not classified here yet.
+
 **By category.** *Design* means RTL, protocol programs, the assembler and the host-firmware
 protocol. *Test* means our own testbenches, models and verification harnesses. *Tool* means
 simulators, synthesis, lint, CI configuration and third-party libraries or decoders.
@@ -149,24 +153,29 @@ that fails on the old code:
 
 ## 3. Verification layers
 
-Status was checked on `main` at `2d62b89` (the same commit as `docs/writeups` before this
-change). All three groups below are on `main`. "In CI" means the `regression` workflow
-(`.github/workflows/regression.yaml`) runs it on every push. Its run on `2d62b89`, run 12, passed.
+Status after round 2 of the independent verification (branch `verify/round2`, D55-D61) was
+merged with `main` (D64). All three groups below are in the repository; round 2's files are under
+`verify/` (D63, D64). "In CI" means the `regression` workflow (`.github/workflows/regression.yaml`)
+runs it on every push. Its run on `2d62b89`, run 12, passed; that was before round 2 enlarged
+`make test`, which passes locally on the merged branch (exit 0, about 6 minutes) and has not run in
+CI yet.
 
-### 3.1 On `main` and in CI on every push
+### 3.1 In `make test` (CI on every push)
 
 | Layer | What | Where |
 |---|---|---|
-| Directed SystemVerilog testbenches | 7 executables run by `make test`: `tb_engine_restart`, `tb_engine_ops`, `tb_fetch`, `tb_line`, `tb_usb`, `tb_proto`, `tb_pbe` (shared host helpers in `tb_host.svh`). Tests 0–12, all through the chip's pins except the unit tests | `pbe_v1/test`, `pbe_v1/Makefile` |
+| Directed SystemVerilog testbenches | 9 executables: `tb_fifo_robustness`, `tb_engine_known_reset`, `tb_engine_restart`, `tb_engine_ops`, `tb_fetch`, `tb_line`, `tb_usb`, `tb_proto`, `tb_pbe` (shared host helpers in `tb_host.svh`). Tests 0–12, all through the chip's pins except the unit tests. `tb_fifo_robustness` was added when mutation M21 survived (BUG-061); `tb_engine_known_reset` checks four-state reset and restart outputs, which two-state formal cannot | `pbe_v1/test`, `pbe_v1/Makefile` |
+| SRAM program memory | `make test-sram`: `tb_fetch`, `tb_usb`, `tb_proto`, `tb_pbe` again with `USE_SRAM` and IHP's macro model (D62) | `pbe_v1/Makefile` |
 | Device models | Written apart from the RTL (D21): UART monitor, SPI peripheral, I2C register device with clock stretching, two DS18B20-style 1-Wire devices, RS-485 Modbus device, WS2812 decoder, mode-0 SPI controller, fast-mode I2C controller, USB host at ±1.5 % with its own CRC code, USB device-firmware model, and reference coders for USB, CAN and HDLC | the testbenches above |
 | Hand mutation checks | Features broken on purpose to show that a test fails, as listed in D34–D37, D42, D50 and `pbe_v1/README.md` (Status). Two of these exposed weak tests (BUG-004, BUG-026) | the same tests |
 | Testbench lint | `make test` fails on Icarus's static-initializer warning (BUG-023) | `pbe_v1/Makefile` `LINT` |
-| Verilator lint | `--lint-only -Wall` on the whole RTL (D46, BUG-045) | `regression.yaml` |
-| Python executable specification, unit tests | `make test-model`: 20 unit tests, engine, line coder, top level and FIFOs (REPORT.md) | `verify/golden-model/model` |
-| Random differential smoke | `make diff N=2 CYCLES=600 SEED=0x504245`: random programs, host traffic and pin stimulus compared with the RTL every clock | `verify/golden-model/differential` |
-| Capture-extraction regression | `make test-sigrok-extract` (BUG-049); needs no sigrok binary | `pbe_v1/test/test_sigrok_extract.py` |
+| Verilator lint | `--lint-only -Wall` on the whole RTL, and again with `USE_SRAM` (D46, BUG-045) | `regression.yaml` |
+| Specification boundaries | The documented program-window and write contracts pass; the three original, stronger claims are kept as expected counterexamples (BUG-058/059) | `verify/spec_boundaries` |
+| Python executable specification, unit tests | `make test-model`: 24 unit tests, engine, line coder, top level and FIFOs | `verify/golden-model/model` |
+| Tool self-tests | 3 formal-receipt tests (BUG-067, BUG-071), 7 coverage-artifact guards (BUG-072), 5 capture-extraction and decoder-replay tests (BUG-049, BUG-062); none needs the external tool | `verify/formal`, `verify/coverage`, `verify/golden-model/sigrok` |
+| Random differential smoke | `make diff N=2 CYCLES=600 SEED=0x504245`: random programs, host traffic and pin stimulus compared with the RTL every clock; 49,010 clocks | `verify/golden-model/differential` |
 
-### 3.2 On `main`, run by hand
+### 3.2 Run by hand
 
 | Layer | What | Recorded result |
 |---|---|---|
@@ -174,18 +183,24 @@ change). All three groups below are on `main`. "In CI" means the `regression` wo
 | Tiny Tapeout cocotb `gl_test` | `test/test.py`: a register round trip and a UART loopback between the engines, run on the routed netlist by the `gds` workflow (also on the RTL by `test.yaml` on every push) | 2/2 passed in the first run (D46) |
 | Long random differential campaign | `make diff N=… SEED=…` | 32 seeds, 883,486 clocks compared, 8/8 opcodes and 34/34 sub-operations run, no disagreement (REPORT.md, phase 1) |
 | Line coder and engine+coder differential | `make diff-line`, `make diff-engine-line` | 80,160 and 64,064 clocks, pass (REPORT.md) |
-| sigrok decoding | `make sigrok`: stock UART, SPI, I2C, 1-Wire, Modbus, WS2812 and USB decoders on captured pins (D52) | 22/22; the strict `make sigrok-full` gives 22/24, from two stock-decoder bugs (BUG-050, BUG-051) |
+| sigrok decoding | `make sigrok`: stock UART, SPI, I2C, 1-Wire, Modbus, WS2812 and USB decoders on captured pins (D52, D57) | 22 pass and the 2 stock-decoder disagreements (BUG-050, BUG-051) as exact expected failures, exit 0; the strict `make sigrok-full` gives 22/24, exit 1 |
 | cocotbext bus models | `make test-buses`: third-party UART, SPI and I2C endpoints on the chip's pins only (D53) | 6 endpoints, 18 random cases pass (PHASE3.md), with recorded adapters (BUG-052, BUG-053) |
+| SymbiYosys formal properties | `make formal`: FIFO, host SPI, line coder, engine (D58) | 108/108 jobs match their expectation: 2 unbounded k-induction proofs (16-byte FIFO, host SPI), 79 bounded (BMC) passes, 15 covers reached, 12 original properties failing as expected (10 line-coder claims, 2 program-window fences). The engine and line coder are bounded only |
+| Mutation testing | `make mutate`: 24 single-site RTL faults, each running `make test` and `make diff` on a scratch copy (D56) | The initial `make test` caught 23/24, the one-seed `make diff` 17/24; the survivor M21 (empty-FIFO pop) is now caught by `tb_fifo_robustness` (ROUND2_MUTATIONS.md) |
+| CRC catalogue vectors | `make test-crc-vectors`: the CRC unit against the RevEng catalogue and crccheck (D59) | 22 configurations, widths 3–16: 220 payloads and 22 corrupted checksums pass; 3 entries need an arbitrary initial value and are unsupported |
+| Protocol reference vectors | `make test-protocol-vectors`: USB packets from LUNA and usb-protocol, Modbus ADUs from PyModbus, through the chip's pins (D59) | USB: 38 host packets and 13 device responses, two seeds; Modbus: 7 cases at 19,200 and 115,200 baud, 8E1 and 8N2 |
+| Code coverage | `make coverage`: the SV benches, the differential and the line sweep under Verilator (D60) | 92/92 named functional bins; line 190/191 (99.5 %), toggle 3,186/4,062 (78.4 %), branch 278/292 (95.2 %), expression 443/461 (96.1 %) |
+| Stress and robustness | `make stress`, `make stress-characterize`: UART clock error and jitter, glitches, FIFO backlog, concurrent UART and SPI with restarts (D61) | 22/22 required observations; 33 characterized, 28 pass and 5 kept as failures (UART RX fails first at ±6 % clock error; a one-clock mid-bit glitch corrupts a byte; 3 of 20 bytes lost past FIFO capacity, with overflow flagged); random supplement 8 seeds, 276,039 clocks |
 
-### 3.3 Planned (not in the repository)
+### 3.3 Not covered yet
 
 | Layer | Status and source |
 |---|---|
-| SymbiYosys formal properties | Planned: FIFO acceptance and count invariants, host SPI framing, line-coder safety (D21; REPORT.md "Next") |
-| Automated mutation score | Planned with MCY (D21). Mutation checks are done by hand today (3.1) |
-| CRC catalogue vectors | Planned: wider CRC vectors from the reveng catalogue (REPORT.md). Today the CRCs are checked against Modbus, 1-Wire, SMBus and USB values (D29, D36, D41) |
-| Code coverage | Planned: Verilator coverage with coverage-directed generation (REPORT.md). Today's coverage is functional, counting executed opcodes, not RTL branch or toggle coverage |
+| Unbounded engine and line-coder proofs | Only bounded (BMC 40–164 clocks) today; only the FIFO and host SPI are proved by induction (ROUND2_FORMAL_*.md) |
+| Stress of the other protocols | I2C, Modbus, USB, 1-Wire and WS2812 margins, every glitch phase and mid-byte restart are not measured (ROUND2_STRESS.md) |
+| Toggle coverage | 78.4 %; the misses are visible in the annotated sources (COVERAGE.md) |
 | SPI modes 1–3 | Not covered: the existing SPI programs implement mode 0, and the bus tests report the other modes as unsupported (PHASE3.md) |
+| Silicon and pads | Everything above is digital simulation or formal on the RTL (and the gate-level netlist for `test-gl`); no electrical or hardware claim |
 
 ## 4. Where AI helped and where it failed
 
@@ -246,13 +261,18 @@ From the repository root, with `iverilog`/`vvp` (12.0) and Python 3 on `PATH`:
 python3 -m venv .venv
 .venv/bin/pip install -r verify/golden-model/differential/requirements.txt   # cocotb 2.0.1
 cd pbe_v1
-make test                                  # lint, 7 testbenches, model unit tests, extraction test, 2-seed smoke
+make test                                  # lint, 9 testbenches, SRAM benches, spec boundaries, model and tool unit tests, 2-seed smoke
 make diff N=32 SEED=0x504245 CYCLES=2000    # a longer differential campaign
 make diff-line && make diff-engine-line     # line coder, engine + coder + CRC
 make sigrok SIGROK_CLI=/path/to/sigrok-cli  # stock decoders; needs sigrok-cli
 make sigrok-full SIGROK_CLI=/path/to/sigrok-cli   # strict USB request check; expected to fail (BUG-050/051)
 ../.venv/bin/pip install -r ../verify/golden-model/bus_models/requirements.txt
 make test-buses CASES=3 BUS_SEED=20261029   # third-party bus models
+make formal                                # SymbiYosys; needs the OSS CAD Suite on PATH
+make test-crc-vectors test-protocol-vectors # after installing ../verify/vectors/*/requirements.txt
+make coverage                              # Verilator coverage
+make stress                                # pin-level stress, required cases
+make mutate                                # 24 RTL faults on scratch copies (long)
 make synth && make timing                   # area and logic-only timing estimates (D22)
 cd ../test && make                          # Tiny Tapeout cocotb test on the RTL
 ```

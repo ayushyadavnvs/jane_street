@@ -1,0 +1,26 @@
+[
+  {
+    "case": "before",
+    "command": [
+      "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+      "pbe_v1/verification/evidence/round2/python_runtime/check_receipt.py",
+      "pbe_v1/verification/evidence/round2/python_runtime/coverage-receipt-before.json",
+      "pbe_v1/verification/evidence/round2/python_runtime/verilator-runtime.json"
+    ],
+    "returncode": 1,
+    "expected": 1,
+    "output": "VERSION MISMATCH: receipt=3.10.14 runtime=3.10.12\n"
+  },
+  {
+    "case": "after",
+    "command": [
+      "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+      "pbe_v1/verification/evidence/round2/python_runtime/check_receipt.py",
+      "pbe_v1/verification/evidence/round2/coverage/receipt.json",
+      "pbe_v1/verification/evidence/round2/python_runtime/verilator-runtime.json"
+    ],
+    "returncode": 0,
+    "expected": 0,
+    "output": "VERSION MATCH: receipt=3.10.12 independently probed runtime=3.10.12\n"
+  }
+]

@@ -7,6 +7,15 @@
 // (program memory data and the engine FIFOs), so a burst can stream many bytes into one.
 //
 // SCK, CS_n and MOSI arrive already synchronized to clk, so SCK must be at most clk/8.
+// Cycle contract (round-2 clarification): byte completion registers wr_en/rd_done;
+// the top-level bus consumes the pulse on the following clk edge. Read data stages into
+// MISO two clk edges after command/read-byte completion, after a FIFO pop has landed.
+// The first following SCK falling edge (bit count 0) does not shift this fresh byte.
+// Stream addresses are exactly 0x07, 0x16, 0x26; other addresses wrap modulo 128.
+// CS_n high abandons any partial byte, clears command framing, read-load pipeline and
+// transmit shifter/MISO, but preserves address/receive shifter and commits any previously
+// issued bus pulse. Reset zeros all host state. Write transactions have no promised MISO
+// payload; read prefetch may expose unspecified head data if an empty FIFO is selected.
 module pbe_host_spi (
     input  logic       clk,
     input  logic       rst_n,

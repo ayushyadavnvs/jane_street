@@ -498,6 +498,10 @@ module tb_pbe;
   always @(negedge bus[OW]) if (conc_i2c_busy && !conc_ow_done) conc_overlap++;
 
 
+`ifdef PBE_PROTOCOL_REFERENCE
+  `include "modbus_reference.svh"
+`endif
+
   // ---------------- tests ----------------
   initial begin
     logic [7:0] sent[$], got;
@@ -511,6 +515,11 @@ module tb_pbe;
     repeat (5) @(posedge clk);
     rst_n = 1;
     repeat (5) @(posedge clk);
+
+`ifdef PBE_PROTOCOL_REFERENCE
+    modbus_reference;
+    $finish;
+`endif
 
     // register readback sanity check
     reg_write(7'h10, 8'hA5);

@@ -1,5 +1,12 @@
 // Small synchronous FIFO used between the host interface and each engine.
 // Push while full and pop while empty are ignored.
+// Acceptance uses occupancy before the edge: simultaneous push+pop when full only pops,
+// when empty only pushes, and at intermediate occupancy accepts both. Reset/flush zeros
+// both pointers and count, with flush winning over pointer updates. Storage is unreset and
+// an accepted push still writes its old write-pointer slot on a flush/reset edge; those
+// bytes are not logically queued after the reset/flush. dout continuously exposes the
+// head slot, even while empty (stale/unknown data); callers must qualify it with !empty.
+// This is the existing storage/pointer contract, clarified in the round-2 model audit.
 module pbe_fifo #(
     parameter int WIDTH = 8,
     parameter int ADDR_BITS = 2  // depth = 2**ADDR_BITS
@@ -38,7 +45,7 @@ module pbe_fifo #(
     end
   end
 
-  // Storage has no reset: it is never read before it is written.
+  // Storage has no reset: logical consumers must qualify reads with !empty.
   always_ff @(posedge clk) begin
     if (push && !full) mem[wptr[ADDR_BITS-1:0]] <= din;
   end

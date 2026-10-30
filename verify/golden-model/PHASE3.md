@@ -147,7 +147,9 @@ third-party master, not a claim that the stock master passed.
 
 ## Recorded environment and outcome
 
-Python 3.10.14; Icarus Verilog/VVP 12.0 stable; cocotb 2.0.1;
+Python startup banner reported 3.10.14; this historical run did not independently
+probe its runtime. Current round-2 probes measure 3.10.12 (BUG-073).
+Icarus Verilog/VVP 12.0 stable; cocotb 2.0.1;
 cocotbext-uart 0.1.4; cocotbext-spi 0.5.0; cocotbext-i2c 0.1.2;
 cocotb-bus 0.3.0; find_libpython 0.5.1; scapy 2.8.0.
 

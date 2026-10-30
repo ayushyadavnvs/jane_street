@@ -1,0 +1,75 @@
+{
+  "baseline_commit": "6130fa7c006777fda956408d216807d4fbaf5f7b",
+  "tools": {
+    "sby": "v0.67-4-gfea6e46",
+    "yosys": "0.67+94 git 7defa5186-dirty",
+    "yices": "2.7.0"
+  },
+  "source_sha256": {
+    "src/pbe_fifo.sv": "0dab5b2937704a236f43f8972991446d4e0dfa10894e86b1ef87d8cd3acf8898",
+    "src/pbe_host_spi.sv": "e797259e321c4344bad7d541ed13953f1fcd5361411b0620ad636f62d8841d94"
+  },
+  "instrumentation_sha256": {
+    "fifo_formal.sv": "b868f1592103b796b8d08202e3a29d25d04cbea2ff7916747737eb5ef790888e",
+    "host_formal.sv": "f895576ebd1fc8cd78ec8581dc7e71c7ba2008dff362220cc430c2a3e8e862f2"
+  },
+  "results": [
+    {
+      "block": "fifo",
+      "task": "prove",
+      "configured_depth": 32,
+      "status": "PASS 0 5",
+      "command": "sby -f -d ../build/formal/fifo fifo.sby prove",
+      "cover_steps": [],
+      "log": "fifo_host-fifo.log.gz",
+      "kind": "unbounded k-induction",
+      "induction_success": true
+    },
+    {
+      "block": "fifo",
+      "task": "cover",
+      "configured_depth": 64,
+      "status": "PASS 0 0",
+      "command": "sby -f -d ../build/formal/fifo_cover fifo.sby cover",
+      "cover_steps": [
+        3,
+        18,
+        19,
+        19
+      ],
+      "log": "fifo_host-fifo_cover.log.gz",
+      "kind": "bounded reachability witnesses"
+    },
+    {
+      "block": "host",
+      "task": "prove",
+      "configured_depth": 24,
+      "status": "PASS 0 0",
+      "command": "sby -f -d ../build/formal/host host.sby prove",
+      "cover_steps": [],
+      "log": "fifo_host-host.log.gz",
+      "kind": "unbounded k-induction",
+      "induction_success": true
+    },
+    {
+      "block": "host",
+      "task": "cover",
+      "configured_depth": 224,
+      "status": "PASS 0 7",
+      "command": "sby -f -d ../build/formal/host_cover host.sby cover",
+      "cover_steps": [
+        139,
+        139,
+        195,
+        195
+      ],
+      "log": "fifo_host-host_cover.log.gz",
+      "kind": "bounded reachability witnesses"
+    }
+  ],
+  "assumptions": {
+    "fifo": "Initial reset then high; push/pop/flush/din unconstrained",
+    "host": "Initial reset+CS high+SCK low, then reset high; >=4 clocks per SCK phase; CS assertion with SCK low; CS changes not coincident with SCK edge; arbitrary command/data/rd_data and gaps; cover only fixes SCK phases to exactly4 clocks"
+  },
+  "initial_harness_issue": "Host wrapping3bit read-index ghost admitted unreachable induction states; replaced with saturating4bit shifted-word count. Original induction counterexample/log retained; no RTL bug."
+}

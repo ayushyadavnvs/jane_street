@@ -1,0 +1,11 @@
+Coverage Summary:
+  line      : 73.3% ( 1752/ 2391)
+  toggle    : 39.1% (13108/33506)
+  branch    : 58.5% ( 1907/ 3260)
+  expr      : 57.6% ( 5204/ 9041)
+  fsm_state : 0.0% (    0/    0)
+  fsm_arc   : 0.0% (    0/    0)
+  user      : 26.9% (  263/  979)
+Annotation Summary:
+  lines with all attached points covered : 68.00%  (2360/3457)
+See lines with '%00' in /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/annotated

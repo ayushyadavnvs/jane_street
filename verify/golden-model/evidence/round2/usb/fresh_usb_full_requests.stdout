@@ -1,0 +1,23 @@
+usb_request-1: SETUP in: [ 80 06 00 01 00 00 40 00 ][ 12 01 10 01 FF 00 00 08 34 12 78 56 00 01 00 00 00 01 ] : ACK
+usb_request-1: ERR: received SETUP token in state DATA RECEIVED
+usb_request-1: ERR: received DATA0 token in state DATA RECEIVED
+usb_request-1: ERR: received SETUP token in state DATA RECEIVED
+usb_request-1: ERR: received DATA0 token in state DATA RECEIVED
+usb_request-1: ERR: received OUT token in state DATA RECEIVED
+usb_request-1: ERR: received DATA1 token in state DATA RECEIVED
+usb_request-1: ERR: received OUT token in state DATA RECEIVED
+usb_request-1: ERR: received DATA1 token in state DATA RECEIVED
+usb_request-1: ERR: received SETUP token in state DATA RECEIVED
+usb_request-1: ERR: received DATA0 token in state DATA RECEIVED
+usb_request-1: BULK in: [ ] : timeout
+usb_request-1: SETUP in: [ 80 06 00 01 00 00 12 00 ][ 12 01 10 01 FF 00 00 08 34 12 78 56 00 01 00 00 00 01 ] : ACK
+usb_request-1: SETUP in: [ 80 06 00 02 00 00 09 00 ][ 09 02 12 00 01 01 00 80 32 ] : ACK
+usb_request-1: SETUP in: [ 80 06 00 02 00 00 FF 00 ][ 09 02 12 00 01 01 00 80 32 09 04 00 00 00 FF 00 00 00 ] : ACK
+usb_request-1: SETUP out: [ 00 09 01 00 00 00 00 00 ][ ] : ACK
+usb_request-1: SETUP in: [ 80 06 02 03 09 04 40 00 ][ ] : STALL
+usb_request-1: SETUP out: [ 40 01 00 00 00 00 03 00 ][ AA BB CC ] : ACK
+usb_request-1: SETUP in: [ C0 02 00 00 00 00 04 00 ][ CC BB AA 55 ] : ACK
+usb_request-1: ERR: received IN token in state DATA RECEIVED
+usb_request-1: SETUP in: [ 80 06 00 01 00 00 12 00 ][ 12 01 10 01 FF 00 00 08 12 01 10 01 FF 00 00 08 34 12 78 56 00 01 00 00 00 01 ] : ACK
+usb_request-1: SETUP in: [ 84 06 00 02 00 00 09 00 ][ ] : timeout
+usb_request-1: SETUP in: [ 80 06 00 01 00 00 40 00 ][ 12 01 10 01 FF 00 00 08 34 12 78 56 00 01 00 00 00 01 ] : ACK

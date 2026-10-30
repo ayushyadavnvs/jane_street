@@ -1,0 +1,12 @@
+srd: TypeError: Calling usb_request-1 decode() failed: argument 1 must be int, not None
+srd: Traceback (most recent call last):
+  File "/tmp/pbe-sigrok-root/usr/share/libsigrokdecode/decoders/usb_request/pd.py", line 341, in decode
+    self.handle_transfer()
+  File "/tmp/pbe-sigrok-root/usr/share/libsigrokdecode/decoders/usb_request/pd.py", line 220, in handle_transfer
+    self.handle_request(request_started, request_end)
+  File "/tmp/pbe-sigrok-root/usr/share/libsigrokdecode/decoders/usb_request/pd.py", line 308, in handle_request
+    self.putr(ss_data, es, [2, ['BULK in: %s' % summary]])
+  File "/tmp/pbe-sigrok-root/usr/share/libsigrokdecode/decoders/usb_request/pd.py", line 160, in putr
+    self.put(ss, es, self.out_ann, data)
+TypeError: argument 1 must be int, not None
+

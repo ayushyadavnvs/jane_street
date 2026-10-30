@@ -1,0 +1,2 @@
+Exit: 1
+ERROR: iverilog exited 20; inspect /tmp/pbe_protocol_before_queue_bits/modbus_compile.stdout/stderr

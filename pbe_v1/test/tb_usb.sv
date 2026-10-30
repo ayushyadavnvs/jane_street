@@ -564,6 +564,10 @@ module tb_usb;
   end
 
   // ---------------- the test ----------------
+`ifdef PBE_PROTOCOL_REFERENCE
+  `include "usb_reference.svh"
+`endif
+
   initial begin
 `ifndef PBE_SIGROK
     if ($test$plusargs("vcd")) begin
@@ -611,6 +615,11 @@ module tb_usb;
     fw_run = 1;
     repeat (100) @(posedge clk);
     check(bus[0] && !bus[1] && uio_oe[1:0] == 0, "USB: bus not idle in J with the device released");
+
+`ifdef PBE_PROTOCOL_REFERENCE
+    usb_reference;
+    $finish;
+`endif
 
     // bus reset and a keep-alive: nothing must come back
     hs_line(0);

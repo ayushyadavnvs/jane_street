@@ -1,0 +1,37 @@
+SBY 16:06:18 [../build/formal/engine_invariants] Removing directory '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/formal/engine_invariants'.
+SBY 16:06:18 [../build/formal/engine_invariants] Copy '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../build/formal/generated/engine_instrumented.sv' to '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../build/formal/engine_invariants/src/engine_instrumented.sv'.
+SBY 16:06:18 [../build/formal/engine_invariants] Copy '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/engine_formal.sv' to '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../build/formal/engine_invariants/src/engine_formal.sv'.
+SBY 16:06:18 [../build/formal/engine_invariants] Copy '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../../src/pbe_crc.sv' to '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../build/formal/engine_invariants/src/pbe_crc.sv'.
+SBY 16:06:18 [../build/formal/engine_invariants] Copy '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../../src/pbe_line.sv' to '/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/../build/formal/engine_invariants/src/pbe_line.sv'.
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: smtbmc yices
+SBY 16:06:18 [../build/formal/engine_invariants] base: starting process "cd ../build/formal/engine_invariants/src; yosys -ql ../model/design.log ../model/design.ys"
+SBY 16:06:18 [../build/formal/engine_invariants] base: finished (returncode=0)
+SBY 16:06:18 [../build/formal/engine_invariants] prep: starting process "cd ../build/formal/engine_invariants/model; yosys -ql design_prep.log design_prep.ys"
+SBY 16:06:18 [../build/formal/engine_invariants] prep: finished (returncode=0)
+SBY 16:06:18 [../build/formal/engine_invariants] smt2: starting process "cd ../build/formal/engine_invariants/model; yosys -ql design_smt2.log design_smt2.ys"
+SBY 16:06:18 [../build/formal/engine_invariants] smt2: finished (returncode=0)
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: starting process "cd ../build/formal/engine_invariants; yosys-smtbmc -s yices --presat --unroll --noprogress -t 40  --append 0 --dump-vcd engine_0/trace.vcd --dump-yw engine_0/trace.yw --dump-vlogtb engine_0/trace_tb.v --dump-smtc engine_0/trace.smtc model/design_smt2.smt2"
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Solver: yices
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Checking assumptions in step 0..
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Checking assertions in step 0..
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Checking assumptions in step 1..
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Checking assertions in step 1..
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Checking assumptions in step 2..
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Checking assertions in step 2..
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  BMC failed!
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Value for anyconst engine_formal.start_any (engine_formal.sv:11.28-11.37): 1
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Assert failed in engine_formal.dut: engine_instrumented.sv:577.11-577.34 (_witness_.assert_assert_engine_instrumented_sv_577_545)
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Writing trace to VCD file: engine_0/trace.vcd
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Writing trace to Verilog testbench: engine_0/trace_tb.v
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Writing trace to constraints file: engine_0/trace.smtc
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Writing trace to Yosys witness file: engine_0/trace.yw
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: ##   0:00:00  Status: failed
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: finished (returncode=1)
+SBY 16:06:18 [../build/formal/engine_invariants] engine_0: Status returned by engine: FAIL
+SBY 16:06:18 [../build/formal/engine_invariants] summary: Elapsed clock time [H:MM:SS (secs)]: 0:00:00 (0)
+SBY 16:06:18 [../build/formal/engine_invariants] summary: Elapsed process time [H:MM:SS (secs)]: 0:00:00 (0)
+SBY 16:06:18 [../build/formal/engine_invariants] summary: engine_0 (smtbmc yices) returned FAIL
+SBY 16:06:18 [../build/formal/engine_invariants] summary: counterexample trace: ../build/formal/engine_invariants/engine_0/trace.vcd
+SBY 16:06:18 [../build/formal/engine_invariants] summary:   failed assertion engine_formal.dut._witness_.assert_assert_engine_instrumented_sv_577_545 at engine_instrumented.sv:577.11-577.34 step 2
+SBY 16:06:18 [../build/formal/engine_invariants] DONE (FAIL, rc=2)
+SBY 16:06:18 The following tasks failed: ['invariants']

@@ -3,6 +3,9 @@
 The model has separate old-state evaluation and edge commit: host transactions,
 engine side effects, synchronizers and FIFO accepts all see pre-edge values.
 No RTL is read at runtime. Unwritten memory is deliberately None (unspecified).
+Cycle priorities beyond the original register map are implementation-informed
+and explicitly inventoried in verify/golden-model/ROUND2_MODEL_AUDIT.md. Direct write()
+commits storage only; edge() is required for bus events/flush/restart behavior.
 """
 from .pbe_model import EngineModel
 
@@ -85,6 +88,7 @@ class HostSPI:
 class PBEModel:
     def __init__(self):
         self.program = [None] * 128
+        self._pm_partial = {}
         self.reset()
 
     def reset(self):
@@ -145,8 +149,22 @@ class PBEModel:
         elif addr == 7:
             word = self.pm_ptr >> 1
             old = self.program[word]
-            old = 0 if old is None else old
-            self.program[word] = (old & 0xff00 | data) if self.pm_ptr & 1 else (old & 255 | data << 8)
+            shift = 0 if self.pm_ptr & 1 else 8
+            if old is None:
+                # RAM has no reset. Retain each known byte, but do not invent a
+                # zero value for its unwritten neighbour. Partial words remain
+                # outside the deterministic engine oracle until both are known.
+                value, known = self._pm_partial.get(word, (0, 0))
+                value = (value & ~(255 << shift)) | data << shift
+                known |= 1 << (shift // 8)
+                if known == 3:
+                    self.program[word] = value
+                    self._pm_partial.pop(word, None)
+                else:
+                    self._pm_partial[word] = value, known
+            else:
+                self.program[word] = (old & ~(255 << shift)) | data << shift
+                self._pm_partial.pop(word, None)
             self.pm_ptr = (self.pm_ptr+1) & 255
         page, reg = addr >> 4, addr & 15
         if page in (1,2):

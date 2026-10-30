@@ -1,0 +1,41 @@
+{
+  "id": "M22",
+  "category": "restart-side-effect",
+  "file": "src/pbe_engine.sv",
+  "before": "wire exec = issue && ready && !restart;",
+  "after": "wire exec = issue && ready;",
+  "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+  "scratch": "/tmp/pbe-mutation-M22-apvi2zc6/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 0.446,
+      "status": "caught",
+      "first_failure": "FAIL: PULL had side effects during restart (pop 1 push 0 set 0000 clr 0000 irq 0)",
+      "log": "M22-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 5.493,
+      "status": "survived",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M22-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test"
+  ]
+}

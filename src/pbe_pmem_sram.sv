@@ -1,4 +1,4 @@
-// Program memory in SRAM (D55, a proposal; used only when USE_SRAM is defined).
+// Program memory in SRAM (D62, a proposal; used only when USE_SRAM is defined).
 //
 // One IHP RM_IHPSG13_1P_256x16_c2_bm_bist (single port, 256 x 16, synchronous read) per engine.
 // The host writes every copy at once, so the engines still see one shared program image, as

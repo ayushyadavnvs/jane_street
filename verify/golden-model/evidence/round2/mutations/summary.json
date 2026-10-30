@@ -1,0 +1,1127 @@
+{
+  "baseline_commit": "2d62b89d99163fa56d0ddb57985fba498b0b3bab",
+  "n": 1,
+  "cycles": 600,
+  "seed": "0x504245",
+  "jobs": 3,
+  "total": 24,
+  "caught": 23,
+  "source_audit": {
+    "src/pbe_crc.sv": {
+      "baseline_sha256": "3b25526d688495d7aac6baa14f217fbf550dbbbf13250449dbde250260e8fc55",
+      "current_sha256": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f",
+      "baseline_hdl_sha256": "85ddb82db12a66b69143503e4a3b5cd21d01f3f5923ebf1fa048463f3281bc5e",
+      "current_hdl_sha256": "85ddb82db12a66b69143503e4a3b5cd21d01f3f5923ebf1fa048463f3281bc5e",
+      "hdl_unchanged": true
+    },
+    "src/pbe_engine.sv": {
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "current_sha256": "68cbdbde6d69ef637d773a6fdadde14cc6fbedaf477c8348944c1c79cb27d99b",
+      "baseline_hdl_sha256": "955a334840a073bb9aad5dc0971d736daff962cf6abe1ccf9cc973528db0851e",
+      "current_hdl_sha256": "955a334840a073bb9aad5dc0971d736daff962cf6abe1ccf9cc973528db0851e",
+      "hdl_unchanged": true
+    },
+    "src/pbe_fifo.sv": {
+      "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+      "current_sha256": "0dab5b2937704a236f43f8972991446d4e0dfa10894e86b1ef87d8cd3acf8898",
+      "baseline_hdl_sha256": "e503581dfca26cb9c517e7aaafa3e930d64360a65a6420f7dbaf92a296ec0db1",
+      "current_hdl_sha256": "e503581dfca26cb9c517e7aaafa3e930d64360a65a6420f7dbaf92a296ec0db1",
+      "hdl_unchanged": true
+    },
+    "src/pbe_host_spi.sv": {
+      "baseline_sha256": "bccde5257da39f04b635086c6bc5c3ca1230b5293423aefc2c41fd625cd6b74b",
+      "current_sha256": "e797259e321c4344bad7d541ed13953f1fcd5361411b0620ad636f62d8841d94",
+      "baseline_hdl_sha256": "e835d09185f3a6760bc878f05dda195d6134e2eb5cd4e8adcd896e18e6a33099",
+      "current_hdl_sha256": "e835d09185f3a6760bc878f05dda195d6134e2eb5cd4e8adcd896e18e6a33099",
+      "hdl_unchanged": true
+    },
+    "src/pbe_line.sv": {
+      "baseline_sha256": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+      "current_sha256": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1",
+      "baseline_hdl_sha256": "7fdecd96a1d4626640ca13bbb25c1a34aaa710af1ca8c25f774f060f27c8b5cf",
+      "current_hdl_sha256": "7fdecd96a1d4626640ca13bbb25c1a34aaa710af1ca8c25f774f060f27c8b5cf",
+      "hdl_unchanged": true
+    },
+    "src/tt_um_pbe.sv": {
+      "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+      "current_sha256": "d9e7c849262c8d242438654c108f8d9c7ba5a0372777ad1ef3d3e95cef98a0e9",
+      "baseline_hdl_sha256": "a9afc2c5e307a743dfa5c6abe508842f765e20625d54615d1edcd0a2e00856c1",
+      "current_hdl_sha256": "a9afc2c5e307a743dfa5c6abe508842f765e20625d54615d1edcd0a2e00856c1",
+      "hdl_unchanged": true
+    }
+  },
+  "results": [
+    {
+      "id": "M01",
+      "category": "jump",
+      "file": "src/pbe_engine.sv",
+      "before": "3'd0:    jmp_take = 1'b1;",
+      "after": "3'd0:    jmp_take = 1'b0;",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M01-mmw_enfm/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.358,
+          "status": "caught",
+          "first_failure": "FAIL: 27 bytes pushed, expected 8",
+          "log": "M01-test.log.gz",
+          "first_failing_check": "tb_engine_ops"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 3.527,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(17, 17, 158), expected=(1, 17, 158)\",",
+          "log": "M01-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M01.json"
+    },
+    {
+      "id": "M02",
+      "category": "jump",
+      "file": "src/pbe_engine.sv",
+      "before": "jmp_take = (x != 8'd0);",
+      "after": "jmp_take = (x == 8'd0);",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M02-10_dcvw0/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.348,
+          "status": "caught",
+          "first_failure": "FAIL: byte 3 is 41, expected dd",
+          "log": "M02-test.log.gz",
+          "first_failing_check": "tb_engine_ops"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 3.54,
+          "status": "caught",
+          "first_failure": "\"reason\": \"flags\",",
+          "log": "M02-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M02.json"
+    },
+    {
+      "id": "M03",
+      "category": "jump",
+      "file": "src/pbe_engine.sv",
+      "before": "3'd2:    jmp_take = pins_in[jmp_idx];",
+      "after": "3'd2:    jmp_take = !pins_in[jmp_idx];",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M03-ex9enrno/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 11.481,
+          "status": "caught",
+          "first_failure": "FAIL: SPI peripheral replies 9e 52 ff, expected 3c a5 ff",
+          "log": "M03-test.log.gz",
+          "first_failing_check": "tb_proto"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 3.78,
+          "status": "caught",
+          "first_failure": "\"reason\": \"flags\",",
+          "log": "M03-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M03.json"
+    },
+    {
+      "id": "M04",
+      "category": "delay",
+      "file": "src/pbe_engine.sv",
+      "before": "dly_cnt <= dly;",
+      "after": "dly_cnt <= dly + 1'b1;",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M04-l4x8eobb/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.957,
+          "status": "caught",
+          "first_failure": "FAIL: CLKDIV 0: E1-E0 = 2 clocks, expected 1",
+          "log": "M04-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 3.597,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(0, 17, 204), expected=(1, 17, 204)\",",
+          "log": "M04-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M04.json"
+    },
+    {
+      "id": "M05",
+      "category": "tick",
+      "file": "src/pbe_engine.sv",
+      "before": "(div_cnt >= clkdiv)",
+      "after": "(div_cnt > clkdiv)",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M05-8x4ibzle/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.838,
+          "status": "caught",
+          "first_failure": "FAIL: CLKDIV 0: E1-E0 = 2 clocks, expected 1",
+          "log": "M05-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 4.227,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(0, 1, 204), expected=(0, 17, 204)\",",
+          "log": "M05-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M05.json"
+    },
+    {
+      "id": "M06",
+      "category": "FIFO-empty",
+      "file": "src/pbe_fifo.sv",
+      "before": "assign empty = (wptr == rptr);",
+      "after": "assign empty = (wptr != rptr);",
+      "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+      "scratch": "/tmp/pbe-mutation-M06-3dfgs3dk/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.965,
+          "status": "caught",
+          "first_failure": "FAIL: first run: 2 bytes ( 11 11 ), expected 1",
+          "log": "M06-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 0.176,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(0, 0, 48), expected=(0, 0, 0)\",",
+          "log": "M06-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M06.json"
+    },
+    {
+      "id": "M07",
+      "category": "FIFO-full",
+      "file": "src/pbe_fifo.sv",
+      "before": "(wptr[ADDR_BITS] != rptr[ADDR_BITS]);",
+      "after": "(wptr[ADDR_BITS] == rptr[ADDR_BITS]);",
+      "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+      "scratch": "/tmp/pbe-mutation-M07-iaqbkge3/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.871,
+          "status": "caught",
+          "first_failure": "FAIL: first run: 0 bytes ( ), expected 1",
+          "log": "M07-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 0.184,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(0, 0, 192), expected=(0, 0, 0)\",",
+          "log": "M07-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M07.json"
+    },
+    {
+      "id": "M08",
+      "category": "FIFO-count",
+      "file": "src/pbe_fifo.sv",
+      "before": "assign count = wptr - rptr;",
+      "after": "assign count = wptr - rptr + 1'b1;",
+      "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+      "scratch": "/tmp/pbe-mutation-M08-afiu5dcs/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.818,
+          "status": "caught",
+          "first_failure": "FAIL: first run: 2 bytes ( 11 xx ), expected 1",
+          "log": "M08-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 4.284,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(1, 17, 147), expected=(1, 17, 146)\",",
+          "log": "M08-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M08.json"
+    },
+    {
+      "id": "M09",
+      "category": "flag-clear",
+      "file": "src/tt_um_pbe.sv",
+      "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+      "after": "p_clr[7:0] | p_clr[15:8] | 8'h00",
+      "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+      "scratch": "/tmp/pbe-mutation-M09-8zopaag1/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 9.976,
+          "status": "caught",
+          "first_failure": "FAIL: USB: status stage is not a DATA1 ZLP",
+          "log": "M09-test.log.gz",
+          "first_failing_check": "tb_usb"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 5.206,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M09-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [
+        "test"
+      ],
+      "original_receipt": "M09.json"
+    },
+    {
+      "id": "M10",
+      "category": "flag-clear",
+      "file": "src/tt_um_pbe.sv",
+      "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+      "after": "8'h00 | 8'h00 | host_clr",
+      "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+      "scratch": "/tmp/pbe-mutation-M10-yde7ldfz/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 14.683,
+          "status": "caught",
+          "first_failure": "FAIL: I2C target: address+W not ACKed",
+          "log": "M10-test.log.gz",
+          "first_failing_check": "tb_proto"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 4.393,
+          "status": "caught",
+          "first_failure": "\"reason\": \"flags\",",
+          "log": "M10-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M10.json"
+    },
+    {
+      "id": "M11",
+      "category": "MSB-LSB",
+      "file": "src/pbe_engine.sv",
+      "before": "out_msb_first ? osr[7] : osr[0]",
+      "after": "out_msb_first ? osr[0] : osr[7]",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M11-jbi384vi/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.479,
+          "status": "caught",
+          "first_failure": "FAIL: byte 3 is 7e, expected dd",
+          "log": "M11-test.log.gz",
+          "first_failing_check": "tb_engine_ops"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 4.677,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(0, 17, 158), expected=(0, 16, 158)\",",
+          "log": "M11-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M11.json"
+    },
+    {
+      "id": "M12",
+      "category": "MSB-LSB",
+      "file": "src/pbe_engine.sv",
+      "before": "in_msb_first ? {isr[6:0], pin_now} : {pin_now, isr[7:1]}",
+      "after": "in_msb_first ? {pin_now, isr[7:1]} : {isr[6:0], pin_now}",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M12-pa007iht/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 14.523,
+          "status": "caught",
+          "first_failure": "FAIL: SPI peripheral received 88, controller sent 11",
+          "log": "M12-test.log.gz",
+          "first_failing_check": "tb_proto"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 5.736,
+          "status": "caught",
+          "first_failure": "\"reason\": \"0 u_rxf contents\",",
+          "log": "M12-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M12.json"
+    },
+    {
+      "id": "M13",
+      "category": "CRC-init",
+      "file": "src/pbe_crc.sv",
+      "before": "init_ones ? mask : '0",
+      "after": "init_ones ? '0 : mask",
+      "baseline_sha256": "3b25526d688495d7aac6baa14f217fbf550dbbbf13250449dbde250260e8fc55",
+      "scratch": "/tmp/pbe-mutation-M13-taxy22u3/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.512,
+          "status": "caught",
+          "first_failure": "FAIL: byte 3 is 9d, expected dd",
+          "log": "M13-test.log.gz",
+          "first_failing_check": "tb_engine_ops"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 5.024,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(17, 17, 158), expected=(1, 17, 158)\",",
+          "log": "M13-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M13.json"
+    },
+    {
+      "id": "M14",
+      "category": "CRC-feedback",
+      "file": "src/pbe_crc.sv",
+      "before": "bit_in ^ |(crc & top)",
+      "after": "bit_in ^ ~|(crc & top)",
+      "baseline_sha256": "3b25526d688495d7aac6baa14f217fbf550dbbbf13250449dbde250260e8fc55",
+      "scratch": "/tmp/pbe-mutation-M14-9m5n4t0b/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.36,
+          "status": "caught",
+          "first_failure": "FAIL: byte 3 is 9c, expected dd",
+          "log": "M14-test.log.gz",
+          "first_failing_check": "tb_engine_ops"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 4.543,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(17, 17, 158), expected=(1, 17, 158)\",",
+          "log": "M14-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M14.json"
+    },
+    {
+      "id": "M15",
+      "category": "D50-pm-write",
+      "file": "src/pbe_engine.sv",
+      "before": "if (pm_wr) iv <= 1'b0;",
+      "after": "if (1'b0) iv <= 1'b0;",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M15-5rqk3f86/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 1.193,
+          "status": "caught",
+          "first_failure": "FAIL: (a) stopped on a word the host rewrote, then run: 0 bytes ( ), expected 1",
+          "log": "M15-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 4.824,
+          "status": "caught",
+          "first_failure": "\"reason\": \"flags\",",
+          "log": "M15-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M15.json"
+    },
+    {
+      "id": "M16",
+      "category": "D50-pm-write",
+      "file": "src/pbe_engine.sv",
+      "before": "(iv && !exec) ? pc - 1'b1 : pc",
+      "after": "(iv && !exec) ? pc : pc",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M16-t7mmvxxh/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 1.114,
+          "status": "caught",
+          "first_failure": "FAIL: (a) stopped on a word the host rewrote, then run: byte 0 is 00, expected 33",
+          "log": "M16-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 5.398,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M16-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [
+        "test"
+      ],
+      "original_receipt": "M16.json"
+    },
+    {
+      "id": "M17",
+      "category": "stuff-5-vs-6",
+      "file": "src/pbe_line.sv",
+      "before": "(st == 2'd1) ? 3'd6 : 3'd5",
+      "after": "(st == 2'd1) ? 3'd5 : 3'd6",
+      "baseline_sha256": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+      "scratch": "/tmp/pbe-mutation-M17-6o7xivb_/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 1.245,
+          "status": "caught",
+          "first_failure": "FAIL: USB TX: driven for 2336 clocks, expected 72 bits x 32",
+          "log": "M17-test.log.gz",
+          "first_failing_check": "tb_line"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 5.135,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M17-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [
+        "test"
+      ],
+      "original_receipt": "M17.json"
+    },
+    {
+      "id": "M18",
+      "category": "stuff-TX",
+      "file": "src/pbe_line.sv",
+      "before": "wire n_stuff = !tstuff && st != 2'd0 && n_run == run_n;",
+      "after": "wire n_stuff = 1'b0;",
+      "baseline_sha256": "a565222e903bd9ece4c10c5185cdaf87e790271ad28e535b2461b2cb00ab818b",
+      "scratch": "/tmp/pbe-mutation-M18-cylzojfq/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 1.256,
+          "status": "caught",
+          "first_failure": "FAIL: USB TX: driven for 2144 clocks, expected 72 bits x 32",
+          "log": "M18-test.log.gz",
+          "first_failing_check": "tb_line"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 5.121,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M18-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [
+        "test"
+      ],
+      "original_receipt": "M18.json"
+    },
+    {
+      "id": "M19",
+      "category": "timeout",
+      "file": "src/pbe_engine.sv",
+      "before": "tmo_cnt >= timeout",
+      "after": "tmo_cnt > timeout",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M19-d0ro9lt3/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 195.166,
+          "status": "caught",
+          "first_failure": "\"reason\": \"flags\",",
+          "log": "M19-test.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 6.218,
+          "status": "caught",
+          "first_failure": "\"reason\": \"flags\",",
+          "log": "M19-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M19.json"
+    },
+    {
+      "id": "M20",
+      "category": "pin-ownership",
+      "file": "src/tt_um_pbe.sv",
+      "before": "(e_out[15:8] & pin_own) | (e_out[7:0] & ~pin_own)",
+      "after": "(e_out[15:8] & ~pin_own) | (e_out[7:0] & pin_own)",
+      "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+      "scratch": "/tmp/pbe-mutation-M20-l17v51xz/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 3.75,
+          "status": "caught",
+          "first_failure": "FATAL: tb_fetch.sv:174: time limit",
+          "log": "M20-test.log.gz",
+          "first_failing_check": "tb_fetch"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 5.027,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(0, 17, 204), expected=(1, 17, 204)\",",
+          "log": "M20-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M20.json"
+    },
+    {
+      "id": "M21",
+      "category": "FIFO-accept",
+      "file": "src/pbe_fifo.sv",
+      "before": "if (pop && !empty) rptr <= rptr + 1'b1;",
+      "after": "if (pop) rptr <= rptr + 1'b1;",
+      "baseline_sha256": "94ff0ef56b07a312d1cdf2e44fb91e9d1bf6bd1b1b0b2248805b0366d59be69a",
+      "scratch": "/tmp/pbe-mutation-M21-mrvm5hpv/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 0,
+          "seconds": 195.993,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M21-test.log.gz",
+          "first_failing_check": null
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 6.851,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M21-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [],
+      "original_receipt": "M21.json"
+    },
+    {
+      "id": "M22",
+      "category": "restart-side-effect",
+      "file": "src/pbe_engine.sv",
+      "before": "wire exec = issue && ready && !restart;",
+      "after": "wire exec = issue && ready;",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M22-apvi2zc6/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.446,
+          "status": "caught",
+          "first_failure": "FAIL: PULL had side effects during restart (pop 1 push 0 set 0000 clr 0000 irq 0)",
+          "log": "M22-test.log.gz",
+          "first_failing_check": "tb_engine_restart"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 5.493,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M22-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [
+        "test"
+      ],
+      "original_receipt": "M22.json"
+    },
+    {
+      "id": "M23",
+      "category": "parity",
+      "file": "src/pbe_engine.sv",
+      "before": "no_par || (par_out ^ odd)",
+      "after": "no_par || !(par_out ^ odd)",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M23-u4k8eise/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 185.705,
+          "status": "caught",
+          "first_failure": "FAIL: Modbus: device saw 72 parity, 0 stop, 0 DE errors",
+          "log": "M23-test.log.gz",
+          "first_failing_check": "tb_pbe"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 0,
+          "seconds": 5.864,
+          "status": "survived",
+          "first_failure": null,
+          "log": "M23-diff.log.gz",
+          "first_failing_check": null
+        }
+      },
+      "caught_by": [
+        "test"
+      ],
+      "original_receipt": "M23.json"
+    },
+    {
+      "id": "M24",
+      "category": "FIFO-ready",
+      "file": "src/pbe_engine.sv",
+      "before": "OP_FIFO: ready = arg_hi ? !rx_full : !tx_empty;",
+      "after": "OP_FIFO: ready = arg_hi ? rx_full : tx_empty;",
+      "baseline_sha256": "a62d03c631aab62f8a50afd095d59c4125a815a2201b266d16f2b51fa643eb4c",
+      "scratch": "/tmp/pbe-mutation-M24-x741k0wb/pbe_v1",
+      "checks": {
+        "test": {
+          "command": [
+            "make",
+            "test",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+          ],
+          "returncode": 2,
+          "seconds": 0.606,
+          "status": "caught",
+          "first_failure": "FAIL: 0 bytes pushed, expected 8",
+          "log": "M24-test.log.gz",
+          "first_failing_check": "tb_engine_ops"
+        },
+        "diff": {
+          "command": [
+            "make",
+            "diff",
+            "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+            "N=1",
+            "CYCLES=600",
+            "SEED=0x504245"
+          ],
+          "returncode": 2,
+          "seconds": 5.381,
+          "status": "caught",
+          "first_failure": "\"reason\": \"outputs actual=(1, 17, 206), expected=(1, 17, 142)\",",
+          "log": "M24-diff.log.gz",
+          "first_failing_check": "test_diff.random_differential"
+        }
+      },
+      "caught_by": [
+        "test",
+        "diff"
+      ],
+      "original_receipt": "M24.json"
+    }
+  ],
+  "provenance_note": "Reconstructed from all 24 original per-mutant receipts and raw logs after the runner final literal source hash guard correctly raised on concurrent specification-comment edits. Original receipts/logs are preserved. All baseline source file hashes match HEAD and all current comment-stripped HDL hashes match baseline. first_failure fields in this reconstructed summary are reparsed to omit the harmless cocotb pytest hint present in original receipts."
+}

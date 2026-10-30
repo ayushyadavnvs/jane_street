@@ -1,0 +1,251 @@
+{
+  "seed": 1346520370,
+  "versions": {
+    "usb-protocol": "0.9.2",
+    "luna-usb": "0.2.3",
+    "pymodbus": "3.11.3"
+  },
+  "usb": {
+    "packets": [
+      {
+        "label": "setup",
+        "hex": "2d0010",
+        "bits": "101101000000000000001000"
+      },
+      {
+        "label": "in",
+        "hex": "690010",
+        "bits": "100101100000000000001000"
+      },
+      {
+        "label": "out",
+        "hex": "e10010",
+        "bits": "100001110000000000001000"
+      },
+      {
+        "label": "wrong_address",
+        "hex": "692558",
+        "bits": "100101101010010000011010"
+      },
+      {
+        "label": "bad_crc5",
+        "hex": "690090",
+        "bits": "100101100000000000001001"
+      },
+      {
+        "label": "ack",
+        "hex": "d2",
+        "bits": "01001011"
+      },
+      {
+        "label": "nak",
+        "hex": "5a",
+        "bits": "01011010"
+      },
+      {
+        "label": "stall",
+        "hex": "1e",
+        "bits": "01111000"
+      },
+      {
+        "label": "get_descriptor",
+        "hex": "c38006000100001200e0f4",
+        "bits": "1100001100000001011000000000000010000000000000000000000001001000000000000000011100101111"
+      },
+      {
+        "label": "vendor_write",
+        "hex": "c34001000000000700a934",
+        "bits": "1100001100000010100000000000000000000000000000000000000011100000000000001001010100101100"
+      },
+      {
+        "label": "vendor_read",
+        "hex": "c3c00200000000080097a4",
+        "bits": "1100001100000011010000000000000000000000000000000000000000010000000000001110100100100101"
+      },
+      {
+        "label": "unsupported",
+        "hex": "c38006020309044000e7eb",
+        "bits": "1100001100000001011000000100000011000000100100000010000000000010000000001110011111010111"
+      },
+      {
+        "label": "bad_crc16",
+        "hex": "c38006000100001200e074",
+        "bits": "1100001100000001011000000000000010000000000000000000000001001000000000000000011100101110"
+      },
+      {
+        "label": "descriptor0",
+        "hex": "4b12011001ff0000082163",
+        "bits": "1101001001001000100000000000100010000000111111110000000000000000000100001000010011000110"
+      },
+      {
+        "label": "descriptor1",
+        "hex": "c334127856000100009ca6",
+        "bits": "1100001100101100010010000001111001101010000000001000000000000000000000000011100101100101"
+      },
+      {
+        "label": "descriptor2",
+        "hex": "4b00013f8f",
+        "bits": "1101001000000000100000001111110011110001"
+      },
+      {
+        "label": "empty_data1",
+        "hex": "4b0000",
+        "bits": "110100100000000000000000"
+      },
+      {
+        "label": "vendor_payload",
+        "hex": "4bffff024b3267a69a5e",
+        "bits": "11010010111111111111111101000000110100100100110011100110011001010101100101111010"
+      },
+      {
+        "label": "vendor_reply",
+        "hex": "4ba667324b02ffff55333b",
+        "bits": "1101001001100101111001100100110011010010010000001111111111111111101010101100110011011100"
+      }
+    ],
+    "vendor_payload": "ffff024b3267a6",
+    "labels": {
+      "setup": 0,
+      "in": 1,
+      "out": 2,
+      "wrong_address": 3,
+      "bad_crc5": 4,
+      "ack": 5,
+      "nak": 6,
+      "stall": 7,
+      "get_descriptor": 8,
+      "vendor_write": 9,
+      "vendor_read": 10,
+      "unsupported": 11,
+      "bad_crc16": 12,
+      "descriptor0": 13,
+      "descriptor1": 14,
+      "descriptor2": 15,
+      "empty_data1": 16,
+      "vendor_payload": 17,
+      "vendor_reply": 18
+    },
+    "expected_responses": [
+      5,
+      13,
+      14,
+      15,
+      5,
+      5,
+      5,
+      16,
+      5,
+      18,
+      5,
+      5,
+      7
+    ]
+  },
+  "modbus": [
+    {
+      "index": 0,
+      "device": 1,
+      "address": 0,
+      "registers": [
+        4660,
+        22136
+      ],
+      "baud": 19200,
+      "npar": false,
+      "bad_crc": false,
+      "invalid_gap": false,
+      "request": "010300000002c40b",
+      "response": "010304123456788107"
+    },
+    {
+      "index": 1,
+      "device": 243,
+      "address": 3492,
+      "registers": [
+        35866,
+        18822
+      ],
+      "baud": 115200,
+      "npar": false,
+      "bad_crc": false,
+      "invalid_gap": false,
+      "request": "f3030da400029256",
+      "response": "f303048c1a49869499"
+    },
+    {
+      "index": 2,
+      "device": 93,
+      "address": 52999,
+      "registers": [
+        53374,
+        33540,
+        5465
+      ],
+      "baud": 19200,
+      "npar": false,
+      "bad_crc": false,
+      "invalid_gap": false,
+      "request": "5d03cf0700038782",
+      "response": "5d0306d07e830415591503"
+    },
+    {
+      "index": 3,
+      "device": 58,
+      "address": 59089,
+      "registers": [
+        60511
+      ],
+      "baud": 115200,
+      "npar": false,
+      "bad_crc": false,
+      "invalid_gap": false,
+      "request": "3a03e6d10001e7f0",
+      "response": "3a0302ec5f5179"
+    },
+    {
+      "index": 4,
+      "device": 65,
+      "address": 30203,
+      "registers": [
+        62153,
+        33866
+      ],
+      "baud": 19200,
+      "npar": true,
+      "bad_crc": false,
+      "invalid_gap": false,
+      "request": "410375fb0002a136",
+      "response": "410304f2c9844abb86"
+    },
+    {
+      "index": 5,
+      "device": 68,
+      "address": 11067,
+      "registers": [
+        46985,
+        62312,
+        32117
+      ],
+      "baud": 115200,
+      "npar": false,
+      "bad_crc": true,
+      "invalid_gap": false,
+      "request": "44032b3b00037377",
+      "response": "440306b789f3687d75bb90"
+    },
+    {
+      "index": 6,
+      "device": 104,
+      "address": 21208,
+      "registers": [
+        24336
+      ],
+      "baud": 19200,
+      "npar": false,
+      "bad_crc": false,
+      "invalid_gap": true,
+      "request": "680352d800011db0",
+      "response": "6803025f10dc71"
+    }
+  ]
+}

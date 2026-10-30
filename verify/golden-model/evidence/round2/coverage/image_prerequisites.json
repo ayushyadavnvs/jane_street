@@ -1,0 +1,22 @@
+{
+  "command": [
+    "make",
+    "-s",
+    "test/conc_image.hex",
+    "test/ow_image.hex",
+    "test/modbus_image.hex",
+    "test/nop_image.hex",
+    "test/uart_image.hex",
+    "test/spi_image.hex",
+    "test/mixed_image.hex",
+    "test/ws2812_image.hex",
+    "test/spi_periph_image.hex",
+    "test/i2c_target_image.hex",
+    "test/usb_image.hex",
+    "test/ops_image.hex",
+    "test/fetch_image.hex"
+  ],
+  "returncode": 0,
+  "output": "",
+  "passed": true
+}

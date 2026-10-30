@@ -1,0 +1,285 @@
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/pbe_engine.sv:316: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/pbe_engine.sv:316: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/pbe_engine.sv:332: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/pbe_engine.sv:316: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/pbe_engine.sv:316: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/pbe_engine.sv:332: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:247: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:271: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/src/tt_um_pbe.sv:281: sorry: constant selects in always_* processes are not currently supported (all bits will be included).
+     -.--ns INFO     gpi                                ..mbed/gpi_embed.cpp:93   in _embed_init_python              Using Python 3.10.14 interpreter at /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python
+     -.--ns INFO     gpi                                ../gpi/GpiCommon.cpp:79   in gpi_print_registered_impl       VPI registered
+     0.00ns INFO     cocotb                             Running on Icarus Verilog version 12.0 (stable)
+     0.00ns INFO     cocotb                             Seeding Python random module with supplied seed 1346520372
+     0.00ns INFO     cocotb                             Initialized cocotb v2.0.1 from /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/lib/python3.10/site-packages/cocotb
+     0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages
+     0.00ns WARNING  py.warnings                        /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/lib/python3.10/site-packages/cocotb/_init.py:102: DeprecationWarning: COCOTB_TESTCASE is deprecated in favor of COCOTB_TEST_FILTER
+                                                          _setup_regression_manager()
+     0.00ns INFO     cocotb                             Running tests
+     0.00ns INFO     cocotb.regression                  running test_stress.pin_stress (1/1)
+761743.12ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_clock_minus2
+1514996.40ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_clock_plus2
+2276583.27ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_clock_minus2_jitter2
+3029982.37ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_clock_plus2_jitter2
+3787235.77ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_digital_rise_delay4
+4550510.20ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_idle_glitch_1clock
+5009274.88ns INFO     cocotb.stress_top.sda              UART sink
+5009274.88ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+5009274.88ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+5009274.88ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+5009274.88ns INFO     cocotb.stress_top.sda              UART sink configuration:
+5009274.88ns INFO     cocotb.stress_top.sda                Baud rate: 489984 bps
+5009274.88ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+5009274.88ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+5036936.39ns INFO     cocotb.stress_top.sda              Read byte 0x00
+5057937.06ns INFO     cocotb.stress_top.sda              Read byte 0xff
+5078937.73ns INFO     cocotb.stress_top.sda              Read byte 0x55
+5099938.41ns INFO     cocotb.stress_top.sda              Read byte 0xaa
+5120939.08ns INFO     cocotb.stress_top.sda              Read byte 0x81
+5141939.75ns INFO     cocotb.stress_top.sda              Read byte 0x7e
+5162940.42ns INFO     cocotb.stress_top.sda              Read byte 0x03
+5183941.09ns INFO     cocotb.stress_top.sda              Read byte 0xc0
+5308451.12ns INFO     cocotb.stress_top                  STRESS PASS uart_tx_clock_-2%
+5767194.96ns INFO     cocotb.stress_top.sda              UART sink
+5767194.96ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+5767194.96ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+5767194.96ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+5767194.96ns INFO     cocotb.stress_top.sda              UART sink configuration:
+5767194.96ns INFO     cocotb.stress_top.sda                Baud rate: 509983 bps
+5767194.96ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+5767194.96ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+5794096.48ns INFO     cocotb.stress_top.sda              Read byte 0x00
+5815097.15ns INFO     cocotb.stress_top.sda              Read byte 0xff
+5836097.82ns INFO     cocotb.stress_top.sda              Read byte 0x55
+5857098.49ns INFO     cocotb.stress_top.sda              Read byte 0xaa
+5878099.16ns INFO     cocotb.stress_top.sda              Read byte 0x81
+5899099.84ns INFO     cocotb.stress_top.sda              Read byte 0x7e
+5920100.51ns INFO     cocotb.stress_top.sda              Read byte 0x03
+5941101.18ns INFO     cocotb.stress_top.sda              Read byte 0xc0
+6066371.20ns INFO     cocotb.stress_top                  STRESS PASS uart_tx_clock_+2%
+11308122.27ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_slow_host_16
+16853383.04ns INFO     cocotb.stress_top                  STRESS PASS uart_rx_slow_host_20
+17338398.56ns INFO     cocotb.stress_top.sda              UART sink
+17338398.56ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+17338398.56ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+17338398.56ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+17338398.56ns INFO     cocotb.stress_top.sda              UART sink configuration:
+17338398.56ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+17338398.56ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+17338398.56ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+17338398.56ns WARNING  py.warnings                        /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/lib/python3.10/site-packages/cocotbext/spi/spi.py:370: DeprecationWarning: The 'units' argument has been renamed to 'unit'.
+                                                            frame_spacing = Timer(self._config.frame_spacing_ns, units='ns')
+17354597.00ns WARNING  py.warnings                        /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/lib/python3.10/site-packages/cocotbext/spi/spi.py:269: DeprecationWarning: Use `signal.value_change` instead.
+                                                            if (await First(Edge(self._sclk), frame_end)) == frame_end or self._cs.value == 1:
+17355097.01ns WARNING  py.warnings                        /home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/lib/python3.10/site-packages/cocotbext/spi/spi.py:283: DeprecationWarning: Use `signal.value_change` instead.
+                                                            if (await First(Edge(self._sclk), frame_end)) == frame_end or self._cs.value == 1:
+17365680.08ns INFO     cocotb.stress_top.sda              Read byte 0x6e
+17386680.75ns INFO     cocotb.stress_top.sda              Read byte 0x9c
+17407681.42ns INFO     cocotb.stress_top.sda              Read byte 0xf7
+17428682.09ns INFO     cocotb.stress_top.sda              Read byte 0x14
+17585635.64ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_0
+17585635.64ns INFO     cocotb.stress_top.sda              UART sink
+17585635.64ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+17585635.64ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+17585635.64ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+17585635.64ns INFO     cocotb.stress_top.sda              UART sink configuration:
+17585635.64ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+17585635.64ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+17585635.64ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+17612917.15ns INFO     cocotb.stress_top.sda              Read byte 0x17
+17633917.83ns INFO     cocotb.stress_top.sda              Read byte 0xd8
+17654918.50ns INFO     cocotb.stress_top.sda              Read byte 0x24
+17675919.17ns INFO     cocotb.stress_top.sda              Read byte 0x74
+17832872.72ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_1
+17832872.72ns INFO     cocotb.stress_top.sda              UART sink
+17832872.72ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+17832872.72ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+17832872.72ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+17832872.72ns INFO     cocotb.stress_top.sda              UART sink configuration:
+17832872.72ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+17832872.72ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+17832872.72ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+17860154.23ns INFO     cocotb.stress_top.sda              Read byte 0xd4
+17881154.90ns INFO     cocotb.stress_top.sda              Read byte 0xbe
+17902155.58ns INFO     cocotb.stress_top.sda              Read byte 0xa5
+17923156.25ns INFO     cocotb.stress_top.sda              Read byte 0x12
+18080109.80ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_2
+18080109.80ns INFO     cocotb.stress_top.sda              UART sink
+18080109.80ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+18080109.80ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+18080109.80ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+18080109.80ns INFO     cocotb.stress_top.sda              UART sink configuration:
+18080109.80ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+18080109.80ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+18080109.80ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+18107391.31ns INFO     cocotb.stress_top.sda              Read byte 0x98
+18128391.98ns INFO     cocotb.stress_top.sda              Read byte 0x13
+18149392.65ns INFO     cocotb.stress_top.sda              Read byte 0xb7
+18170393.33ns INFO     cocotb.stress_top.sda              Read byte 0x38
+18327346.87ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_3
+18327346.87ns INFO     cocotb.stress_top.sda              UART sink
+18327346.87ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+18327346.87ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+18327346.87ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+18327346.87ns INFO     cocotb.stress_top.sda              UART sink configuration:
+18327346.87ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+18327346.87ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+18327346.87ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+18354628.39ns INFO     cocotb.stress_top.sda              Read byte 0x95
+18375629.06ns INFO     cocotb.stress_top.sda              Read byte 0xc6
+18396629.73ns INFO     cocotb.stress_top.sda              Read byte 0x05
+18417630.40ns INFO     cocotb.stress_top.sda              Read byte 0x7c
+18574583.95ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_4
+18574583.95ns INFO     cocotb.stress_top.sda              UART sink
+18574583.95ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+18574583.95ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+18574583.95ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+18574583.95ns INFO     cocotb.stress_top.sda              UART sink configuration:
+18574583.95ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+18574583.95ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+18574583.95ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+18601865.47ns INFO     cocotb.stress_top.sda              Read byte 0x48
+18622866.14ns INFO     cocotb.stress_top.sda              Read byte 0x0e
+18643866.81ns INFO     cocotb.stress_top.sda              Read byte 0xbf
+18664867.48ns INFO     cocotb.stress_top.sda              Read byte 0x51
+18821821.03ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_5
+18821821.03ns INFO     cocotb.stress_top.sda              UART sink
+18821821.03ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+18821821.03ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+18821821.03ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+18821821.03ns INFO     cocotb.stress_top.sda              UART sink configuration:
+18821821.03ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+18821821.03ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+18821821.03ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+18849102.54ns INFO     cocotb.stress_top.sda              Read byte 0xdd
+18870103.22ns INFO     cocotb.stress_top.sda              Read byte 0x54
+18891103.89ns INFO     cocotb.stress_top.sda              Read byte 0xc9
+18912104.56ns INFO     cocotb.stress_top.sda              Read byte 0xb8
+19069058.11ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_6
+19069058.11ns INFO     cocotb.stress_top.sda              UART sink
+19069058.11ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+19069058.11ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+19069058.11ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+19069058.11ns INFO     cocotb.stress_top.sda              UART sink configuration:
+19069058.11ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+19069058.11ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+19069058.11ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+19096339.62ns INFO     cocotb.stress_top.sda              Read byte 0x0d
+19117340.29ns INFO     cocotb.stress_top.sda              Read byte 0x5b
+19138340.97ns INFO     cocotb.stress_top.sda              Read byte 0x23
+19159341.64ns INFO     cocotb.stress_top.sda              Read byte 0x94
+19316295.18ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_7
+19316295.18ns INFO     cocotb.stress_top.sda              UART sink
+19316295.18ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+19316295.18ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+19316295.18ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+19316295.18ns INFO     cocotb.stress_top.sda              UART sink configuration:
+19316295.18ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+19316295.18ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+19316295.18ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+19343576.70ns INFO     cocotb.stress_top.sda              Read byte 0x54
+19364577.37ns INFO     cocotb.stress_top.sda              Read byte 0x30
+19385578.04ns INFO     cocotb.stress_top.sda              Read byte 0x8f
+19406578.72ns INFO     cocotb.stress_top.sda              Read byte 0x45
+19563532.26ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_8
+19563532.26ns INFO     cocotb.stress_top.sda              UART sink
+19563532.26ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+19563532.26ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+19563532.26ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+19563532.26ns INFO     cocotb.stress_top.sda              UART sink configuration:
+19563532.26ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+19563532.26ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+19563532.26ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+19590813.78ns INFO     cocotb.stress_top.sda              Read byte 0xfc
+19611814.45ns INFO     cocotb.stress_top.sda              Read byte 0x38
+19632815.12ns INFO     cocotb.stress_top.sda              Read byte 0x1c
+19653815.79ns INFO     cocotb.stress_top.sda              Read byte 0xf7
+19810769.34ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_9
+19810769.34ns INFO     cocotb.stress_top.sda              UART sink
+19810769.34ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+19810769.34ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+19810769.34ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+19810769.34ns INFO     cocotb.stress_top.sda              UART sink configuration:
+19810769.34ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+19810769.34ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+19810769.34ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+19838050.86ns INFO     cocotb.stress_top.sda              Read byte 0x1b
+19859051.53ns INFO     cocotb.stress_top.sda              Read byte 0xe5
+19880052.20ns INFO     cocotb.stress_top.sda              Read byte 0x0d
+19901052.87ns INFO     cocotb.stress_top.sda              Read byte 0xad
+20058006.42ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_10
+20058006.42ns INFO     cocotb.stress_top.sda              UART sink
+20058006.42ns INFO     cocotb.stress_top.sda              cocotbext-uart version 0.1.4
+20058006.42ns INFO     cocotb.stress_top.sda              Copyright (c) 2020-2025 Alex Forencich
+20058006.42ns INFO     cocotb.stress_top.sda              https://github.com/alexforencich/cocotbext-uart
+20058006.42ns INFO     cocotb.stress_top.sda              UART sink configuration:
+20058006.42ns INFO     cocotb.stress_top.sda                Baud rate: 499984 bps
+20058006.42ns INFO     cocotb.stress_top.sda                Byte size: 8 bits
+20058006.42ns INFO     cocotb.stress_top.sda                Stop bits: 1.000000 bits
+20085287.93ns INFO     cocotb.stress_top.sda              Read byte 0x6e
+20106288.61ns INFO     cocotb.stress_top.sda              Read byte 0x2d
+20127289.28ns INFO     cocotb.stress_top.sda              Read byte 0x97
+20148289.95ns INFO     cocotb.stress_top.sda              Read byte 0xaf
+20305243.50ns INFO     cocotb.stress_top                  STRESS PASS concurrent_uart_spi_restart_11
+20305243.50ns INFO     cocotb.stress_top                  Stress observations complete: 22 cases; 0 failures
+20305243.50ns INFO     cocotb.regression                  test_stress.pin_stress passed
+20305243.50ns INFO     cocotb.regression                  **************************************************************************************
+                                                          ** TEST                          STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                          **************************************************************************************
+                                                          ** test_stress.pin_stress         PASS    20305243.50          58.94     344524.98  **
+                                                          **************************************************************************************
+                                                          ** TESTS=1 PASS=1 FAIL=0 SKIP=0           20305243.50          58.94     344490.09  **
+                                                          **************************************************************************************
+{
+  "cases": 22,
+  "passed": 22,
+  "failed": 0,
+  "failed_cases": []
+}

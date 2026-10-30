@@ -1,0 +1,400 @@
+{
+  "decoder_path": "/tmp/pbe-sigrok-root/usr/share/libsigrokdecode/decoders/usb_request/pd.py",
+  "decoder_sha256": "bc65af71f912d288d48c4133355e5adb77181537d2cd7878c57a4834c54689a2",
+  "boundary": "stock request decoder with synthetic packet inputs; no PBE waveform",
+  "cases": [
+    {
+      "case": "missing-handshake",
+      "in_request_start": "submit",
+      "expected": {
+        "set_address_requests": 1
+      },
+      "actual": {
+        "set_address_requests": 0
+      },
+      "known_limitation_reproduced": true,
+      "annotations": [
+        "ERR: received SETUP token in state DATA RECEIVED",
+        "ERR: received DATA0 token in state DATA RECEIVED"
+      ],
+      "events": [
+        {
+          "packet": "SETUP",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "SETUP",
+          "before": "DATA RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "DATA RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        }
+      ]
+    },
+    {
+      "case": "lost-ack-nak-retry",
+      "in_request_start": "submit",
+      "expected": {
+        "descriptor_bytes": 18
+      },
+      "actual": {
+        "descriptor_bytes": 26
+      },
+      "known_limitation_reproduced": true,
+      "annotations": [
+        "ERR: received IN token in state DATA RECEIVED",
+        "SETUP in: [ 80 06 00 01 00 00 12 00 ][ 12 01 10 01 FF 00 00 08 12 01 10 01 FF 00 00 08 34 12 78 56 00 01 00 00 00 01 ] : ACK"
+      ],
+      "events": [
+        {
+          "packet": "SETUP",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "IN",
+          "before": "DATA RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "NAK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "OUT",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        }
+      ]
+    },
+    {
+      "case": "empty-in-timeout",
+      "in_request_start": "submit",
+      "known_limitation_reproduced": true,
+      "exception": null,
+      "annotations": [
+        "BULK in: [ ] : timeout"
+      ],
+      "events": [
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "NAK",
+          "before": "TOKEN RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "IN",
+          "before": "TOKEN RECEIVED",
+          "after": "TOKEN RECEIVED"
+        }
+      ]
+    },
+    {
+      "case": "missing-handshake",
+      "in_request_start": "first-ack",
+      "expected": {
+        "set_address_requests": 1
+      },
+      "actual": {
+        "set_address_requests": 0
+      },
+      "known_limitation_reproduced": true,
+      "annotations": [
+        "ERR: received SETUP token in state DATA RECEIVED",
+        "ERR: received DATA0 token in state DATA RECEIVED"
+      ],
+      "events": [
+        {
+          "packet": "SETUP",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "SETUP",
+          "before": "DATA RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "DATA RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        }
+      ]
+    },
+    {
+      "case": "lost-ack-nak-retry",
+      "in_request_start": "first-ack",
+      "expected": {
+        "descriptor_bytes": 18
+      },
+      "actual": {
+        "descriptor_bytes": 26
+      },
+      "known_limitation_reproduced": true,
+      "annotations": [
+        "ERR: received IN token in state DATA RECEIVED",
+        "SETUP in: [ 80 06 00 01 00 00 12 00 ][ 12 01 10 01 FF 00 00 08 12 01 10 01 FF 00 00 08 34 12 78 56 00 01 00 00 00 01 ] : ACK"
+      ],
+      "events": [
+        {
+          "packet": "SETUP",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "IN",
+          "before": "DATA RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "NAK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA0",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "OUT",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "DATA1",
+          "before": "TOKEN RECEIVED",
+          "after": "DATA RECEIVED"
+        },
+        {
+          "packet": "ACK",
+          "before": "DATA RECEIVED",
+          "after": "IDLE"
+        }
+      ]
+    },
+    {
+      "case": "empty-in-timeout",
+      "in_request_start": "first-ack",
+      "known_limitation_reproduced": true,
+      "exception": "annotation sample numbers must be integers",
+      "annotations": [],
+      "events": [
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        },
+        {
+          "packet": "NAK",
+          "before": "TOKEN RECEIVED",
+          "after": "IDLE"
+        },
+        {
+          "packet": "IN",
+          "before": "IDLE",
+          "after": "TOKEN RECEIVED"
+        }
+      ]
+    }
+  ]
+}

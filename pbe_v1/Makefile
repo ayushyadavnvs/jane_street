@@ -5,7 +5,7 @@ IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
 .PHONY: test test-proto test-usb test-gl test-sram synth synth-sram timing clean
 
-# The SRAM program memory (D55, a proposal): the wrapper, IHP's model of the macro (FUNCTIONAL
+# The SRAM program memory (D62, a proposal): the wrapper, IHP's model of the macro (FUNCTIONAL
 # selects its behavioural core) and, for synthesis, the macro as a black box.
 SRAM_DIR   := ../macros/RM_IHPSG13_1P_256x16_c2_bm_bist
 SRAM_MODEL := $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist.v $(SRAM_DIR)/RM_IHPSG13_1P_core_behavioral_bm_bist.v
@@ -59,6 +59,8 @@ test/fetch_image.hex: test/fetch_timing.pbe test/fetch_host.pbe tools/pbe_asm.py
 
 test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	$(LINT)
+	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
+	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(addprefix ../,$(SRC)) && vvp -n known_reset.vvp
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp
 	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(addprefix ../,$(SRC)) && vvp -n ops.vvp
 	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(addprefix ../,$(SRC)) && vvp -n fetch.vvp
@@ -67,11 +69,14 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
 	$(MAKE) test-sram
+	$(PYTHON) $(V)/spec_boundaries/check_spec_boundaries.py
 	$(MAKE) test-model
+	$(PYTHON) -m unittest discover -s $(V)/formal -p test_runner.py -v
+	$(MAKE) test-coverage-tools
 	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
 
-# The end-to-end testbenches on the SRAM program memory (USE_SRAM, D55). The engine-only
+# The end-to-end testbenches on the SRAM program memory (USE_SRAM, D62). The engine-only
 # testbenches do not use the top level, so they are not repeated.
 SRAM_FLAGS = -DUSE_SRAM -DFUNCTIONAL
 SRAM_ALL   = $(addprefix ../,$(SRC) $(SRAM_SRC) $(SRAM_MODEL))
@@ -139,8 +144,10 @@ timing:
 	@grep -o 'Start-point = .*' synth/timing.log | tail -1
 
 # Verification only (the golden model, sigrok decoding and bus models live in
-# ../verify/golden-model). Install its differential/requirements.txt into a virtual environment.
-GM := ../verify/golden-model
+# ../verify/golden-model; formal, vectors, coverage, stress and mutation in ../verify, D64).
+# Install golden-model/differential/requirements.txt into a virtual environment.
+V  := ../verify
+GM := $(V)/golden-model
 PYTHON ?= $(if $(wildcard ../.venv/bin/python),$(abspath ../.venv/bin/python),python3)
 N ?= 1000
 SEED ?= 0x504245
@@ -178,3 +185,44 @@ CASES ?= 3
 .PHONY: test-buses
 test-buses:
 	$(PYTHON) $(GM)/bus_models/run.py --seed $(BUS_SEED) --cases $(CASES)
+
+# Round-2 fault audit: long runs stay outside the default gate.
+.PHONY: mutate
+mutate:
+	$(PYTHON) $(V)/mutation/mutate.py --jobs $(or $(JOBS),2) --n 1 --cycles 600 --seed $(SEED)
+
+FORMAL_BLOCK ?= all
+FORMAL_JOBS ?= 3
+FORMAL_ARGS ?=
+.PHONY: formal
+formal:
+	$(PYTHON) $(V)/formal/run.py --block $(FORMAL_BLOCK) --jobs $(FORMAL_JOBS) $(FORMAL_ARGS)
+
+# Independent library/catalogue packet checks; install their pinned requirements explicitly.
+.PHONY: test-crc-vectors test-protocol-vectors
+test-crc-vectors:
+	$(PYTHON) $(V)/vectors/crc/run.py
+
+test-protocol-vectors:
+	$(PYTHON) $(V)/vectors/protocols/run.py
+
+# Source coverage remains a separate long campaign; artifact guards are quick default tests.
+COVERAGE_JOBS ?= 2
+.PHONY: coverage test-coverage-tools
+coverage:
+	$(PYTHON) $(V)/coverage/run.py --jobs $(COVERAGE_JOBS)
+
+test-coverage-tools:
+	$(PYTHON) -m unittest discover -s $(V)/coverage -p test_harness.py -v
+
+# Optional finite robustness campaign; characterization retains adverse FAIL labels.
+STRESS_SEED ?= 0x50424534
+.PHONY: stress stress-characterize stress-strict
+stress:
+	$(PYTHON) $(V)/stress/run.py --seed $(STRESS_SEED) --required-only
+
+stress-characterize:
+	$(PYTHON) $(V)/stress/run.py --seed $(STRESS_SEED) --characterize
+
+stress-strict:
+	$(PYTHON) $(V)/stress/run.py --seed $(STRESS_SEED)

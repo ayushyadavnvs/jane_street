@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1793292708" />
+    <testcase name="random_differential" classname="test_diff" file="/tmp/pbe_stress_diff_8mc0ka5b/pbe_v1/test/differential/test_diff.py" lineno="185" time="54.46912121772766" sim_time_ns="5750944.416" ratio_time="105581.73672404105" />
+  </testsuite>
+</testsuites>

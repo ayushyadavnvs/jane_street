@@ -19,6 +19,37 @@
 // The frame ends on SE0 followed by the idle level (pair mode); otherwise after 8 bit times at
 // the idle level, or when a run at the idle level breaks the stuffing rule. frame_end pulses, and
 // a byte of that frame the engine has not taken is dropped.
+//
+// Cycle contract clarified by the round-2 model audit (existing behavior):
+// - clear/reset empties queues/state, releases drive, sets a_out/b_out=1/0 and previous
+//   level=1, and clears data/valid/event outputs. The engine asserts clear while mode=off;
+//   standalone callers must do so too. Mode 3 is reserved, with no promised behavior.
+// - Transfers observe tx_ready before the edge. A newly queued item is considered on a
+//   later edge; tx_end wins if asserted with tx_put. Producers must not enqueue while
+//   !tx_ready. END without an active frame is consumed without driving. The gap leaves
+//   drive low; after two bit periods, the following clock emits the first sync/data bit.
+// - TX/RX timers are 16 bits and compare the old count. TX boundaries use == period_m1;
+//   RX sample is old_count == floor(period_m1/2)+1. An input edge resets the NEXT count
+//   but does not cancel a sample already due on that edge. At period_m1=0 RX cannot
+//   sample (its count remains 0); there is no universal receive guarantee at that rate.
+// - Sync and payload share stuffing/run state across entry boundaries. Stuffed bits pass
+//   through NRZI too. Initial previous bit/level=1, run=0; inserted ones-style bits reset
+//   run to 0, inserted equal-style bits start a new run of length 1. A TX underrun pulses
+//   err at each empty bit boundary and holds the driven level until new data/end arrives.
+// - RX is suppressed throughout non-idle TX states, including gap and end sequence. A low
+//   level starts RX even without a new edge; SE0 takes priority. Initial NRZI previous
+//   sampled level=1. The sync window is zero-filled, so it can match before 8 received
+//   bits. Transfer bit order follows in_msb_first/out_msb_first, including sync.
+// - A receive stuff violation advances run/sample state; in single mode an idle-high
+//   violation ends the frame without err. Pair SE0 length is not checked: the first later
+//   sampled non-SE0 returns idle, and pulses frame_end only if a_in=1. Single mode's 8th
+//   idle-high sample can also deliver data. Arbitrary data with no sync or long idle runs
+//   is therefore not guaranteed to round-trip without framing restrictions.
+// - RX overrun replaces the unread unit and pulses err; coincident rx_take allows the
+//   replacement without err. frame_end/err are registered one-clock indications. On the
+//   NEXT edge, old frame_end clears rx_valid, winning over a new unit/take that edge.
+// - Release clears drive but keeps output latches. Configuration is read live; changing
+//   mode/period/width/shift direction mid-frame has no protocol-validity guarantee.
 module pbe_line (
     input  logic        clk,
     input  logic        rst_n,

@@ -1,4 +1,4 @@
-# PDN for the SRAM program memory (D55, a proposal) on Tiny Tapeout IHP sg13cmos5l.
+# PDN for the SRAM program memory (D62, a proposal) on Tiny Tapeout IHP sg13cmos5l.
 #
 # This is LibreLane 3.1.0.dev4's scripts/openroad/common/pdn_cfg.tcl (the version that
 # tt-gds-action@ttihp27a installs) for FP_PDN_MULTILAYER 0, with its macro grid removed and a

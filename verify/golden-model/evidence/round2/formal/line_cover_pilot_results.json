@@ -1,0 +1,1962 @@
+{
+  "scope": "bounded line-coder conformance; not induction",
+  "source_sha256": {
+    "formal/line.sby": "09bd4df59b7c1f113d767f6bb6c7965da41610782be977b388477a4de1cc28ec",
+    "formal/line_roundtrip.sv": "49eb21b7d8b6006dad85a7e92cb57dff789a8f62abe118fd7cbf11bd8feadd10",
+    "formal/line_stuff.sv": "cecb64fe3a8c507c79d983aa49651c934fc3568324dbab95e3986db5b2fc5e5a",
+    "formal/line_properties.svh": "cb747650fe40e0952a1b14df4eecda4a0ccaedba7eaf294e6e21dfa0b6ca78f0",
+    "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1"
+  },
+  "tasks": [
+    {
+      "task": "cover_stuff_nrz_s1_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s1",
+        "p1"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 1.664,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrz_s1_pair"
+    },
+    {
+      "task": "cover_stuff_nrz_s1_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s1",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 2.051,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrz_s1_single"
+    },
+    {
+      "task": "cover_stuff_nrz_s2_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s2",
+        "p1"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 1.833,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrz_s2_pair"
+    },
+    {
+      "task": "cover_stuff_nrz_s2_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s2",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 2.042,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrz_s2_single"
+    },
+    {
+      "task": "cover_stuff_nrz_s3_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s3",
+        "p1"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 1.583,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrz_s3_pair"
+    },
+    {
+      "task": "cover_stuff_nrz_s3_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m1",
+        "s3",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.672,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrz_s3_single"
+    },
+    {
+      "task": "cover_stuff_nrzi_s1_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s1",
+        "p1"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 1.858,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s1_pair"
+    },
+    {
+      "task": "cover_stuff_nrzi_s1_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s1",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.961,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s1_single"
+    },
+    {
+      "task": "cover_stuff_nrzi_s2_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s2",
+        "p1"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 1.434,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s2_pair"
+    },
+    {
+      "task": "cover_stuff_nrzi_s2_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s2",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.672,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s2_single"
+    },
+    {
+      "task": "cover_stuff_nrzi_s3_pair",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s3",
+        "p1"
+      ],
+      "status": "FAIL",
+      "expected_status": "PASS",
+      "returncode": 2,
+      "matched_expectation": false,
+      "seconds": 1.265,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s3_pair"
+    },
+    {
+      "task": "cover_stuff_nrzi_s3_single",
+      "tags": [
+        "stuff",
+        "cover",
+        "m2",
+        "s3",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.552,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_cover_stuff_nrzi_s3_single"
+    },
+    {
+      "task": "original_no_sync",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o0",
+        "nosync",
+        "forceones"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.331,
+      "depth": 164,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:69.7-69.81 (_witness_.assert_assert_line_roundtrip_sv_69_551)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_no_sync"
+    },
+    {
+      "task": "original_period0",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o0",
+        "period0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.412,
+      "depth": 164,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:69.7-69.81 (_witness_.assert_assert_line_roundtrip_sv_69_487)",
+        "line_roundtrip: line_roundtrip.sv:70.17-70.32 (_witness_.assert_assert_line_roundtrip_sv_70_495)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_period0"
+    },
+    {
+      "task": "original_single_bit_suffix",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s2",
+        "p0",
+        "b0",
+        "o0",
+        "forceones"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 7.214,
+      "depth": 164,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:65.9-65.21 (_witness_.assert_assert_line_roundtrip_sv_65_473)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_single_bit_suffix"
+    },
+    {
+      "task": "original_single_idle",
+      "tags": [
+        "rt",
+        "original",
+        "m1",
+        "s0",
+        "p0",
+        "b1",
+        "o0",
+        "forceones"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.642,
+      "depth": 164,
+      "failed_assertions": [
+        "line_roundtrip: line_roundtrip.sv:69.7-69.81 (_witness_.assert_assert_line_roundtrip_sv_69_507)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_single_idle"
+    },
+    {
+      "task": "original_stuff_nrz_s1",
+      "tags": [
+        "stuff",
+        "original",
+        "m1",
+        "s1",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.287,
+      "depth": 48,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrz_s1"
+    },
+    {
+      "task": "original_stuff_nrz_s2",
+      "tags": [
+        "stuff",
+        "original",
+        "m1",
+        "s2",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.234,
+      "depth": 48,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrz_s2"
+    },
+    {
+      "task": "original_stuff_nrz_s3",
+      "tags": [
+        "stuff",
+        "original",
+        "m1",
+        "s3",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.176,
+      "depth": 48,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrz_s3"
+    },
+    {
+      "task": "original_stuff_nrzi_s1",
+      "tags": [
+        "stuff",
+        "original",
+        "m2",
+        "s1",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.292,
+      "depth": 48,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrzi_s1"
+    },
+    {
+      "task": "original_stuff_nrzi_s2",
+      "tags": [
+        "stuff",
+        "original",
+        "m2",
+        "s2",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.16,
+      "depth": 48,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrzi_s2"
+    },
+    {
+      "task": "original_stuff_nrzi_s3",
+      "tags": [
+        "stuff",
+        "original",
+        "m2",
+        "s3",
+        "p0"
+      ],
+      "status": "FAIL",
+      "expected_status": "FAIL",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.208,
+      "depth": 48,
+      "failed_assertions": [
+        "line_stuff.rx: line_formal.sv:331.11-331.22 (_witness_.assert_assert_line_formal_sv_331_391)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/line_original_stuff_nrzi_s3"
+    },
+    {
+      "task": "rt_nrz_s0_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.839,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s0_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 7.529,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s0_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.637,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s0_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.619,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s0_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.594,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s0_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.922,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s0_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.093,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s0_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s0",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.643,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s0_single_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s1_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.465,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s1_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 19.006,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s1_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.52,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s1_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.258,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s1_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 13.242,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s1_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 20.192,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s1_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 9.576,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s1_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s1",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 8.815,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s1_single_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s2_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 12.866,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s2_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 16.902,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s2_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.984,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s2_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 9.472,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s2_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 16.158,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s2_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 24.936,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s2_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 12.625,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s2_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s2",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.175,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s2_single_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s3_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 14.578,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s3_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 19.812,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s3_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.317,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s3_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 11.69,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrz_s3_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 20.435,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrz_s3_single_bit_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 35.706,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_bit_msb"
+    },
+    {
+      "task": "rt_nrz_s3_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 13.105,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrz_s3_single_byte_msb",
+      "tags": [
+        "rt",
+        "m1",
+        "s3",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 14.746,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrz_s3_single_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s0_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.454,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s0_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 7.589,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s0_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.653,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s0_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.592,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s0_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.884,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s0_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 7.367,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s0_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.778,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s0_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s0",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 6.95,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s0_single_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s1_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.32,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s1_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 18.198,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s1_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.581,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s1_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.559,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s1_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 15.207,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s1_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 19.368,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s1_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 9.567,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s1_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s1",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 10.564,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s1_single_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s2_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 16.982,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s2_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 24.872,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s2_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 13.386,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s2_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 12.578,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s2_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 27.686,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s2_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 33.301,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s2_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 12.779,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s2_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s2",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 18.497,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s2_single_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s3_pair_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 21.275,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s3_pair_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 37.36,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s3_pair_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 19.694,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s3_pair_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p1",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 19.423,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_pair_byte_msb"
+    },
+    {
+      "task": "rt_nrzi_s3_single_bit_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b0",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 30.247,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_bit_lsb"
+    },
+    {
+      "task": "rt_nrzi_s3_single_bit_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b0",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 43.121,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_bit_msb"
+    },
+    {
+      "task": "rt_nrzi_s3_single_byte_lsb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b1",
+        "o0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 15.403,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_byte_lsb"
+    },
+    {
+      "task": "rt_nrzi_s3_single_byte_msb",
+      "tags": [
+        "rt",
+        "m2",
+        "s3",
+        "p0",
+        "b1",
+        "o1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 18.159,
+      "depth": 164,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_rt_nrzi_s3_single_byte_msb"
+    },
+    {
+      "task": "stuff_nrz_s1_pair",
+      "tags": [
+        "stuff",
+        "m1",
+        "s1",
+        "p1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.502,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s1_pair"
+    },
+    {
+      "task": "stuff_nrz_s1_single",
+      "tags": [
+        "stuff",
+        "m1",
+        "s1",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.569,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s1_single"
+    },
+    {
+      "task": "stuff_nrz_s2_pair",
+      "tags": [
+        "stuff",
+        "m1",
+        "s2",
+        "p1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.594,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s2_pair"
+    },
+    {
+      "task": "stuff_nrz_s2_single",
+      "tags": [
+        "stuff",
+        "m1",
+        "s2",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.693,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s2_single"
+    },
+    {
+      "task": "stuff_nrz_s3_pair",
+      "tags": [
+        "stuff",
+        "m1",
+        "s3",
+        "p1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.434,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s3_pair"
+    },
+    {
+      "task": "stuff_nrz_s3_single",
+      "tags": [
+        "stuff",
+        "m1",
+        "s3",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.53,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrz_s3_single"
+    },
+    {
+      "task": "stuff_nrzi_s1_pair",
+      "tags": [
+        "stuff",
+        "m2",
+        "s1",
+        "p1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.537,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s1_pair"
+    },
+    {
+      "task": "stuff_nrzi_s1_single",
+      "tags": [
+        "stuff",
+        "m2",
+        "s1",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.773,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s1_single"
+    },
+    {
+      "task": "stuff_nrzi_s2_pair",
+      "tags": [
+        "stuff",
+        "m2",
+        "s2",
+        "p1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.437,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s2_pair"
+    },
+    {
+      "task": "stuff_nrzi_s2_single",
+      "tags": [
+        "stuff",
+        "m2",
+        "s2",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.598,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s2_single"
+    },
+    {
+      "task": "stuff_nrzi_s3_pair",
+      "tags": [
+        "stuff",
+        "m2",
+        "s3",
+        "p1"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.21,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s3_pair"
+    },
+    {
+      "task": "stuff_nrzi_s3_single",
+      "tags": [
+        "stuff",
+        "m2",
+        "s3",
+        "p0"
+      ],
+      "status": "PASS",
+      "expected_status": "PASS",
+      "returncode": 0,
+      "matched_expectation": true,
+      "seconds": 1.464,
+      "depth": 48,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/line_stuff_nrzi_s3_single"
+    }
+  ],
+  "matched": 90,
+  "total": 98
+}

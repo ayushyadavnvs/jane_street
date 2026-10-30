@@ -1,0 +1,12 @@
+{
+  "command": "make -C pbe_v1 test",
+  "exit": 0,
+  "seconds": 128.68,
+  "differential_clocks": 49010,
+  "model_units": 24,
+  "formal_receipt_units": 3,
+  "coverage_guard_units": 7,
+  "decoder_units": 5,
+  "log_sha256": "da586b8c9c3c4e0ac181824526132160dd8a83744420629d2ce171fdaafd40cc",
+  "note": "Final source before Phase4 commit; optional stock USB class replay explicitly skips if source not installed. Long campaigns are separate targets."
+}

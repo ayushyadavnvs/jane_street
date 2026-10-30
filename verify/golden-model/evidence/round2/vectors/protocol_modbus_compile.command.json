@@ -1,0 +1,18 @@
+[
+  "iverilog",
+  "-g2012",
+  "-DPBE_PROTOCOL_REFERENCE",
+  "-I",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/reference_protocols_final",
+  "-s",
+  "tb_pbe",
+  "-o",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/reference_protocols_final/modbus.vvp",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_pbe.sv",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/src/pbe_fifo.sv",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/src/pbe_host_spi.sv",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/src/pbe_crc.sv",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/src/pbe_line.sv",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/src/pbe_engine.sv",
+  "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/src/tt_um_pbe.sv"
+]

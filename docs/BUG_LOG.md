@@ -52,7 +52,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-043 | Design (D50 draft) | A bubble after every instruction broke the SPI peripheral at 2 MHz | Timing review of the draft; Test 9 on it | Fixed (prefetch) |
 | BUG-044 | Tooling | Yosys merged the copies of the read address back into one register, `keep` on the variable notwithstanding | Flip-flop count after synthesis | Fixed |
 | BUG-045 | Tooling | Verilator 5.020 rejects a default value on a module input, which the unit testbenches needed for `pm_wr` | Lint before the first run | Worked around |
-| BUG-058 | Design (D55 prototype) | With the SRAM, one refetch after a host write took the macro's stale output | Timing review; `tb_fetch` (a) as a mutation | Fixed (second refetch) |
+| BUG-074 | Design (D62 prototype) | With the SRAM, one refetch after a host write took the macro's stale output | Timing review; `tb_fetch` (a) as a mutation | Fixed (second refetch) |
 
 ---
 
@@ -1529,9 +1529,430 @@ No decoder or system USB configuration was changed.
   the dependency requirement locally, not a claim of an observed GitHub CI pass.
 - **RTL, GDS and GL workflows:** unchanged. GitHub CI results must be checked after push.
 
-## BUG-058 — SRAM prototype: one refetch after a host write read a stale word (design, D55 prototype)
+## BUG-058 — Specification implied an enforced 64-word program fence (contract text, clarified; original assertion fails)
 
-- **Where:** `src/tt_um_pbe.sv`, the `USE_SRAM` branch (D55), before its first commit.
+- **Before (headers):**
+  ```systemverilog
+  // ... so each engine works in its own 64-word window ...
+  // START_PC ... (64-word window)
+  ```
+  The implementation always used a full7-bit sequential PC. Six-bit jump operands
+  bound branch offsets, not sequential execution or instruction prefetch.
+- **After (comments only):**
+  ```systemverilog
+  // A target is 6 bits; this is a branch-offset window, not a memory-protection boundary.
+  // Sequential execution increments the full 7-bit PC and can leave that window or wrap 127->0.
+  ```
+- **Regression:** `python tools/check_spec_boundaries.py` runs the retained original
+  physical-PC fence assertion and actual-instruction fence assertion; both must
+  fail with their exact markers. It also runs a corrected-contract check that
+  passes. PhysicalPC64/current instruction63 is distinguished from actually
+  executing instruction64. The wrapper rejects a missing expected failure or
+  an unrelated simulator error. Evidence: `evidence/round2/spec_boundary_checks.json`.
+- **Status:** architectural protection is not added. The requested unconditional
+  formal window property must retain its counterexample; clarifying text is not
+  proof of the original stronger claim. HDL behavior is unchanged.
+
+## BUG-059 — Program-write comment overstated atomic instruction cancellation (contract text, clarified)
+
+- **Before:**
+  ```systemverilog
+  // A host write to the program memory refetches the current instruction ...
+  // ... a program the host changes is never run from a stale copy ...
+  ```
+- **After (comment only):**
+  ```systemverilog
+  // It does not cancel an instruction already ready to execute on that same edge:
+  // that instruction uses the old registered word.
+  // ... its successor (or taken target) is fetched again.
+  ```
+- **Regression:** `test_memory_write_may_execute_old_ready_word` checks the model;
+  `tools/check_spec_boundaries.py` checks actual RTL. The original same-edge
+  cancellation assertion fails with its expected marker: the old DRV1 drives
+  out01/oe01 while RAM word0 is replaced by DRV0, and validity clears. The updated
+  snapshot/refetch contract passes. The original stronger claim remains an
+  explicit negative regression. No instruction side effects were suppressed.
+- **Boundary:** this does not establish failure of a correctly sampled
+  `iv -> instr_q == memory[pc-1]` invariant: PM-write invalidation can make that
+  invariant true even though a ready old instruction executes on the write edge.
+- **HDL:** unchanged.
+
+## BUG-060 — Golden model invented the unknown half of a partially written program word (model, fixed)
+
+- **Before:**
+  ```python
+  old = self.program[word]
+  old = 0 if old is None else old
+  self.program[word] = (old & 0xff00 | data) if self.pm_ptr & 1 else (old & 255 | data << 8)
+  ```
+- **After:** retain separately known byte values and a two-bit validity mask;
+  keep `program[word] is None` until both halves are written. Reset preserves
+  partial memory state, just as it preserves unreset RAM.
+  ```python
+  value, known = self._pm_partial.get(word, (0, 0))
+  value = (value & ~(255 << shift)) | data << shift
+  known |= 1 << (shift // 8)
+  if known == 3: self.program[word] = value
+  else: self._pm_partial[word] = value, known
+  ```
+- **Fail-before/pass-after:** new top model tests
+  `test_partial_program_word_stays_unspecified_until_both_bytes_written` and
+  `test_rewriting_one_unknown_word_half_does_not_initialize_other_half` originally
+  failed with `55296 is not None` and `4608 is not None`. Both now pass, alongside
+  initialized-memory differential checks. No RTL value is copied into the model.
+- **HDL:** unchanged. Unknown execution remains outside the deterministic oracle.
+
+## BUG-061 — Verification missed isolated empty-FIFO pop rejection (test coverage, fixed)
+
+- **Finding:** scratch mutation M21 removes `!empty` from the FIFO pop guard.
+  Initial `make test` and separate `make diff` both return0. Their host/engine
+  stimulus qualifies logical pops and did not drive this isolated block boundary.
+- **Before:** no standalone FIFO robustness check in the default target.
+- **After:**
+  ```make
+  cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
+  ```
+  The new test drives empty pops, full pushes, ordered16-byte traffic and flush.
+- **Fail-before/pass-after sensitivity:** without the test M21 survives both make
+  invocations; with it the mutant fails with `empty pop must be ignored count=31`.
+  Unchanged RTL passes. Correct source remains:
+  ```systemverilog
+  if (pop && !empty) rptr <= rptr + 1'b1;
+  ```
+  The faulty `if (pop)` exists only in scratch. All24 selected mutants now have a
+  recorded detecting check. Full table/receipts: `ROUND2_MUTATIONS.md` and
+  `evidence/round2/mutations/`, including the original survivor and corrective rerun.
+
+### BUG-050/051 round-2 root cause and expected-failure disposition
+
+`tools/usb_decoder_repro.py` reproduces both defects without PBE/NRZI/VCD input.
+USB1.1 sections8.7.1–2 require transaction timeout and discarded corrupt traffic;
+section8.6.4 describes identical PID/data retry after missing ACK. Both stock
+request-start options fail. BUG-051 specifically follows missing DATA/handshake
+timeout -> rejected retry IN -> intervening NAK associated with stale DATA1 ->
+unconditional control-IN append, then acknowledged duplicate append. Primary
+specification hash/source/receipts: `ROUND2_USB.md`. Default full-trace checks now
+mark only exact verified signatures XFAIL, never PASS; strict `sigrok-full` still
+fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged.
+
+## BUG-062 — Stock USB first-ack decoder raises TypeError but exits0 with partial output (external tool and harness guard)
+
+- **External code before/after:** unchanged libsigrokdecode0.5.3 usb_request:
+  ```python
+  ss_data = None
+  # first-ack updates this only if actual data arrives
+  self.putr(ss_data, es, ...)
+  ```
+  An empty BULK-IN timeout supplies None as native annotation start sample. Native
+  sigrok prints `argument 1 must be int, not None`, but exits0 with partial output.
+  The independent packet reproducer and native full waveform both confirm it.
+- **Harness before:**
+  ```python
+  result = call(command, output)
+  if not result: raise RuntimeError('empty decoder output')
+  ```
+- **Harness after:** also reject decoder exceptions from stderr.
+  ```python
+  stderr = output.with_suffix('.stderr').read_text(errors='replace')
+  if 'Traceback (most recent call last)' in stderr or re.search(r'Calling .* decode\(\) failed', stderr):
+      raise RuntimeError('stock decoder exception')
+  ```
+- **Fail-before/pass-after:** regression
+  `DecoderExitStatus.test_nonempty_stdout_and_exit_zero_do_not_hide_decoder_exception`
+  fails against the old helper and passes now. Exact `bug062_before_fix.txt` and
+  `bug062_after_fix.txt` transcripts are in `evidence/round2/usb/`. Installed-stock
+  replay covers both options and native exception. Default pins submit; no patch
+  or passing first-ack full-trace result is claimed. RTL is unchanged.
+
+## BUG-063 — Host formal read observer wrapped and resurrected old bits (verification, fixed)
+
+- **Before:** the observer used a wrapping three-bit read index:
+  ```systemverilog
+  reg [2:0] f_read_bit = 7;
+  wire [7:0] f_shifted_read_word = f_read_word << (7-f_read_bit);
+  if (f_fall && f_bit != 0) f_read_bit <= f_read_bit - 1'b1;
+  ```
+  An arbitrary induction state could wrap 0 to 7 and predict old data again,
+  while the real host shifter correctly continued emitting zeroes.
+- **After:** count mathematical shifts with saturation:
+  ```systemverilog
+  reg [3:0] f_read_shift = 0;
+  wire [7:0] f_shifted_read_word = f_read_word << f_read_shift;
+  if (f_fall && f_bit != 0 && f_read_shift < 8)
+    f_read_shift <= f_read_shift + 1'b1;
+  assert(f_read_shift <= 8);
+  ```
+- **Fail-before/pass-after:** `formal/host.sby prove` originally passed its
+  24-step base case but failed induction, yielding UNKNOWN/exit 4. The corrected
+  observer passes base and temporal induction without additional environment
+  assumptions. Original trace/log:
+  `pbe_v1/verification/evidence/round2/formal/fifo_host-host-initial-*`.
+  Detailed contract and reproducer: `ROUND2_FORMAL_FIFO_HOST.md`. RTL unchanged.
+
+## BUG-064 — Restart observer ignored reset priority (verification, fixed)
+
+- **Before:**
+  ```systemverilog
+  if ($past(restart)) assert(pc == start_pc);
+  ```
+  Reset low with restart high properly resets the DUT to PC 0; the monitor
+  incorrectly required an arbitrary nonzero START_PC on the following edge.
+- **After:**
+  ```systemverilog
+  if ($past(rst_n && restart)) assert(pc == start_pc);
+  ```
+- **Fail-before/pass-after:** `formal/engine.sby invariants` originally failed
+  at step 2 with START_PC 1, reset low and restart high. The qualified monitor
+  passes BMC 40. The original transcript is
+  `evidence/round2/formal/engine/monitor_reset_before.log`; final evidence is
+  `aggregate_results.json` and `logs/engine_invariants.log.gz`. This is a monitor
+  correction, not an RTL reset change or a two-state proof of X freedom.
+
+## BUG-066 — Line receive-rate limitation was unstated (contract text, clarified)
+
+- **Before:** the pre-audit line header advertised `one bit every period_m1 + 1
+  clocks` and `Sampling is mid-bit` without an RX lower-rate boundary.
+  The actual unchanged comparator/timer are:
+  ```systemverilog
+  sample = rcnt == {1'b0, period_m1[15:1]} + 16'd1;
+  rcnt <= (a_in != a_d || rcnt == period_m1) ? 16'd0 : rcnt + 16'd1;
+  ```
+- **After (comment only, already in phase 0):**
+  ```systemverilog
+  // At period_m1=0 RX cannot sample (its count remains 0);
+  // there is no universal receive guarantee at that rate.
+  ```
+- **Regression:** `formal/line.sby original_period0` deliberately retains the
+  original all-period reception claim. It fails at step 161: two bytes sent,
+  zero received, RX counter/sample always 0 after reset. The corresponding
+  framed period-3 tasks pass BMC 164. The original assertion remains an expected
+  failure; no hardware change or claim that all other periods work is made.
+  `line_original_period0.vcd`, `line_counterexample_summary.json` and
+  `ROUND2_FORMAL_LINE.md` retain the evidence.
+
+## BUG-067 — Formal receipt read the first option rather than its override (metadata, fixed)
+
+- **Before (reproduced first-value defect):**
+  ```python
+  return values[0] if values else None
+  ```
+  Expanded SBY task settings can contain general mode/depth followed by
+  task-specific overrides. This mislabeled cover jobs as BMC and overstated
+  some depths; solver results themselves were unchanged.
+- **After:**
+  ```python
+  return values[-1] if values else None
+  ```
+- **Fail-before/pass-after:** `FormalReceiptTests.test_task_override_is_effective_mode_and_depth`
+  supplies mode bmc/depth 164 followed by mode cover/depth 48. A temporary
+  first-value copy fails (`bmc != cover`); the corrected helper passes. The
+  before/after transcripts and explicitly incorrect old receipt are under
+  `evidence/round2/formal/engine/metadata_*` and `receipt_before_option_fix.json`.
+  Final collection validates effective options and current inputs for all jobs.
+
+## BUG-068 — Stuff observer asked for impossible cover events (verification, fixed)
+
+- **Before:**
+  ```systemverilog
+  cover(f_saw_violation && err);
+  if (!pair) cover(f_saw_idle_end && frame_end);
+  ```
+  Pair mode retained a disabled unreachable cover cell. A wrong NRZ ones-style
+  stuff bit on a single wire is necessarily idle-high, which ends a frame
+  without err, making the first goal impossible in those configurations.
+- **After:**
+  ```systemverilog
+  cover(f_saw_violation && (err || (!pair && frame_end)));
+  ```
+- **Fail-before/pass-after:** eight original cover jobs fail, including
+  `cover_stuff_nrz_s1_pair` and `cover_stuff_nrz_s1_single`; all 12 corrected
+  cover jobs pass. `line_cover_pilot_results.json` preserves the original
+  failures. Every final line task was rerun with the final observer, and source
+  collection confirms identical final inputs/configuration. The actual reaction
+  assertions are unchanged, and six original unconditional-error assertions
+  still fail as expected. RTL unchanged; details: `ROUND2_FORMAL_LINE.md`.
+
+## BUG-071 — Formal receipt omitted reached cover locations (metadata, fixed)
+
+- **Before:** both collectors searched for text not emitted by SMTBMC:
+  ```python
+  re.findall(r'Reached cover statement at (.+)', logtext)
+  ```
+  Real logs contain `Reached cover statement in step 3 at ...`, so the lists
+  were empty despite valid cover results. This did not change solver status.
+- **After:**
+  ```python
+  re.findall(r'Reached cover statement in step \d+ at (.+)', logtext)
+  ```
+- **Fail-before/pass-after:** new regression
+  `FormalReceiptTests.test_cover_locations_include_smtbmc_step_text` originally
+  fails with `[]` versus two locations; all three collector unit tests pass
+  after the fix. Exact transcripts: `evidence/round2/formal/bug071_before.txt`
+  and `bug071_after.txt`. Collection reran against all 108 completed jobs with
+  exact input/configuration checks; no solver rerun was needed. The 15 successful
+  cover jobs reach 22 reached statement events across jobs. Corrected aggregate receipt
+  and compressed raw logs are retained under `evidence/round2/formal/`.
+
+## BUG-065 — Independent protocol harness had count and simulator-expression defects (test, fixed)
+
+- **USB before:**
+  ```python
+  if len(actual) != 14:
+      raise RuntimeError(...)
+  ```
+  The planned scenarios produce 13 final responses; this rejected a correct
+  simulation with `USB expected14 captured responses, got13`.
+- **USB after:** derive the complete expected response-ID sequence from the
+  planned stimulus and compare captured IDs before comparing packet bytes.
+  The expectation is never derived from DUT output:
+  ```python
+  assert [int(index) for index, _ in actual] == usb['expected_responses'], actual
+  for index, raw in actual:
+      assert raw == usb['packets'][int(index)]['hex']
+  ```
+- **Modbus before:** generated SystemVerilog selected bits directly from a
+  variable-index queue element (the exact offending expressions):
+  ```systemverilog
+  mb_par[i][0]
+  mb_par[mb_par.size()-1][1]
+  ```
+  Icarus 12 rejects this expression form with 20 elaboration errors.
+- **Modbus after:** copy the selected byte into the existing temporary first:
+  ```systemverilog
+  mb_x = mb_par[i]; check(!mb_x[0], "independent Modbus parity status");
+  mb_x = mb_par[mb_par.size()-1];
+  // Generated CRC check reads mb_x[1] against its case's fixed expected bit.
+  ```
+- **Fail-before/pass-after:** temporary before-fix scripts return nonzero with
+  the count error or compiler errors. Exact commands/output are retained as
+  `pbe_v1/verification/evidence/round2/vectors/protocol_bug065_before_*`.
+  The corrected `test/reference_protocols/run.py --seed 0x50424532` passes USB
+  (38 transmitted host packets, 13 final responses) and all seven Modbus cases.
+  A second USB seed also passes. Full packets, generated SV tasks, source hashes
+  and PASS logs are retained beside the failure evidence. No RTL, protocol
+  program, packet bytes or installed library implementation was changed.
+
+## BUG-069 — Coverage tool rejected diagnostic formatting and annotation cwd (tool compatibility, fixed)
+
+- **Before:** the Icarus-accepted diagnostic in the scratch `tb_line` copy used:
+  ```systemverilog
+  $sformatf("USB RX %+0.1f %%: ...", ...)
+  ```
+  Verilator rejected three such strings with `Unknown $display-like format
+  code: '%+'`. The original failed compiler log remains in
+  `evidence/round2/coverage/coverage-initial-tb_line-build.log.gz`.
+- **After (scratch printing only):**
+  ```systemverilog
+  $sformatf("USB RX %0.1f %%: ...", ...)
+  ```
+  The same stimulus/assertions now compile and `tb_line` passes. Tracked bench
+  source and RTL are unchanged; only scratch diagnostic formatting is adapted.
+- **Annotation before:** `verilator_coverage --annotate ...` ran outside the
+  scratch test directory, so bare relative `tb_host.svh` could not be found.
+  **After:** launch annotation with `cwd=build/coverage/test`, where the copied
+  include lives. The preserved wrong-cwd negative returns 1; correct-cwd merge,
+  annotation and LCOV generation pass. Evidence includes
+  `annotation-wrong-cwd-negative.log.gz` and the final merged/annotated outputs.
+
+## BUG-072 — Coverage accepted absent/stale artifacts and shared stale inputs/diagnostics (verification, fixed)
+
+- **Before:** normal benches required only an exit status/PASS marker; the
+  line sweep did not require data, and differential existence-only checking
+  could accept a stale file:
+  ```python
+  passed = proc.returncode == 0 and 'PASS' in proc.stdout
+  if coverage and not coverage_output.exists():
+      raise SystemExit('missing coverage')
+  ```
+- **After:** all three launch paths unlink the expected file before launch and
+  require a new regular nonempty file after successful checks:
+  ```python
+  clear_coverage(expected_path)
+  run_simulator()
+  require_coverage(expected_path)
+  ```
+  Exit/PASS and fresh data are jointly required; a failed run with a dump still
+  fails. A full campaign clears old data before aggregation. Partial runs are
+  explicitly debugging runs and may aggregate existing inputs.
+- **Image before/after:** copying existing hex could silently use stale program
+  images. `refresh_images()` now invokes the existing 13 make image prerequisites
+  before copying the snapshot, so a changed `.pbe` rebuilds its image or fails.
+  Its regression runs a real temporary make graph with newer program/stale hex.
+- **Diagnostics before/after:** the differential wrote metrics/failure JSON to
+  fixed `build/differential/` even under a separate Verilator build. It now uses
+  the launcher's `PBE_DIFF_OUTPUT_DIR` and `output_path(...)` for both artifacts.
+  Default Icarus paths are unchanged; coverage diagnostics live in their own
+  `build/coverage/obj_diff/` to avoid overwriting independent runs.
+- **Fail-before/pass-after:** seven tests in `coverage/test_harness.py` pass.
+  Restoring old acceptance in a scratch helper makes the missing/stale/empty
+  artifact regressions all fail as expected. The new image/isolation regressions
+  additionally check rebuild and unchanged-default behavior. Logs/receipts are
+  `evidence/round2/coverage/bug072-legacy-acceptance-negative.*`,
+  `harness-tests.log.gz` and `image_prerequisites.json`. Old successful data is
+  retained under `before_bug072/`; the final hardened complete campaign reran
+  successfully with all 11 bench dumps fresh/nonempty and 92/92 functional bins.
+  No RTL or protocol-program behavior changed.
+
+## BUG-073 — Tool receipts mistook a cocotb banner for the Python runtime (metadata, fixed)
+
+- **Before:** CRC/coverage receipts copied the startup banner into metadata:
+  ```python
+  tools['python'] = '3.10.14'  # copied from "Using Python 3.10.14"
+  ```
+  Independent launcher and in-cocotb probes instead report `sys.version`
+  3.10.12 for the exact `.venv/bin/python` used by both Icarus and Verilator.
+  The same probe logs still print the original 3.10.14 banner. No mechanism
+  for that discrepancy is established or claimed.
+- **After:** capture the live launcher value and check it against the embedded
+  probes, retaining banner text separately:
+  ```python
+  tools['python'] = sys.version.split()[0]
+  ```
+  CRC/coverage reports/receipts now identify measured Python 3.10.12. D59's
+  earlier CRC version statement is corrected as metadata, not silently preserved.
+- **Fail-before/pass-after:** `python_runtime/check_receipt.py` compares a receipt
+  with the measured probe. Original receipts return 1/VERSION MISMATCH; corrected
+  receipts return 0/VERSION MATCH. `run_probe.py --sim icarus` and `--sim verilator`
+  each execute `runtime_probe.py` inside cocotb. Launcher JSON, both embedded
+  runtime JSON/XML/logs, old receipts, and before/after comparison results are
+  under `evidence/round2/python_runtime/`. Raw banner logs remain unchanged.
+  No RTL, stimulus, comparison or verification result changed.
+
+## BUG-070 — Evidence launcher resolved the virtualenv interpreter into system Python (tool, fixed)
+
+- **Where:** the ad hoc Phase4 stress evidence-export/exit-reevaluation invocation.
+  Actual simulator runs had already used the correct virtualenv launcher; this
+  defect did not alter RTL, stimulus or recorded protocol outcomes.
+- **Before:**
+  ```python
+  command = [str(Path(sys.executable).resolve()),
+             'pbe_v1/test/stress/run.py', '--check-results', observations, *flags]
+  ```
+  Resolving the virtualenv symlink selected `/usr/bin/python3.10` and omitted
+  virtualenv packages. All three reevaluations exited 1 with
+  `ModuleNotFoundError: No module named 'cocotb_tools'`, including the required-only
+  and characterization cases that should complete successfully. Those are
+  environment-launch failures, not newly discovered DUT stress failures.
+- **After:** preserve the virtualenv interpreter path:
+  ```python
+  command = [sys.executable,
+             'pbe_v1/test/stress/run.py', '--check-results', observations, *flags]
+  ```
+- **Fail-before/pass-after:** repeat the identical saved 33-case evidence checks
+  with flags `[]`, `['--required-only']` and `['--characterize']`. The before
+  launcher fails the expected-exit regression with `[1, 1, 1]` and missing-module
+  stderr. The corrected launcher yields `[1, 0, 0]`: strict retains the five
+  adverse observations, required-only checks all 22 passing required cases, and
+  characterization completes while preserving five FAIL labels. Exact commands,
+  stdout/stderr and exit codes are in
+  `pbe_v1/verification/evidence/round2/stress/stress_bug070_before_launcher.json`
+  and `stress_exit_checks.json`. No dependency reinstall or failure waiver was
+  used; the code change concerns the evidence-export invocation only.
+
+## BUG-074 — SRAM prototype: one refetch after a host write read a stale word (design, D62 prototype)
+
+- **Number:** logged as BUG-058; renumbered BUG-074 when round 2's BUG-058 to BUG-073 were merged (D64).
+- **Where:** `src/tt_um_pbe.sv`, the `USE_SRAM` branch (D62), before its first commit.
 - **Found by:** design review of the macro's timing, then confirmed by running the reviewed
   version as a mutation. The single-port macro cannot read in the clock it is written, so
   after a host write its output still holds the word read before. With D50's refetch alone
@@ -1555,6 +1976,73 @@ No decoder or system USB configuration was changed.
   engine is parked on, then runs it):
   - Before: `FAIL: (a) stopped on a word the host rewrote, then run: byte 0 is 11, expected 33`.
   - After: `PASS`.
-- **Not caught by any test** (D55, investigation §3.7): `pm_wr_q` resetting to 0 (every test
+- **Not caught by any test** (D62, investigation §3.7): `pm_wr_q` resetting to 0 (every test
   writes its program after reset, which refetches), and a refetch only one clock after the
   write (an instruction would have to complete in exactly that clock).
+
+## BUG-075 — Stress bench imported the bus models from their pre-D63 location (merge interaction, fixed)
+
+- **Where:** `verify/stress/test_stress.py` (round 2's `pbe_v1/test/stress/test_stress.py`).
+- **Found by:** reading every path in round 2's new files while merging it with `main` (D64).
+  Round 2 branched before D63 moved `pbe_v1/test/bus_models` to `verify/golden-model/bus_models`,
+  and its stress bench reuses those third-party UART/SPI endpoints. Git merged both sides
+  cleanly, so nothing flagged it; `make stress` is not part of `make test`.
+- **Before:**
+  ```python
+  ROOT=Path(os.environ['PBE_ROOT'])
+  sys.path.insert(0,str(ROOT/'pbe_v1/test/bus_models'))
+  ```
+- **After:**
+  ```python
+  sys.path.insert(0,str(ROOT/'verify/golden-model/bus_models'))
+  ```
+  (`verify/stress/run.py` sets `PBE_ROOT` to the repository root: `HERE.parents[1]`, was
+  `HERE.parents[2]` one level deeper.)
+- **Test:** `make stress`.
+  - Before: the cocotb module fails to import, `ModuleNotFoundError: No module named 'test_buses'`;
+    no observation is made and `make stress` exits 2.
+  - After: 22/22 required observations pass in 60 s, each identical (settings, expected
+    and actual bytes, status, IRQ) to round 2's `evidence/round2/stress/stress_required.json`.
+
+## BUG-076 — Mutation scratch copy held only `pbe_v1`, so every mutant's `make test` failed on missing files (tool, fixed)
+
+- **Where:** `verify/mutation/mutate.py` (round 2's `pbe_v1/tools/mutate.py`).
+- **Found by:** reading its scratch-copy logic while merging round 2 with `main` (D64). The runner
+  copies the design into a temporary directory, mutates one RTL line there and runs `make test`
+  and `make diff`. It copied `pbe_v1` alone. After D63, `make test` runs scripts in
+  `../verify/golden-model`, and after D62 it also needs `../macros` for `test-sram`; neither
+  exists beside the copy. The runner classifies "No such file or directory" as
+  `inconclusive-infrastructure-or-compile`, so `make diff` could judge no mutant: round 2's 17/24
+  caught by `make diff` would have read 0/24.
+- **Before:**
+  ```python
+  snapshot = Path(snapshot_dir.name)/'pbe_v1'
+  shutil.copytree(PBE, snapshot, ignore=shutil.ignore_patterns('build','*.vvp','*.vcd','__pycache__','evidence'))
+  ...
+  scratch = tmp/'pbe_v1'
+  shutil.copytree(snapshot, scratch, ignore=...)
+  path = scratch/'src'/filename
+  ```
+- **After:** copy the part of the repository `make test` uses, keeping `pbe_v1/src` a link to
+  the copied `../src`, and mutate that `src`:
+  ```python
+  SNAPSHOT = ('pbe_v1', 'src', 'macros', 'verify')
+  IGNORE = shutil.ignore_patterns('build','*.vvp','*.vcd','__pycache__','evidence','sim_build','results.xml')
+  ...
+  for part in SNAPSHOT:
+      shutil.copytree(ROOT/part, snapshot/part, symlinks=True, ignore=IGNORE)
+  ...
+  shutil.copytree(snapshot, tmp, symlinks=True, ignore=IGNORE, dirs_exist_ok=True)
+  scratch = tmp/'pbe_v1'
+  path = tmp/'src'/filename
+  ```
+- **Test:** the mutation M21 (empty-FIFO pop accepted), which `tb_fifo_robustness` catches
+  (BUG-061): `mutate.py --only M21 --jobs 1 --out <scratch>`.
+  - Before (round 2's runner on the merged tree): `test` caught (by `tb_fifo_robustness`), but `diff` is
+    `inconclusive-infrastructure-or-compile`: `can't open file
+    '/tmp/pbe-mutation-M21-.../pbe_v1/../verify/golden-model/differential/run.py'`. Every mutant's
+    `make diff`, and the `make test` of any mutant that survives the SV benches, ends this way.
+  - After: `test` caught by `tb_fifo_robustness` (`FIFO boundary: empty pop must be ignored
+    count=31`), `diff` survived, as in round 2's recorded rerun
+    (`evidence/round2/mutations/fifo-gap-rerun/M21.json`). A scratch copy also passes
+    `make test-sram`, the spec-boundary check, the 24 model tests and the tool tests.

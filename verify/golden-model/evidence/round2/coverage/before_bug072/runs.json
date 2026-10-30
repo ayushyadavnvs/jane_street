@@ -1,0 +1,286 @@
+[
+  {
+    "test": "tb_coverage_gaps",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_coverage_gaps.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.147,
+      "passed": true,
+      "log": "build/coverage/tb_coverage_gaps-run.log"
+    },
+    "passed": true,
+    "source_signature": "e2190057a1fa8e4a728bbed0e195752e694804706936c462eb323a4fef33f0cd"
+  },
+  {
+    "test": "tb_engine_known_reset",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_engine_known_reset/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_engine_known_reset.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.147,
+      "passed": true,
+      "log": "build/coverage/tb_engine_known_reset-run.log"
+    },
+    "passed": true,
+    "source_signature": "c72756121cd8caed4ecd718564bd1f8d9db8b830562d1fec7d598357b27f22d9"
+  },
+  {
+    "test": "tb_fifo_robustness",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_fifo_robustness/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_fifo_robustness.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.007,
+      "passed": true,
+      "log": "build/coverage/tb_fifo_robustness-run.log"
+    },
+    "passed": true,
+    "source_signature": "55799025f4ad30b208d3e84dfb8625d30964cc55619dded5a40672cb8f6ea992"
+  },
+  {
+    "test": "tb_engine_restart",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_engine_restart/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_engine_restart.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.086,
+      "passed": true,
+      "log": "build/coverage/tb_engine_restart-run.log"
+    },
+    "passed": true,
+    "source_signature": "6784625f4003c5c1ed037c9a116e9d4fabc457d537d23e939622030a07f12a02"
+  },
+  {
+    "test": "tb_engine_ops",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_engine_ops/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_engine_ops.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.081,
+      "passed": true,
+      "log": "build/coverage/tb_engine_ops-run.log"
+    },
+    "passed": true,
+    "source_signature": "f9f79dd6cefc399bd81710ea5795b802fb7fe92e6c1879c1e1c07bef8dff7490"
+  },
+  {
+    "test": "tb_fetch",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_fetch/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_fetch.dat"
+      ],
+      "returncode": 0,
+      "seconds": 1.224,
+      "passed": true,
+      "log": "build/coverage/tb_fetch-run.log"
+    },
+    "passed": true,
+    "source_signature": "366411263b9170b8ba534eff30f1c341128835f6c456b17c924e8248948e375c"
+  },
+  {
+    "test": "tb_line",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_line/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_line.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.066,
+      "passed": true,
+      "log": "build/coverage/tb_line-run.log"
+    },
+    "passed": true,
+    "source_signature": "806e853fbae795dad84b6790211e1b4ba623db36b96ba759bd619ad243daf36d"
+  },
+  {
+    "test": "tb_usb",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_usb/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_usb.dat"
+      ],
+      "returncode": 0,
+      "seconds": 4.785,
+      "passed": true,
+      "log": "build/coverage/tb_usb-run.log"
+    },
+    "passed": true,
+    "source_signature": "e83a58aa6c03f0298a0a756e090af2962f86f790df80fd3c78339a21bcd6b4cd"
+  },
+  {
+    "test": "tb_proto",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_proto/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_proto.dat"
+      ],
+      "returncode": 0,
+      "seconds": 1.532,
+      "passed": true,
+      "log": "build/coverage/tb_proto-run.log"
+    },
+    "passed": true,
+    "source_signature": "7f1da9a57296556f2a6c6529f5ad7b98db95798093ef1054d6b27f3bd19ab500"
+  },
+  {
+    "test": "tb_pbe",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_pbe/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_pbe.dat"
+      ],
+      "returncode": 0,
+      "seconds": 50.941,
+      "passed": true,
+      "log": "build/coverage/tb_pbe-run.log"
+    },
+    "passed": true,
+    "source_signature": "bfa45de5b5c775d013ffc321cec9a51c7e544e479ff8391534c91f73ebc5d9b4"
+  },
+  {
+    "test": "tb_spec_boundaries",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+        "+verilator+coverage+file+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/tb_spec_boundaries.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.076,
+      "passed": true,
+      "log": "build/coverage/tb_spec_boundaries-run.log"
+    },
+    "passed": true,
+    "source_signature": "f44f1111c0efbe29db004a69cf9034a7994648716218f2db5f8a7d9cc87c970f",
+    "expected_failures": [
+      {
+        "command": [
+          "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_WINDOW_FENCE"
+        ],
+        "returncode": 1,
+        "seconds": 0.017,
+        "passed": true,
+        "log": "build/coverage/tb_spec_boundaries-EXPECT_WINDOW_FENCE.log"
+      },
+      {
+        "command": [
+          "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_INSTRUCTION_WINDOW_FENCE"
+        ],
+        "returncode": 1,
+        "seconds": 0.015,
+        "passed": true,
+        "log": "build/coverage/tb_spec_boundaries-EXPECT_INSTRUCTION_WINDOW_FENCE.log"
+      },
+      {
+        "command": [
+          "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_WRITE_CANCELLATION"
+        ],
+        "returncode": 1,
+        "seconds": 0.016,
+        "passed": true,
+        "log": "build/coverage/tb_spec_boundaries-EXPECT_WRITE_CANCELLATION.log"
+      }
+    ]
+  },
+  {
+    "test": "make diff equivalent --sim verilator",
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/differential/run.py",
+        "--sim",
+        "verilator",
+        "--coverage",
+        "--source-dir",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/src",
+        "--build-dir",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/obj_diff",
+        "--coverage-output",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/build/coverage/diff.dat",
+        "--n",
+        "2",
+        "--cycles",
+        "600",
+        "--seed",
+        "0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 8.623,
+      "passed": true,
+      "log": "build/coverage/diff.log"
+    },
+    "passed": true
+  },
+  {
+    "test": "line differential 160 configurations",
+    "run": {
+      "command": [
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/coverage/run_line.py"
+      ],
+      "returncode": 0,
+      "seconds": 6.92,
+      "passed": true,
+      "log": "build/coverage/line_sweep.log"
+    },
+    "passed": true
+  }
+]

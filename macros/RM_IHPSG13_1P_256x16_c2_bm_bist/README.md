@@ -1,6 +1,6 @@
 # RM_IHPSG13_1P_256x16_c2_bm_bist
 
-IHP's 256 x 16 single-port SRAM, the proposed program memory (D55; one per engine). Used only
+IHP's 256 x 16 single-port SRAM, the proposed program memory (D62; one per engine). Used only
 with `USE_SRAM` (`make test-sram`, `make synth-sram`, `sram/flow.patch`).
 
 **Source:** [IHP-Open-PDK](https://github.com/IHP-GmbH/IHP-Open-PDK)

@@ -32,7 +32,8 @@
 //   0x10+0x10*e   engine e (e = 0, 1):
 //      +0 CLKDIV_L, +1 CLKDIV_H   tick every (CLKDIV + 1) clocks
 //      +2 PIN_BASE[2:0]  +3 JMP_PIN[2:0]  +4 SHIFT [0] OUT msb first, [1] IN msb first
-//      +5 START_PC[6:0]   the program's first word; its jumps are relative to it (64-word window)
+//      +5 START_PC[6:0]   the program's first word; 6-bit jump offsets are relative to it,
+//                         modulo 128; sequential execution is not confined to 64 words
 //      +8 FLAG_BASE[2:0]  first physical flag this engine sees (reset: 0 for E0, 4 for E1)
 //      +9 CRC_POLY_L, +A CRC_POLY_H   W: CRC polynomial (top term implied); R: the CRC's current value
 //      +B CRC_CFG    [3:0] width - 1, [4] init all ones, [5] reversed output, [6] feed OUT bits,
@@ -50,6 +51,26 @@
 //                    (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5 equal), [4] pair, [5] bytes
 //      +1 SYNC       frame start pattern (0 = none)
 //      +2 CRC_GOOD_L, +3 CRC_GOOD_H   the CRC value that means "ok" (0 unless the CRC is sent inverted)
+//
+// Edge/reset contract, clarified by the round-2 model audit (no logic changes):
+// Host pins and protocol pins pass through two clk registers; engines/host SPI consume
+// their pre-edge second-stage values. ena and ui_in[7:3] have no functional effect.
+// Reset: host synchronizers=3'b010, protocol synchronizers=0; configuration, run, IRQ,
+// ownership, flags, PM pointer=0 except FLAG_BASE={4,0}. RAM/FIFO storage is not reset;
+// both bytes of an unwritten program word must be loaded before deterministic execution.
+// Register writes/config changes affect engines on the next edge; combinational pin muxes
+// and readback reflect the newly written configuration immediately after the write edge.
+// Full FLAGS write wins over all same-edge flag events; otherwise clear wins over set
+// across host and both engines. IRQ W1C wins over same-edge IRQ assertion. CTRL run bits
+// are always replaced, even for a restart/flush write; restart and flush are independent.
+// PM_DATA byte writes wrap the 8-bit byte pointer and invalidate both engine fetches,
+// regardless of which address was written. Other byte of a partially written word is
+// retained/unspecified, never zero-initialized by the write. PM_DATA has no readable RAM.
+// FIFO acceptance and flush ordering are in pbe_fifo. An empty FIFO read returns its
+// unqualified head storage (possibly stale/unknown); only a nonempty pop changes count.
+// Unmapped register reads return 0 and unmapped writes do nothing. Only the documented
+// low-width configuration bits are stored/read; other readback bits are 0. LINE[7:6]
+// are stored but reserved; unsupported mode 3 has no architectural guarantee.
 module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the name
     input  wire [7:0] ui_in,
     output wire [7:0] uo_out,
@@ -282,7 +303,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [13:0] pc_d;      // each engine's next read address (7 bits per engine)
   logic        eng_pm_wr; // the engines' refetch
 `ifdef USE_SRAM
-  // One SRAM macro per engine, both written by the host (D55, a proposal). A write takes the
+  // One SRAM macro per engine, both written by the host (D62, a proposal). A write takes the
   // macros' port for that clock, so the engines refetch at the write and once more one clock
   // later. The reset value refetches once after reset, when the macros' output is unknown.
   logic pm_wr_q;

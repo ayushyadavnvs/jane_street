@@ -1,0 +1,15 @@
+{
+  "python": "3.10.12 (main, Aug 31 2026, 10:18:17) [GCC 11.4.0]",
+  "versions": {
+    "luna-usb": "0.2.3",
+    "usb-protocol": "0.9.2",
+    "pymodbus": "3.11.3",
+    "amaranth": "0.5.10",
+    "construct": "2.10.70"
+  },
+  "source_sha256": {
+    "luna.usb_packet": "493dedc8da73504fe420d4f071c00994f9839f4163408fcaa30371ec0cfb233f",
+    "usb_protocol.types": "b097acfce6146b509fbea125ba397b52e1d0df393afd283f68c9c42906095809",
+    "pymodbus.framer.rtu": "9063349330b1d0eda96267cca8ea940b62ffc727e791ddb60dbf3411857f7cd6"
+  }
+}

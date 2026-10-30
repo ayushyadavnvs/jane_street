@@ -18,6 +18,9 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3] / 'pbe_v1'  # the design
+USB_STACK = ('usb_signalling:dp=p1:dm=p0:signalling=low-speed,'
+             'usb_packet:signalling=low-speed,usb_request:in_request_start=submit')
+
 SRC = [ROOT / 'src' / (x + '.sv') for x in
        ('pbe_fifo', 'pbe_host_spi', 'pbe_crc', 'pbe_line', 'pbe_engine', 'tt_um_pbe')]
 
@@ -126,6 +129,9 @@ class Checks:
         result = call(command, self.output/name)
         # libsigrok 0.5 can exit zero on initialization failure: never count empty
         # stdout as success. A comparison below also requires non-empty data.
+        stderr = (self.output/name).with_suffix('.stderr').read_text(errors='replace')
+        if 'Traceback (most recent call last)' in stderr or re.search(r'Calling .* decode\(\) failed', stderr):
+            raise RuntimeError(f'{name}: stock decoder exception; inspect stderr')
         if not result:
             raise RuntimeError(f'{name}: empty decoder output; inspect stderr')
         return result if binary else result.decode()
@@ -143,6 +149,19 @@ class Checks:
                              'expected_sequence':expected.hex(), 'actual':got.hex()})
         print(f'{"PASS" if ok else "FAIL"}: {name}', flush=True)
 
+    def known_limitation(self, name, got, expected, *, known_actual, verified, reason, strict=False):
+        """Accept only the exact independently reproduced external-tool signature.
+
+        A changed/unrecognized failure stays FAIL. A resolved limitation is PASS.
+        Strict mode makes the same known discrepancy an ordinary failing check.
+        """
+        status = ('PASS' if got == expected else
+                  'XFAIL' if verified and got == known_actual and not strict else 'FAIL')
+        self.results.append({'check': name, 'status': status, 'expected': expected,
+                             'actual': got, 'known_actual': known_actual,
+                             'reason': reason, 'strict': strict})
+        print(f'{status}: {name}', flush=True)
+
     def contains(self, name, text, expected):
         missing = [x for x in expected if x.lower() not in text.lower()]
         self.results.append({'check':name, 'status':'FAIL' if missing else 'PASS',
@@ -153,7 +172,7 @@ class Checks:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--full-usb-request', action='store_true',
-                        help='also check full malformed/retry USB trace; exposes known stock decoder disagreements')
+                        help='strict mode: make the two documented full-trace decoder limitations fail (normally XFAIL)')
     parser.add_argument('--sigrok-cli', default=os.environ.get('SIGROK_CLI', 'sigrok-cli'))
     parser.add_argument('--output', type=Path, default=ROOT/'test'/'sigrok_results')
     parser.add_argument('--vcd-dir', type=Path, help='reuse compact PBE_SIGROK VCDs (skip simulation)')
@@ -215,7 +234,7 @@ def main():
         expected = [f'#{(0xff-0x33*led if frame else 1<<led):02x}{0x10*led+frame:02x}{0xa5^(0x11*led):02x}'
                     for frame in range(2) for led in range(5)]
         checks.equal('WS2812 two frames / ten GRB pixels',got,expected)
-        stack = 'usb_signalling:dp=p1:dm=p0:signalling=low-speed,usb_packet:signalling=low-speed,usb_request'
+        stack = USB_STACK
         usb = '\n'.join(checks.decode(name+'_requests',output/(name+'.vcd'),stack,
                                      annotation='usb_request')
                         for name in ('usb_clean_initial','usb_clean_address','usb_clean_descriptors',
@@ -242,14 +261,24 @@ def main():
         checks.equal('USB ten valid control requests: exact setup, data and handshake',
                      got_requests,expected_requests)
         checks.equal('USB valid windows have no request decoder state errors',usb.count('ERR:'),0)
-        if args.full_usb_request:
-            full = checks.decode('usb_full_requests',output/'usb.vcd',stack,annotation='usb_request')
-            checks.contains('USB full trace SET_ADDRESS reconstruction (known stock decoder disagreement)',full,
-                            ['00 05 15 00 00 00 00 00'])
-            request_payloads = [bytes.fromhex(x) for x in re.findall(
-                r'SETUP in: \[ 80 06 00 01 00 00 12 00 \]\[([0-9A-F ]+)\]',full)]
-            checks.equal('USB lost ACK descriptor lengths (known stock decoder disagreement)',
-                         [len(x) for x in request_payloads],[18,18])
+        full = checks.decode('usb_full_requests',output/'usb.vcd',stack,annotation='usb_request')
+        # These are external-tool expected failures, not waived PBE assertions.
+        # Exact observed signatures, known version and clean/packet checks below
+        # prevent an unrelated new failure from being silently called XFAIL.
+        known_version = bool(re.search(r'libsigrokdecode\s+0\.5\.3(?:/|\s|$)', version))
+        address = '00 05 15 00 00 00 00 00'
+        checks.known_limitation('USB full trace SET_ADDRESS reconstruction',
+            full.count(address), 1, known_actual=0,
+            verified=known_version and 'ERR: received SETUP token in state DATA RECEIVED' in full,
+            reason='BUG-050: stock 0.5.3 has no DATA RECEIVED timeout; ROUND2_USB.md and packet-input reproduction',
+            strict=args.full_usb_request)
+        request_payloads = [bytes.fromhex(x) for x in re.findall(
+            r'SETUP in: \[ 80 06 00 01 00 00 12 00 \]\[([0-9A-F ]+)\]',full)]
+        checks.known_limitation('USB lost ACK descriptor lengths',
+            [len(x) for x in request_payloads], [18,18], known_actual=[18,26],
+            verified=known_version and 'ERR: received IN token in state DATA RECEIVED' in full,
+            reason='BUG-051: stock 0.5.3 loses transaction association and unconditionally appends IN data; ROUND2_USB.md',
+            strict=args.full_usb_request)
         data_packets = checks.decode('usb_data_packets',output/'usb.vcd',stack,
                                     annotation='usb_packet=packet-data0:packet-data1')
         checks.contains('USB packet decoder SET_ADDRESS and vendor payload',data_packets,
@@ -260,8 +289,11 @@ def main():
         checks.contains('USB injected bad CRC5/CRC16 are visible independently',packets,['CRC5 ERROR','CRC16 ERROR'])
     finally:
         (output/'results.json').write_text(json.dumps({'versions':version,'checks':checks.results},indent=2)+'\n')
-    failed = [r for r in checks.results if r['status']!='PASS']
-    print(f'{len(checks.results)-len(failed)}/{len(checks.results)} checks passed; evidence: {output}')
+    failed = [r for r in checks.results if r['status']=='FAIL']
+    passed = sum(r['status']=='PASS' for r in checks.results)
+    expected = sum(r['status']=='XFAIL' for r in checks.results)
+    print(f'{passed}/{len(checks.results)} checks passed; {expected} documented external-tool XFAIL; '
+          f'{len(failed)} unexpected/strict failures; evidence: {output}')
     return bool(failed)
 
 if __name__ == '__main__':

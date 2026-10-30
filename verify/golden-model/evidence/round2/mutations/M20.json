@@ -1,0 +1,42 @@
+{
+  "id": "M20",
+  "category": "pin-ownership",
+  "file": "src/tt_um_pbe.sv",
+  "before": "(e_out[15:8] & pin_own) | (e_out[7:0] & ~pin_own)",
+  "after": "(e_out[15:8] & ~pin_own) | (e_out[7:0] & pin_own)",
+  "baseline_sha256": "f50b869d55c0f5e686ab91ffaa64f4c59b9db3a28637cb979a3916faa7b926ce",
+  "scratch": "/tmp/pbe-mutation-M20-l17v51xz/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 3.75,
+      "status": "caught",
+      "first_failure": "FATAL: tb_fetch.sv:174: time limit",
+      "log": "M20-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 2,
+      "seconds": 5.027,
+      "status": "caught",
+      "first_failure": "0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages",
+      "log": "M20-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test",
+    "diff"
+  ]
+}

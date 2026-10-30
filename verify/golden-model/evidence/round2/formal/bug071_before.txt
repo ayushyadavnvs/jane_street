@@ -1,0 +1,21 @@
+F
+======================================================================
+FAIL: test_cover_locations_include_smtbmc_step_text (test_runner.FormalReceiptTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/formal/test_runner.py", line 17, in test_cover_locations_include_smtbmc_step_text
+    self.assertEqual(r.cover_locations(log),[
+AssertionError: Lists differ: [] != ['engine_formal: engine_formal.sv:51.5-51.[48 chars]_b)']
+
+Second list contains 2 additional elements.
+First extra element 0:
+'engine_formal: engine_formal.sv:51.5-51.19 (cover_a)'
+
+- []
++ ['engine_formal: engine_formal.sv:51.5-51.19 (cover_a)',
++  'host: observer.sv:9.1-9.8 (cover_b)']
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (failures=1)

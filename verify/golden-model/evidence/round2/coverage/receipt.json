@@ -1,0 +1,53 @@
+{
+  "command": [
+    "coverage/run.py",
+    "--jobs",
+    "2",
+    "--reuse-builds"
+  ],
+  "returncode": 0,
+  "baseline_commit": "9791eb04c083994e4f17c949e67205ea4945166f",
+  "tools": {
+    "verilator": "5.051 devel v5.050-99-gf8fb1d664",
+    "g++": "11.4.0",
+    "cocotb": "2.0.1",
+    "python": "3.10.12"
+  },
+  "raw_rtl_sha256": {
+    "src/pbe_engine.sv": "68cbdbde6d69ef637d773a6fdadde14cc6fbedaf477c8348944c1c79cb27d99b",
+    "src/pbe_line.sv": "4bffa0a0c6b2ae04cfd9e789dc50be7d15cfbee8ca2650310169ba4b087ed3e1",
+    "src/pbe_host_spi.sv": "e797259e321c4344bad7d541ed13953f1fcd5361411b0620ad636f62d8841d94",
+    "src/pbe_fifo.sv": "0dab5b2937704a236f43f8972991446d4e0dfa10894e86b1ef87d8cd3acf8898",
+    "src/tt_um_pbe.sv": "d9e7c849262c8d242438654c108f8d9c7ba5a0372777ad1ef3d3e95cef98a0e9",
+    "src/pbe_crc.sv": "5843675efd730aca1b11a3fc4cbf1b683667586794a62f906b02575ce722100f"
+  },
+  "coverage_script_sha256": {
+    "pbe_v1/coverage/data_file.py": "6ae2874845fc180a58f932153bf5984cbb557c86b4618c2f7da5783661b5d1dc",
+    "pbe_v1/coverage/prepare.py": "6c8684d59519d09fd76586f789a256dc2bca6e420e09d8bb19c1b0abb8c469a7",
+    "pbe_v1/coverage/run.py": "dd91940a1467bcc3c4d5a8f9a6602f7dd1faee7cdcf3385d65b6e7a032568b07",
+    "pbe_v1/coverage/run_line.py": "31b90ba404289150bf1c3fa40aedbe2ef78f1d40b6e480dc7a65771f51e0d6b3",
+    "pbe_v1/coverage/summarize.py": "d5cb15bcf0956181314b7d110121dae880e22f7d49d3a48288dce6b3a39a6a47",
+    "pbe_v1/coverage/test_harness.py": "baca573fd4ce11f4d4f9a044b37167ac85158124ba11cbafc773e6315fc84f4d",
+    "pbe_v1/test/differential/run.py": "d115fd45f45be8a84b43cdd75349cebc44a698f0da97d2ef8c1e8ef744cfa7ab",
+    "pbe_v1/test/differential/test_diff.py": "d0fc8c2fed1a2854083e76d2e1a4028f295e934d2cb5254e23de86b37dc3921c"
+  },
+  "coverage_data_sha256": "ad0f0c15bafef6244aa8b4989565ad6ec41b61d57d9b76e5fac73bac587f103a",
+  "two_state_policy": "Mask exactly model-marked unspecified MISO; all known output bits/FIFO/status/flags/CRC checked. Icarus no-X check remains independent.",
+  "negative_annotation_check": {
+    "returncode": 1,
+    "reason": "bare tb_host.svh not found outside scratch test cwd",
+    "expected_failure": true
+  },
+  "artifact_enforcement": "Every normal bench clears then requires fresh nonempty .dat; same helper used by line and direct differential. 7 helper regressions pass; scratch pre-fix acceptance policy fails all3 artifact negative regressions.",
+  "image_prerequisites": "Actual existing make prerequisites for 13 images executed successfully before copying hex; see image_prerequisites.json",
+  "diff_output_directory": "build/coverage/obj_diff: coverage.json and failure JSON isolated from default Icarus build/differential",
+  "note": "Final full rerun after BUG072 fixes: 14 successful checks (7unit harness tests as one check,11SVbenches,topdiff,linesweep),plus3checked expectedcounterexamples. Fresh .dat outputs and matching source/include signatures verified. No HDL behavior changed.",
+  "python_runtime": {
+    "launcher": {
+      "version": "3.10.12 (main, Aug 31 2026, 10:18:17) [GCC 11.4.0]",
+      "executable": "/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/.venv/bin/python"
+    },
+    "probe": "verification/evidence/round2/python_runtime/",
+    "banner_observation": "Historical cocotb startup banner says Using Python 3.10.14; independently measured sys.version is 3.10.12. Banner text is retained verbatim, not treated as runtime version evidence."
+  }
+}

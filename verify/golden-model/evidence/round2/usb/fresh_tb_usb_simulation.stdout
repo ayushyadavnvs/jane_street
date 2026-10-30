@@ -1,0 +1,16 @@
+VCD info: dumpfile tb_usb_pins.vcd opened for output.
+Test 11: USB low-speed device (engine 0, D- pin 0, D+ pin 1) enumerated by a host model
+  GET_DESCRIPTOR(device) at address 0: 18 bytes in 3 packets
+  a SETUP with a flipped bit, one with a missing and one with a wrong stuff bit: not ACKed, reported as bad
+  two records piled up while the firmware was busy: split apart from the end
+  SET_ADDRESS(0x15)
+  tokens for address 0 and with a bad CRC5: ignored
+  GET_DESCRIPTOR(device, configuration 9 and 18 bytes) at the new address
+  SET_CONFIGURATION(1)
+  an unsupported request: STALL
+  vendor write (OUT data) and read back
+  a lost ACK: the firmware queued the packet again, the device resent the same DATA1
+  a 10 ms bus reset: back at address 0, GET_DESCRIPTOR works again
+  11 SETUPs, 21 IN packets ACKed, 44 records (up to 2 at once); turnaround 3.00 to 3.19 bit times
+PASS
+/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/tb_usb.sv:829: $finish called at 17260541903 (1ps)

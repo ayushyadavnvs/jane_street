@@ -32,7 +32,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 make test                                  # Icarus Verilog, all testbenches
 make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
 make test-usb                              # only tb_usb
-make test-sram                             # end-to-end testbenches on the SRAM program memory (D55, also in make test)
+make test-sram                             # end-to-end testbenches on the SRAM program memory (D62, also in make test)
 make synth                                 # area, IHP library in ../ihp_lib
 make synth-sram                            # the same with USE_SRAM (macros as black boxes)
 make timing                                # critical path, slow corner
@@ -372,3 +372,17 @@ The bus models use the unmodified UART/SPI/I2C programs through external pins.
 Their documented compatibility adapters and unsupported SPI modes are described
 in [verify/golden-model/PHASE3.md](../verify/golden-model/PHASE3.md); decoder disagreements are
 preserved in [verify/golden-model/PHASE2.md](../verify/golden-model/PHASE2.md).
+
+Round 2 (D55-D61; files under `../verify/`, D64) adds formal properties, reference vectors,
+coverage, stress and mutation testing. The long targets stay out of `make test`:
+
+```sh
+make formal                       # SymbiYosys FIFO, host SPI, line coder, engine (OSS CAD Suite)
+make test-crc-vectors             # needs ../verify/vectors/crc/requirements.txt
+make test-protocol-vectors        # needs ../verify/vectors/protocols/requirements.txt
+make coverage                     # Verilator line/toggle/branch/expression and named bins
+make stress                       # pin-level clock error, jitter, backlog, concurrency
+make mutate                       # 24 single-site RTL faults on scratch copies
+```
+
+Results are in [verify/golden-model/REPORT.md](../verify/golden-model/REPORT.md) ("Round 2").

@@ -1,0 +1,137 @@
+{
+  "uart": {
+    "original_sha256": "7842d687b47e60eeffdf3efca3434fe89f6abff82fc599f126d20c60953870e5",
+    "phase": 1,
+    "start_ps": 752471995,
+    "stop_ps": 1676668235,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "spi_ctrl": {
+    "original_sha256": "7842d687b47e60eeffdf3efca3434fe89f6abff82fc599f126d20c60953870e5",
+    "phase": 2,
+    "start_ps": 1676668235,
+    "stop_ps": 2491819319,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "i2c_ctrl": {
+    "original_sha256": "7842d687b47e60eeffdf3efca3434fe89f6abff82fc599f126d20c60953870e5",
+    "phase": 3,
+    "start_ps": 2491819319,
+    "stop_ps": 4042910619,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "onewire": {
+    "original_sha256": "7842d687b47e60eeffdf3efca3434fe89f6abff82fc599f126d20c60953870e5",
+    "phase": 4,
+    "start_ps": 4042910619,
+    "stop_ps": 105643995083,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "modbus": {
+    "original_sha256": "7842d687b47e60eeffdf3efca3434fe89f6abff82fc599f126d20c60953870e5",
+    "phase": 50,
+    "start_ps": 106408019531,
+    "stop_ps": 121414499723,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "ws281x": {
+    "original_sha256": "8a8f202a490f497afa9bc12a52fc51de805b58f8bac54da8a9272f4e21a3d17e",
+    "phase": 8,
+    "start_ps": 197923,
+    "stop_ps": 1150901411,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "spi_periph": {
+    "original_sha256": "8a8f202a490f497afa9bc12a52fc51de805b58f8bac54da8a9272f4e21a3d17e",
+    "phase": 9,
+    "start_ps": 1150901411,
+    "stop_ps": 2084264611,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "i2c_target": {
+    "original_sha256": "8a8f202a490f497afa9bc12a52fc51de805b58f8bac54da8a9272f4e21a3d17e",
+    "phase": 10,
+    "start_ps": 2084264611,
+    "stop_ps": 3839112431,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "usb": {
+    "original_sha256": "53935fd3fedae34730b108e0810c553e63515c9d1598a6bc9fe1cb279508fb1d",
+    "phase": [
+      11,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116
+    ],
+    "start_ps": 197923,
+    "stop_ps": 17260541903,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "usb_clean_initial": {
+    "original_sha256": "53935fd3fedae34730b108e0810c553e63515c9d1598a6bc9fe1cb279508fb1d",
+    "phase": 11,
+    "start_ps": 197923,
+    "stop_ps": 1472224193,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "usb_clean_address": {
+    "original_sha256": "53935fd3fedae34730b108e0810c553e63515c9d1598a6bc9fe1cb279508fb1d",
+    "phase": 111,
+    "start_ps": 2354106579,
+    "stop_ps": 2746223293,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "usb_clean_descriptors": {
+    "original_sha256": "53935fd3fedae34730b108e0810c553e63515c9d1598a6bc9fe1cb279508fb1d",
+    "phase": 113,
+    "start_ps": 2823267425,
+    "stop_ps": 4601345155,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "usb_clean_vendor": {
+    "original_sha256": "53935fd3fedae34730b108e0810c553e63515c9d1598a6bc9fe1cb279508fb1d",
+    "phase": 114,
+    "start_ps": 4601345155,
+    "stop_ps": 5770070053,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  },
+  "usb_clean_reset": {
+    "original_sha256": "53935fd3fedae34730b108e0810c553e63515c9d1598a6bc9fe1cb279508fb1d",
+    "phase": 116,
+    "start_ps": 6606742659,
+    "stop_ps": 17260541903,
+    "sample_period_ns": 10,
+    "head_pad_ns": 1000,
+    "tail_pad_ns": 100000
+  }
+}

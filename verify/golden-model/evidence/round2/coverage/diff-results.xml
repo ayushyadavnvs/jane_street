@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1793293317" />
+    <testcase name="random_differential" classname="test_diff" file="/home/ayush_mac/Documents/ChatGPT/chip_dx/jane_street/pbe_v1/test/differential/test_diff.py" lineno="189" time="6.936014890670776" sim_time_ns="1021101.312" ratio_time="147217.28948036474" />
+  </testsuite>
+</testsuites>
