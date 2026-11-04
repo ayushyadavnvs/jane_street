@@ -10,8 +10,8 @@
 ; Engine settings (48 MHz; bit time = CLKDIV + 1 clocks):
 ;   CLKDIV = 383 / 191 / 95 / 47 for 125k / 250k / 500k / 1M; JMP_PIN = 1 (RXD);
 ;   SHIFT = 0x03 (OUT and IN MSB first); LINE = 0x2D (NRZ, stuffing after 5 equal bits, frames
-;   start with 8-bit units); LINE2 = 0x72 (CAN mode, wait for bus idle, RXD on pin base + 1,
-;   75 % sample point; 0x73 for 87.5 %); CRC_POLY = 0x4599, CRC_CFG = 0x8E (CRC-15, fed by the
+;   start with 8-bit units); LINE2 = 0xF2 (CAN mode, frame follower, wait for bus idle, RXD on
+;   pin base + 1, 75 % sample point; 0xF3 for 87.5 %); CRC_POLY = 0x4599, CRC_CFG = 0x8E (CRC-15, fed by the
 ;   received bits), CRC_GOOD = 0; LINE_CFG = 0x40 | done (no parity; TIMEOUT_PC = word 45, the
 ;   line-event vector); TIMEOUT = 0.
 ;   At 1 Mbit/s use the 75 % sample point: the program queues the next unit within 8 clocks of
@@ -36,8 +36,12 @@
 ;   bytes and the longest record is 13.
 ;   The error counters and state are in CAN_TEC, CAN_REC and CAN_STATE (second page +5..+7).
 ;
-; Limits (D69): standard frames only. An extended frame (IDE = 1) or r0 = 1 is read as a frame
-; without data, so this node flags an error on it. DLC 9-15 mean 8 data bytes.
+; Extended (CAN 2.0B) frames and standard frames with r0 recessive (D74): the coder's frame
+; follower (LINE2[7]) walks them, checks their CRC and form, and ACKs a valid one; the program's
+; record ends after the third unit ({SRR, IDE = 1, ID17, ID16} or {RTR, 0, r0 = 1, DLC3}), so it
+; is [ID[10:4]] [ID[3:0]] [unit] [status]: the host sees the base ID and, from bit 2 (IDE) or
+; bit 1 (r0) of the third byte, what kind of frame it was. The node never sends extended frames
+; (CAN 2.0B passive). DLC 9-15 mean 8 data bytes.
 .equ tx 0
 
 start:  PIN  tx, DRV1        ; TXD recessive while the coder does not drive

@@ -26,11 +26,14 @@ module can_ref_node #(parameter string NAME = "ref") (
   bit     ack_en = 1;
   bit     crc_corrupt = 0, form_corrupt = 0;
   int     skip_stuff_at = -1;
+  bit     r0_bit = 0;   // test hook: send r0 recessive
+  bit     tx_ext = 0;
   localparam int TQ = 16, SAMPLE = 12, SJW = 4;
 
   // ---- frames ----
   // a frame: [79:69] ID, [68] RTR, [67:64] DLC, [63:0] data (byte b is [63-8*b -: 8])
-  typedef logic [79:0] frame_t;
+  // [98] IDE (extended frame), [97:80] extended ID bits 17..0 (CAN 2.0B)
+  typedef logic [98:0] frame_t;
   frame_t tx_q[$];
   frame_t rx_frames[$];       // frames received without error (own frames not included)
   int     n_sent = 0, n_err_flags = 0, n_arb_lost = 0;
@@ -73,7 +76,7 @@ module can_ref_node #(parameter string NAME = "ref") (
     tx_q.delete(); rx_frames.delete();
     tec = 0; rec = 0; busoff = 0; st = S_INTEG; recessive_run = 0; idle_bits = 0; susp = 0;
     n_sent = 0; n_err_flags = 0; n_arb_lost = 0; enabled = 0; ack_en = 1;
-    crc_corrupt = 0; form_corrupt = 0; skip_stuff_at = -1; tx = 1; drv_dom = 0;
+    crc_corrupt = 0; form_corrupt = 0; skip_stuff_at = -1; r0_bit = 0; tx = 1; drv_dom = 0;
   endfunction
 
   function automatic logic [14:0] crc_step(input logic [14:0] c, input logic b);
@@ -87,11 +90,17 @@ module can_ref_node #(parameter string NAME = "ref") (
     logic [14:0] c;
     int n;
     fbits.delete();
+    tx_ext = f[98];   // the arbitration field runs to RTR: bit 12, or bit 32 when extended
     fbits.push_back(0);
     for (int i = 10; i >= 0; i--) fbits.push_back(f[69 + i]);
+    if (f[98]) begin   // CAN 2.0B: SRR, IDE, ID 17..0, then RTR, r1
+      fbits.push_back(1);
+      fbits.push_back(1);
+      for (int i = 17; i >= 0; i--) fbits.push_back(f[80 + i]);
+    end
     fbits.push_back(f[68]);
-    fbits.push_back(0);   // IDE
-    fbits.push_back(0);   // r0
+    fbits.push_back(0);        // IDE (standard) or r1 (extended): dominant
+    fbits.push_back(r0_bit);   // r0: receivers must accept either level
     for (int i = 3; i >= 0; i--) fbits.push_back(f[64 + i]);
     n = f[68] ? 0 : (f[67:64] > 8 ? 8 : f[67:64]);
     for (int b = 0; b < n * 8; b++) fbits.push_back(f[63 - b]);
@@ -260,7 +269,7 @@ module can_ref_node #(parameter string NAME = "ref") (
     end
     // a data bit: arbitration (identifier and RTR: destuffed bits 1..12), bit error
     if (sending_tx && cur_bit != b) begin
-      if (fpos >= 1 && fpos <= 12 && cur_bit == 1 && b == 0) begin
+      if (fpos >= 1 && fpos <= (tx_ext ? 32 : 12) && cur_bit == 1 && b == 0) begin
         sending_tx = 0;   // lost arbitration: receive from here
         n_arb_lost++;
       end else begin start_error(1, 0); return; end
@@ -270,11 +279,17 @@ module can_ref_node #(parameter string NAME = "ref") (
     last_lvl = b;
     fpos++;
     tpos++;
-    if (rbits.size() == 19) begin
+    if (rbits.size() == (rbits.size() > 13 && rbits[13] ? 39 : 19)) begin
       // header complete: SOF ID(11) RTR IDE r0 DLC(4)
-      dl = {rbits[15], rbits[16], rbits[17], rbits[18]};
-      dlc_n = rbits[12] ? 0 : (dl > 8 ? 8 : dl);
-      crc_end = 19 + 8 * dlc_n + 15;
+      if (rbits[13]) begin   // extended: RTR at 32, DLC at 35..38
+        dl = {rbits[35], rbits[36], rbits[37], rbits[38]};
+        dlc_n = rbits[32] ? 0 : (dl > 8 ? 8 : dl);
+        crc_end = 39 + 8 * dlc_n + 15;
+      end else begin
+        dl = {rbits[15], rbits[16], rbits[17], rbits[18]};
+        dlc_n = rbits[12] ? 0 : (dl > 8 ? 8 : dl);
+        crc_end = 19 + 8 * dlc_n + 15;
+      end
     end
     if (crc_end > 0 && rbits.size() == crc_end) begin
       logic [14:0] c;
@@ -293,10 +308,20 @@ module can_ref_node #(parameter string NAME = "ref") (
     frame_t f;
     f[79:69] = 0;
     for (int i = 1; i <= 11; i++) f[80 - i] = rbits[i];
-    f[68] = rbits[12];
-    f[67:64] = {rbits[15], rbits[16], rbits[17], rbits[18]};
-    f[63:0] = 0;
-    for (int b = 0; b < dlc_n * 8; b++) f[63 - b] = rbits[19 + b];
+    f[98:80] = 0;
+    if (rbits[13]) begin
+      f[98] = 1;
+      for (int i = 0; i < 18; i++) f[97 - i] = rbits[14 + i];
+      f[68] = rbits[32];
+      f[67:64] = {rbits[35], rbits[36], rbits[37], rbits[38]};
+      f[63:0] = 0;
+      for (int b = 0; b < dlc_n * 8; b++) f[63 - b] = rbits[39 + b];
+    end else begin
+      f[68] = rbits[12];
+      f[67:64] = {rbits[15], rbits[16], rbits[17], rbits[18]};
+      f[63:0] = 0;
+      for (int b = 0; b < dlc_n * 8; b++) f[63 - b] = rbits[19 + b];
+    end
     return f;
   endfunction
 

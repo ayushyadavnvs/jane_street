@@ -57,7 +57,8 @@
 //      +2 CRC_GOOD_L, +3 CRC_GOOD_H   the CRC value that means "ok" (0 unless the CRC is sent inverted)
 //      +4 LINE2      line coder (D65): [2:0] sample point (0 default, 1 62.5 %, 2 75 %, 3 87.5 %),
 //                    [3] resync on falling edges only, [4] receive on pin_base+1, [5] bit-synchronous
-//                    (CAN) mode, see pbe_bsync, [6] wait for bus idle before a frame. Reset 0.
+//                    (CAN) mode, see pbe_bsync, [6] wait for bus idle before a frame, [7] CAN
+//                    frame follower (extended frames, D74). Reset 0.
 //      +5 CAN_TEC  R transmit error counter [7:0]; +6 CAN_REC R receive error counter
 //      +7 CAN_STATE R [0] TEC[8], [1] error-passive, [2] bus-off (bit-synchronous mode, D68)
 //
@@ -79,8 +80,7 @@
 // unqualified head storage (possibly stale/unknown); only a nonempty pop changes count.
 // Unmapped register reads return 0 and unmapped writes do nothing. Only the documented
 // low-width configuration bits are stored/read; other readback bits are 0. LINE[7:6]
-// are stored but reserved; unsupported mode 3 has no architectural guarantee. LINE2[7] is
-// stored but reserved. The CAN counters survive a restart; only reset (or bus-off recovery)
+// are stored but reserved; unsupported mode 3 has no architectural guarantee. The CAN counters survive a restart; only reset (or bus-off recovery)
 // clears them.
 module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the name
     input  wire [7:0] ui_in,

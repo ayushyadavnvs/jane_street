@@ -111,7 +111,8 @@ that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
 (0 default, 1/2/3 = 62.5/75/87.5 %), [3] resync on falling edges only, [4] receive on pin base +
 1, [5] bit-synchronous mode (`pbe_bsync`: one bit timer, readback, arbitration, units of 1-8
 bits, the CRC fed from the line, the CAN frame tail, error flags, TEC/REC, bus-off), [6] wait
-for bus idle before a frame. Error counters: +5 `CAN_TEC`, +6 `CAN_REC`, +7 `CAN_STATE`
+for bus idle before a frame, [7] CAN frame follower (extended frames and r0 recessive walked by
+the coder, D74). Error counters: +5 `CAN_TEC`, +6 `CAN_REC`, +7 `CAN_STATE`
 ([0] TEC[8], [1] error-passive, [2] bus-off). `STATUS` write bits [4]/[5]/[6] clear
 arbitration lost / bit error / frame sent.
 
@@ -235,7 +236,7 @@ transceiver. Settings, the frame format in the TX FIFO, the RX records and the l
 the program's header (D72). 125k, 250k and 500k at a 75 % or 87.5 % sample point; 1 Mbit/s at
 75 % only. Tested by `tb_can` against two reference nodes written from ISO 11898-1 (DLC 0-8,
 remote frames, arbitration, missing ACK, CRC/stuff/form/bit errors, error-passive, bus-off and
-recovery, both engines as nodes), by sigrok's `can` decoder (`make sigrok-can`) and by a random
+recovery, both engines as nodes, extended frames and standard/extended arbitration), by sigrok's `can` decoder (`make sigrok-can`) and by a random
 differential of the coder (`make diff-can`).
 
 ## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)

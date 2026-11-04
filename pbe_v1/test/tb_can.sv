@@ -73,12 +73,14 @@ module tb_can;
 
   // ---------------- frames ----------------
   // a frame: [79:69] ID, [68] RTR, [67:64] DLC, [63:0] data (byte b is [63-8*b -: 8])
-  typedef logic [79:0] frame_t;
+  // [98] IDE (extended), [97:80] extended ID 17..0 (as in can_ref_node.sv)
+  typedef logic [98:0] frame_t;
   function automatic int nbytes(input frame_t f);
     return f[68] ? 0 : (f[67:64] > 8 ? 8 : int'(f[67:64]));
   endfunction
   function automatic frame_t mkf(input logic [10:0] id, input bit rtr, input logic [3:0] dlc, input int seed);
     frame_t f;
+    f = '0;
     f[79:69] = id; f[68] = rtr; f[67:64] = dlc; f[63:0] = 0;
     for (int b = 0; b < 8; b++) f[63 - 8 * b -: 8] = 8'((seed * 37 + b * 91 + 5) ^ (b * 16));
     if (!rtr) for (int b = dlc > 8 ? 8 : dlc; b < 8; b++) f[63 - 8 * b -: 8] = 0;
@@ -86,7 +88,7 @@ module tb_can;
     return f;
   endfunction
   function automatic bit same(input frame_t a, input frame_t b);
-    return a[79:69] == b[79:69] && a[68] == b[68] && a[67:64] == b[67:64] && a[63:0] == b[63:0];
+    return a[98:80] == b[98:80] && a[79:69] == b[79:69] && a[68] == b[68] && a[67:64] == b[67:64] && a[63:0] == b[63:0];
   endfunction
   function automatic string fs(input frame_t f);
     return $sformatf("id %03x rtr %0d dlc %0d data %016x", f[79:69], f[68], f[67:64], f[63:0]);
@@ -103,8 +105,8 @@ module tb_can;
   endtask
 
   // ---------------- host: records, read at the IRQ ----------------
-  // a record: [92:13] frame, [12:5] status, [4:0] bytes in the record
-  typedef logic [92:0] rec_t;
+  // a record: [111:13] frame, [12:5] status, [4:0] bytes in the record
+  typedef logic [111:0] rec_t;
   rec_t recs0[$], recs1[$];
   function automatic logic [7:0] st0(input int i);   // status of engine 0's record i
     rec_t r;
@@ -132,9 +134,10 @@ module tb_can;
     rec_t r;
     frame_t rf;
     rf = 0;
-    if (n >= 5) begin
+    if (n >= 4) begin
       rf[79:69] = {rbuf[0][6:0], rbuf[1][3:0]};
       rf[68] = rbuf[2][3];
+      rf[98] = rbuf[2][2];   // IDE: an extended frame's record ends after this unit (D74)
       rf[67:64] = {rbuf[2][0], rbuf[3][2:0]};
       for (int i = 4; i < n - 1 && i < 12; i++) rf[63 - 8 * (i - 4) -: 8] = rbuf[i];
     end
@@ -207,7 +210,7 @@ module tb_can;
       reg_write(p + 1, 8'h00);
       reg_write(p + 2, 8'h00);
       reg_write(p + 3, 8'h00);
-      reg_write(p + 4, line2);             // LINE2
+      reg_write(p + 4, line2 | 8'h80);     // LINE2, with the CAN frame follower (D74) as can_node wants
     end
     reg_write(7'h03, 8'b0000_1100);      // pins 2, 3 belong to engine 1
     reg_write(7'h00, 8'h30);             // restart both
@@ -265,7 +268,7 @@ module tb_can;
     else begin
       r = e ? recs1.pop_front() : recs0.pop_front();
       check(r[12:5] == status, $sformatf("%s: engine %0d status %02x, expected %02x", what, e, r[12:5], status));
-      check(same(r[92:13], f), $sformatf("%s: engine %0d got %s, expected %s", what, e, fs(r[92:13]), fs(f)));
+      check(same(r[111:13], f), $sformatf("%s: engine %0d got %s, expected %s", what, e, fs(r[111:13]), fs(f)));
 `ifdef PBE_SIGROK
       // every frame on the bus is one record of engine 0: the list sigrok must decode
       if (e == 0 && (status == 8'h82 || status == 8'h02 || status == 8'h22))
@@ -599,6 +602,82 @@ module tb_can;
     $display("6: engines 0 and 1 as two nodes: frames both ways, arbitration 0x400 over 0x401");
   endtask
 
+  // an extended (CAN 2.0B) frame: base ID, extended ID, RTR, DLC
+  function automatic frame_t mkx(input logic [10:0] base, input logic [17:0] ext, input bit rtr, input logic [3:0] dlc, input int seed);
+    frame_t f;
+    f = mkf(base, rtr, dlc, seed);
+    f[98] = 1;
+    f[97:80] = ext;
+    return f;
+  endfunction
+
+  // engine e's record of an extended frame or a standard one with r0 recessive: the
+  // first three units ({SOF, ID[10:4]}, ID[3:0], {SRR or RTR, IDE, ..}), then the status (D74)
+  task automatic expect_short(input int e, input logic [10:0] base, input bit ide, input logic [7:0] status, input string what);
+    rec_t r;
+    frame_t rf;
+    wait_recs(e, 1);
+    if ((e ? recs1.size() : recs0.size()) == 0) check(0, $sformatf("%s: engine %0d gave no record", what, e));
+    else begin
+      r = e ? recs1.pop_front() : recs0.pop_front();
+      rf = r[111:13];
+      check(r[4:0] == 5'd4 && r[12:5] == status && rf[79:69] == base && rf[98] == ide,
+            $sformatf("%s: engine %0d record of %0d bytes, status %02x, base ID %03x, IDE %0d; expected 4, %02x, %03x, %0d",
+                      what, e, r[4:0], r[12:5], rf[79:69], rf[98], status, base, ide));
+    end
+  endtask
+
+  task automatic scenario_extended();
+    frame_t f, fs_, fx;
+    int tec;
+    logic [7:0] st, rec_lo;
+    setup(96, 8'hF2);
+    ref_cfg(96 * CLK_NS);
+    ra.enabled = 1; rb.enabled = 0;   // the chip is the only node that can acknowledge
+    run_engines(2'b11);
+    wait_bits(24);
+    // valid extended data and remote frames, and a standard frame with r0 recessive
+    for (int i = 0; i < 4; i++) begin
+      f = (i == 3) ? mkx(11'h2A5, 18'h3_1234, 1, 4'd2, i) : mkx(11'h155 + i, 18'h2_0F0F + i, 0, i == 0 ? 4'd0 : i == 1 ? 4'd3 : 4'd8, i);
+      ra.tx_q.push_back(f);
+      expect_short(0, f[79:69], 1, 8'h02, $sformatf("extended frame %0d", i));
+      expect_short(1, f[79:69], 1, 8'h02, $sformatf("extended frame %0d (engine 1)", i));
+    end
+    ra.r0_bit = 1;
+    f = mkf(11'h0C3, 0, 4'd5, 9);
+    ra.tx_q.push_back(f);
+    expect_short(0, f[79:69], 0, 8'h02, "standard frame with r0 recessive");
+    expect_short(1, f[79:69], 0, 8'h02, "standard frame with r0 recessive (engine 1)");
+    ra.r0_bit = 0;
+    wait_bits(20);
+    check(ra.n_sent == 5 && ra.n_err_flags == 0 && ra.tec == 0,
+          $sformatf("extended: the reference sent %0d of 5, with %0d error flags, TEC %0d (every frame must be ACKed by the chip, no errors)",
+                    ra.n_sent, ra.n_err_flags, ra.tec));
+    read_tec(0, tec, st);
+    reg_read(7'h36, rec_lo);
+    check(tec == 0 && rec_lo == 0 && st[2:1] == 0, $sformatf("extended: engine 0 TEC %0d REC %0d state %b", tec, rec_lo, st[2:0]));
+    // arbitration: a standard frame beats an extended one with the same base ID (SRR/IDE)
+    rb.enabled = 1;
+    rb.rx_frames.delete();
+    recs0.delete(); recs1.delete();
+    wait_bits(16);
+    fs_ = mkf(11'h123, 0, 4'd2, 20);
+    fx = mkx(11'h123, 18'h0_0001, 0, 4'd1, 21);
+    rb.tx_q.push_back(mkf(11'h040, 0, 4'd8, 22));   // a frame first, so both start together after it
+    wait_bits(10);
+    ra.tx_q.push_back(fx);
+    chip_send(0, fs_);
+    wait_flag_clear(0, "standard vs extended");
+    wait_bits(200);
+    expect_rec(0, mkf(11'h040, 0, 4'd8, 22), 8'h02, "standard vs extended: B's frame");
+    expect_rec(0, fs_, 8'h82, "standard vs extended: the standard frame (same base ID) wins");
+    expect_short(0, 11'h123, 1, 8'h02, "standard vs extended: then the extended frame");
+    ref_expect(1, fs_, "standard vs extended: B receives the standard frame first");
+    ref_expect(1, fx, "standard vs extended: then the extended one, intact (29-bit ID)");
+    check(ra.n_arb_lost == 1, $sformatf("standard vs extended: the extended sender lost arbitration %0d times, expected 1", ra.n_arb_lost));
+    $display("7: extended (CAN 2.0B) frames and r0 recessive: received passively, ACKed, no error frames; standard 0x123 beats extended 0x123");
+  endtask
+
   initial begin
     string only;
     repeat (5) @(posedge clk);
@@ -612,6 +691,7 @@ module tb_can;
     if (only == "" || only == "biterr") scenario_bit_error();
     if (only == "" || only == "busoff") scenario_passive_busoff();
     if (only == "" || only == "two") scenario_two_engines();
+    if (only == "" || only == "ext") scenario_extended();
     if (errors == 0) begin
       $display("PASS: CAN node");
       $finish;

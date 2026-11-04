@@ -1780,9 +1780,12 @@ Known and accepted; each is a choice to keep the hardware small or the program w
 - A stuff error on a recessive stuff bit sent during arbitration counts like any transmitter
   error (ISO exception 3b: no TEC increase).
 - Bus-off recovery starts by itself (ISO 11898-1:2015 lets the host request it).
-- `can_node.pbe` (D72): standard (11-bit) frames only; an extended frame, or a standard frame
-  with r0 recessive, is received as a remote frame with no data, so the node flags a stuff,
-  form or CRC error on it. DLC 9–15 are handled (8 bytes).
+- `can_node.pbe` (D72) sends standard (11-bit) frames only: it is CAN 2.0B passive. **Changed
+  (D74, review of the CAN work):** this entry used to say that an extended frame, or a standard
+  frame with r0 recessive, was read as a frame without data, so the node flagged errors on it;
+  on a mixed bus that destroys valid CAN 2.0B traffic. The coder's frame follower now walks
+  such frames, checks them and ACKs valid ones; the host gets a short record (base ID, the IDE
+  or r0 bit, status) but not the 18 extended ID bits or the data. DLC 9–15 are handled (8 bytes).
 - The "arbitration window" covers RTR, IDE, r0 and DLC3 (the program's unit boundary): a
   mismatch there counts as lost arbitration, not a bit error. With unique IDs (which CAN
   requires) the two can only differ at IDE.
@@ -1837,7 +1840,7 @@ Known and accepted; each is a choice to keep the hardware small or the program w
 - **Timing:** the program must queue the next unit between the last sample of a unit and the
   start of the next (at most 8 clocks of instructions after the sample, the DLC to data path).
   125k, 250k, 500k pass at 75 % and 87.5 % sample points (`tb_can +SP=3`); **1 Mbit/s (48 clocks per bit) passes
-  at 75 %** (12 clocks left after the sample) but not at 87.5 % (6 clocks: measured, the first frame never goes out): use LINE2 = 0x72.
+  at 75 %** (12 clocks left after the sample) but not at 87.5 % (6 clocks: measured, the first frame never goes out): use LINE2 = 0xF2 (with the frame follower, D74).
 - **Rejected:** a separate receive loop and transmit loop (the loser of arbitration must
   switch mid-frame; two copies do not fit); the frame tail in the program (D66); host-side
   retransmission (D70).
@@ -1885,4 +1888,47 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   Verilator (5.05x; the recorded 92/92 used 5.051). This environment has Ubuntu's 5.020 (no
   `--compiler-include`) and PyPI's 5.38 (no coroutine flags; it also rejects `tb_proto`'s
   `disable`), and building the suite was not permitted.
+
+## D74. CAN 2.0B passive: a hardware frame follower for extended frames and r0 recessive
+
+- **Problem (review of the CAN work, BUG-092):** `can_node` walks only standard frames. An
+  extended (29-bit, CAN 2.0B) frame, or a standard frame with r0 recessive (receivers must accept
+  either level), was read with the wrong field layout, so the node flagged an error on every
+  such frame: on a mixed bus (J1939, much automotive traffic) it would destroy other nodes' valid
+  frames and raise everyone's error counters. Bosch CAN 2.0 requires a 2.0A node to be at least
+  "2.0B passive": it must tolerate extended frames without error frames.
+- **Chosen:** `LINE2[7]` (reserved until now) enables a **frame follower** in `pbe_bsync`. It
+  counts destuffed bits from SOF. When IDE (bit 13) or, in a standard frame, r0 (bit 14) is
+  recessive, the coder takes the frame over: no unit reaches `IN` after the one that holds that
+  bit, `LINECTL` is ignored, and from RTR (bit 12, or 32 when extended) and DLC (bits 15–18, or
+  35–38) it computes the last CRC bit and ends the stuffed region there. The tail, ACK, CRC
+  check and error rules are the usual ones. The program needs no new word: its waiting `IN`
+  ends at the frame end through the line-event vector, and the record is
+  `[ID[10:4]] [ID[3:0]] [third unit] [status]`.
+- **ACK:** a valid extended frame is acknowledged. A 2.0B-passive node may ACK or not; a frame
+  whose CRC and form the node has checked is correctly received, and acknowledging it is what
+  every other receiver on the bus does. Not acknowledging would also leave a lone extended
+  transmitter talking only to 2.0A nodes with ACK errors. A frame with a bad CRC gets the usual
+  CRC error flag, as for a standard frame.
+- **Alternatives:**
+  - *Handle extended frames in the program:* it has 3 free words; walking 18 more ID bits,
+    choosing the header layout on IDE (no single-bit test exists: about 9 words with the
+    compares) and fixing r0/r1 handling does not fit in 64 words.
+  - *Deliver the 29-bit ID too* (full 2.0B reception): needs either the program path above
+    or the coder assembling the extra bits into units after the program has stopped, which
+    would also need the FIFO protocol to change. Left as a follow-up; the host already knows
+    an extended frame passed (IDE in the record).
+  - *Ignore the frame without tracking it* (wait for 11 recessive bits): the node would not
+    detect errors in it, would not ACK it, and would not see the end of frame for its own next
+    transmission at the right time.
+- **Cost:** `pbe_bsync` 19,961 → 22,213 µm² (+2,253 per engine, +4.5k for both, about 1.2 % of
+  the chip): a 7-bit bit counter, a 7-bit "last CRC bit" register and adder, the DLC and RTR
+  capture. CAN-only, behind `LINE2[7]`.
+- **Verified:** `tb_can` scenario 7: a reference node sends extended data frames (DLC 0, 3, 8),
+  an extended remote frame and a standard frame with r0 recessive while the chip's two engines
+  are the only other nodes: every frame is ACKed by the chip (the sender raises no error and
+  sends each once), no error frames, TEC and REC stay 0, and each engine records the base ID
+  and the IDE/r0 bit. Then a standard frame (engine 0) and an extended frame (reference) with
+  the same base ID 0x123 start together: the standard frame wins on SRR/IDE, the extended
+  sender receives it and then sends its own, intact (checked by a second reference node).
 

@@ -68,6 +68,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-089 | Design (D66) | The CAN coder resynchronized on every falling edge, so edges every two clocks could postpone the next bit (and an error flag) forever | New formal block `bsync`, F2 | Fixed (one sync between sample points) |
 | BUG-090 | Testbench | `tb_can` sent ID 0x7F6, which CAN 2.0A forbids (7 MSBs recessive); sigrok's decoder rejected it and lost sync | `make sigrok-can` | Fixed |
 | BUG-091 | Verification (before commit) | `test_bsync_cocotb` checked the error flag's start against the transmitter's bit grid without the clock-error drift | First 40-trial `make diff-can` | Fixed |
+| BUG-092 | Design (D72, D69) | `can_node` flagged an error on every valid extended (CAN 2.0B) frame and every standard frame with r0 recessive | Parent-session review | Fixed (frame follower, D74) |
 
 ---
 
@@ -2309,4 +2310,24 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   assert nxt + LD - drift <= flag_start <= nxt + LD + drift + period // 4`
 - **Test:** `make diff-can` (seed 0x43414E, 40 trials of each kind). Before: trial 11 fails.
   After: see the run recorded in the final report.
+
+## BUG-092 — The CAN node destroyed valid extended frames (design, fixed)
+
+- **Where:** `pbe_v1/programs/can_node.pbe` and `src/pbe_bsync.sv`.
+- **Found by:** the parent session's review of D69, which listed it as an accepted deviation:
+  the program reads every frame with the standard layout, so an extended frame (or r0
+  recessive) got the wrong data length, and the node flagged a stuff, form or CRC error on a
+  valid frame. CAN 2.0 requires a 2.0A node to be at least 2.0B passive.
+- **Before:** no handling; `LINE2[7]` reserved; D69: "an extended frame, or a standard frame
+  with r0 recessive, is received as a remote frame with no data, so the node flags a stuff, form
+  or CRC error on it".
+- **After:** the frame follower (D74): when bit 13 (IDE) or, in a standard frame, bit 14 (r0) is
+  recessive, `pbe_bsync` stops delivering units, ignores `LINECTL`, finds the last CRC bit from
+  RTR and DLC (`flast <= hdr_end + 15 + n8`) and ends the stuffed region there; `can_node` sets
+  LINE2 = 0xF2.
+- **Test:** `tb_can` scenario 7 (`make test-can ONLY=ext`). Before (written first, run on the old
+  coder): `FAIL: extended frame 0: engine 0 record of 5 bytes, status 10, base ID 155, IDE 1;
+  expected ...` for every extended frame: an error record each time, and the reference had to
+  send each frame again and again. After: PASS (every frame ACKed and sent once, no error flags,
+  TEC/REC 0, standard 0x123 beats extended 0x123).
 

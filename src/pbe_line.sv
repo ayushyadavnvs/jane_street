@@ -16,6 +16,7 @@
 //     [5]     bit-synchronous (CAN) mode: pbe_bsync replaces this module's timing (engine)
 //     [6]     before a frame starts, wait until the line has been idle for 11 bit times, or
 //             for 3 after the end of a received frame (counted at the receive sample point)
+//     [7]     the CAN frame follower of pbe_bsync (D74); not used here
 //
 // Transmit: tx_put queues a byte (or a bit in tx_data[0]), tx_end queues "end of frame"; one
 // entry is buffered (tx_ready). A frame starts with 2 idle bit times (an inter-packet gap) and

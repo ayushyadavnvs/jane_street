@@ -47,6 +47,11 @@
 //   otherwise, plus 8 (suspend transmission) after it transmitted while error-passive. A
 //   foreign start of frame while a unit is queued (or queued before the SOF sample point) is
 //   joined if this node may start, otherwise the unit is sent silently and arb_lost pulses.
+// Frame follower (LINE2[7], D74, CAN-only): a CAN 2.0A program walks standard frames; when
+//   IDE (destuffed bit 13) or r0 (bit 14) is recessive, the coder follows the rest of the frame
+//   itself: no unit reaches IN after the one holding that bit, LINECTL is ignored, and from the
+//   RTR and DLC it finds the last CRC bit and ends the stuffed region there; the tail, ACK and
+//   error checks are the usual ones. The program's waiting IN ends at the frame end (vector).
 // Every config bit of this mode defaults to 0 in LINE2, so the engine never selects it unless
 // LINE2[5] is written.
 module pbe_bsync (
@@ -88,7 +93,8 @@ module pbe_bsync (
   wire       ones  = st != 2'd3;
   wire [2:0] run_n = (st == 2'd1) ? 3'd6 : 3'd5;
   wire       idle_wait = cfg2[6];
-  wire       _unused = &{cfg[7:6], cfg[4], cfg[1:0], cfg2[7], cfg2[5:3], 1'b0};
+  wire       _unused = &{cfg[7:6], cfg[4], cfg[1:0], cfg2[5:3], 1'b0};
+  wire       cfol = cfg2[7];   // LINE2[7]: follow CAN frames the program does not walk (D74)
 
   // ---- timing ----
   logic [15:0] cnt;
@@ -132,6 +138,13 @@ module pbe_bsync (
   logic [2:0]  dcnt;
   logic [6:0]  rseq;
   logic [3:0]  rrun;
+  // the CAN frame follower (D74): destuffed bit index, and the fields it needs
+  logic [6:0]  bidx, flast;
+  logic        follow, fext, frtr, fhave;
+  logic [2:0]  fdlc;
+  wire  [6:0]  hdr_end = fext ? 7'd38 : 7'd18;               // the last DLC bit
+  wire  [3:0]  dlcv = {fdlc, b};
+  wire  [6:0]  n8 = frtr ? 7'd0 : dlcv[3] ? 7'd64 : {1'b0, dlcv[2:0], 3'b000};
 
   assign passive  = tec >= 9'd128 || rec >= 8'd128;
   assign busoff   = cs == C_BUSOFF;
@@ -236,6 +249,7 @@ module pbe_bsync (
       icnt <= '0; after <= 1'b0; susp <= 1'b0; tpos <= '0; flag_on <= 1'b0; flag_pas <= 1'b0;
       fprev <= 1'b0; ack_exc <= 1'b0; first_after <= 1'b0; fcnt <= '0;
       dom_cnt <= '0; dcnt <= '0; rseq <= '0; rrun <= '0; tec <= '0; rec <= '0;
+      bidx <= '0; flast <= '0; follow <= 1'b0; fext <= 1'b0; frtr <= 1'b0; fhave <= 1'b0; fdlc <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0; crc_step <= 1'b0;
       crc_bit <= 1'b0; arb_lost <= 1'b0; bit_err <= 1'b0; sent <= 1'b0;
     end else if (clear) begin
@@ -248,6 +262,7 @@ module pbe_bsync (
       icnt <= '0; after <= 1'b0; susp <= 1'b0; tpos <= '0; flag_on <= 1'b0; flag_pas <= 1'b0;
       fprev <= 1'b0; ack_exc <= 1'b0; first_after <= 1'b0; fcnt <= '0;
       dom_cnt <= '0; dcnt <= '0; rrun <= '0;
+      bidx <= '0; flast <= '0; follow <= 1'b0; fext <= 1'b0; frtr <= 1'b0; fhave <= 1'b0; fdlc <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0; crc_step <= 1'b0;
       crc_bit <= 1'b0; arb_lost <= 1'b0; bit_err <= 1'b0; sent <= 1'b0;
     end else begin
@@ -271,7 +286,7 @@ module pbe_bsync (
       else if (resync || fstart) synced <= 1'b1;
 
       // ---- LINECTL ----
-      if (ctl) begin
+      if (ctl && !follow) begin   // the follower owns a frame the program does not walk
         if (!ctl_param[4]) begin
           width  <= {1'b0, ctl_param[2:0]} + 4'd1;
           arb_en <= ctl_param[3];
@@ -286,6 +301,7 @@ module pbe_bsync (
         cs <= C_FRAME; sof <= 1'b1; last <= 1'b1; run <= '0; stuff_pend <= 1'b0;
         st_en <= st != 2'd0; arb_en <= 1'b1; width <= start_w; rbits <= '0; rsh <= '0;
         slot_stuff <= 1'b0; after <= 1'b0; susp <= 1'b0; tleft <= '0;
+        bidx <= '0; follow <= 1'b0; fext <= 1'b0; fhave <= 1'b0;
         if (q_valid) begin                       // this node's queued unit is the first one
           tsh     <= q_rest;
           tleft   <= start_w - 4'd1;
@@ -396,10 +412,25 @@ module pbe_bsync (
                 crc_step <= 1'b1;
                 crc_bit  <= b;
               end
+              // the frame follower: an extended frame (IDE recessive) or a standard frame with
+              // r0 recessive is walked here, not by the program: header, data length, CRC end
+              if (bidx != 7'd127) bidx <= bidx + 7'd1;
+              if (cfol) begin
+                if (bidx == 7'd12 || (fext && bidx == 7'd32)) frtr <= b;   // RTR (SRR first)
+                if (bidx == 7'd13 && b) begin fext <= 1'b1; follow <= 1'b1; end
+                if (bidx == 7'd14 && !fext && b) follow <= 1'b1;
+                if (bidx >= hdr_end - 7'd3 && bidx <= hdr_end) fdlc <= dlcv[2:0];
+                if (bidx == hdr_end) begin
+                  flast <= hdr_end + 7'd15 + n8;   // the last CRC bit
+                  fhave <= 1'b1;
+                end
+                if (follow && fhave && bidx == flast) st_en <= 1'b0;   // then the usual tail
+              end
               if (rbits == width - 4'd1) begin
                 rx_data  <= rsh_n;
                 if (rx_valid && !rx_take) err <= 1'b1;
-                rx_valid <= 1'b1;
+                // nothing reaches the program after the unit that held IDE (bit 13) or r0
+                if (!(follow && bidx > 7'd15)) rx_valid <= 1'b1;
                 rbits    <= '0;
                 rsh      <= '0;
               end else begin
