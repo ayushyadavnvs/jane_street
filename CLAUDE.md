@@ -9,3 +9,7 @@
   and its lessons are in `docs/USB_NOTES.md`. Keep the engine general: new hardware should be
   useful to more than one protocol.
 - Run `make test` in `pbe_v1/` before pushing; it must exit non-zero on any failure.
+- Commits: author every commit as `Ayush Yadav <ayushyadavnvs5@gmail.com>` (set
+  `git config user.name`/`user.email` in a fresh checkout before committing) and add no
+  `Co-Authored-By` or other AI attribution lines to commit messages or pull requests. Earlier
+  history is left as it is.
