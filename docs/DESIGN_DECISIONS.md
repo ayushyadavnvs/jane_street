@@ -1701,12 +1701,13 @@ clean (0 design violations).
     flags ≈ 2.0k (D68);
   - the rest (≈ 7.2k): LINE2 in `pbe_line`, `LINECTL`/vector decode, FIFO mark/rewind,
     the new registers and readback.
-  **Options evaluated, not taken:** CAN on engine 0 only (a parameter leaving `pbe_bsync`
-  out of engine 1) saves ≈ 20.1k µm² (≈ 5 %), but loses two CAN nodes per chip (`tb_can`
-  scenario 6) and the second general bit-synchronous coder; sharing one timer between
-  `pbe_line` and `pbe_bsync` (they are never both active) would save roughly 1-2k per engine
-  but ties the new mode into the old one's timing, which D66 keeps separate. Both are left to
-  the owner.
+  **Options evaluated and rejected (owner's decision):**
+  - *CAN on engine 0 only* (a parameter leaving `pbe_bsync` out of engine 1): saves about
+    20k µm² (about 5 %), but the chip could then run only one CAN node. Both engines keep it,
+    so the chip can be two CAN nodes, for example a bridge or gateway between two buses
+    (`tb_can` scenario 6 runs the two engines as two nodes).
+  - *One bit timer shared by `pbe_line` and `pbe_bsync`* (never both active): roughly 1-2k
+    per engine, but it ties the new mode into the old one's timing, which D66 keeps separate.
 - **Timing (`make timing`, logic only, IHP slow):** 3.39 ns before CAN; 5.00 ns after step 1
   (worst path from `clkdiv` through the sample-point adders to the counter compare); the
   sample counts are now registered (D65, BUG-088): 3.69 ns, worst path back to the original
