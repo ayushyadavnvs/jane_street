@@ -87,7 +87,9 @@
 // and the CRC is fed by the coder with every bit of the stuffed region as it is sampled (not
 // by OUT or IN). A transfer (IN, OUT, OUTOD, END) issued while a frame-end or error event is
 // pending is abandoned: the engine consumes the event, drops the queued unit and jumps to
-// timeout_pc (the line-event vector) without setting "timeout happened".
+// timeout_pc (the line-event vector) without setting "timeout happened". While the engine is
+// stopped (run = 0) its bit-synchronous coder is held clear (counters kept): a node without a
+// running program must not acknowledge or flag frames.
 //
 // WAIT, PULL and PUSH block until they can complete. While blocked the engine checks
 // every clock (not every tick), and when it unblocks the tick divider restarts, so
@@ -357,7 +359,7 @@ module pbe_engine (
   wire lctl = exec && op == OP_EXT && ext_op == E_LINECTL && !arg[5];
   pbe_bsync u_bsync (
       .clk, .rst_n,
-      .clear        (restart || !bsm),
+      .clear        (restart || !bsm || !run),  // a stopped CAN node stays off the bus
       .cfg          (coder_cfg),
       .cfg2         (coder_cfg2),
       .period_m1    (clkdiv),

@@ -58,6 +58,11 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-079 | Verification | New FIFO mark/rewind formal property compared a pointer difference with a 32-bit constant, so it went negative when the pointers wrapped | First `fifo_mark` run (induction and depth-40 BMC fail) | Fixed |
 | BUG-080 | Design (D68, before commit) | The CAN error flag took its type from the counter after the error's own increment, so the error that reached TEC 128 sent a passive flag | Writing the reference node from ISO 11898-1 | Fixed |
 | BUG-081 | Testbench (before commit) | `tb_line` D1 expected the sample at `P/2+1`; the rule is `floor((P-1)/2)+1` | First run of `tb_line` D | Fixed |
+| BUG-082 | Testbench (before commit) | The reference CAN node's resync on a late edge within SJW started a new bit instead of lengthening the current one | `tb_can` ref->chip: the reference missed every ACK | Fixed |
+| BUG-083 | Design (D66, before commit) | A stopped engine's CAN coder still acknowledged frames and sent CRC error flags | `tb_can` ACK scenario: TEC passed 128 | Fixed |
+| BUG-084 | Design (D66, before commit) | After an error, the next frame started from the leftover bits of the abandoned unit | `tb_can` bit-error scenario: retransmitted ID 0x20F for 0x0FF | Fixed |
+| BUG-085 | Program (can_node, before commit) | `done` compared the status after PUSH had cleared ISR, then (fixed) only 0x82: sent frames were resent forever | `tb_can` first run | Fixed |
+| BUG-086 | Testbench (before commit) | The host model read engine 1's RX_COUNT after a long read of engine 0, so engine 1's next record leaked in | `tb_can` two-engine arbitration | Fixed |
 
 ---
 
@@ -2131,9 +2136,10 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   cs <= C_EFLAG; flag_on <= 1'b0; flag_pas <= pas_new;
   ```
 - **After:** `cs <= C_EFLAG; flag_on <= 1'b0; flag_pas <= passive;` (the state before the count).
-- **Test:** `tb_can` scenario "error passive and bus-off" checks the flag type of every attempt
-  on the chip's TXD against the reference node's state. Before the fix the 16th flag is
-  recessive (`flag 16: passive, expected active`); after, the 16th is active and the 17th passive.
+- **Test:** `tb_can` scenario 5 (error-passive and bus-off) counts the active (6-bit dominant)
+  flags on engine 0's TXD. With the old line put back in a scratch copy: `FAIL: error flags: 15
+  active flags on engine 0's TXD, expected 16 (errors 1-16)`. With the fix: PASS (16 active,
+  then passive).
 
 ## BUG-081 — `tb_line` D1 expected the wrong sample count (testbench, fixed before commit)
 
@@ -2144,4 +2150,88 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Before:** `sp = P / 2 + 1 + k * (P / 8);`  **After:** `sp = (P - 1) / 2 + 1 + k * (P / 8);`
 - **Test:** `tb_line` D1 and E6. Before: `LINE2 sample point 0: X=18 read 0, X=19 read 0`.
   After: all four sample points read 1 then 0 at the two probe positions.
+
+## BUG-082 — Reference CAN node lengthened a late bit by starting a new one (testbench, fixed before commit)
+
+- **Where:** `pbe_v1/test/can_ref_node.sv`, the time-quantum loop.
+- **Found by:** `tb_can` reference → chip: the reference reported an ACK error on every frame,
+  while the chip drove the ACK slot (probe: chip ACK 208 ns after the reference's bit start,
+  the loop delay). The reference's ACK slot lasted 4 quanta.
+- **Cause:** a late edge (before the sample point) within SJW set the quantum counter to 0,
+  and quantum 0 is where the loop starts a new bit.
+- **Before:** `if (tqc <= SAMPLE) tqc = tqc - (tqc < SJW ? tqc : SJW);`
+- **After:** `if (tqc <= SAMPLE) tqc = (tqc <= SJW) ? 1 : tqc - SJW;` (the edge ends the sync
+  segment, ISO 11898-1 resynchronization).
+- **Test:** `tb_can` scenario 1, reference → chip at 500k. Before: `FAIL: 500k ref->chip engine
+  0 #0: engine 0 status 12, expected 02` and the reference's TEC 24. After: PASS.
+
+## BUG-083 — A stopped engine's CAN coder stayed on the bus (design, fixed before commit)
+
+- **Where:** `src/pbe_engine.sv`, the `pbe_bsync` clear.
+- **Found by:** `tb_can` scenario 3 (ACK missing, engine 1 stopped): TEC went past 128 although
+  a passive ACK error does not count. A probe showed engine 1's TXD dominant in EOF: its coder
+  ran without a program (like `pbe_line`, which keeps running while stopped), acknowledged
+  frames with a CRC that no `CRCRST` reset, and sent CRC error flags.
+- **Before:** `.clear (restart || !bsm),`
+- **After:** `.clear (restart || !bsm || !run),` — a stopped CAN node stays off the bus (D66);
+  the counters are kept.
+- **Test:** `tb_can` scenario 3. Before: `FAIL: ACK missing: TEC 152 state 010, expected 128`.
+  After: PASS.
+
+## BUG-084 — The next frame started from an abandoned unit (design, fixed before commit)
+
+- **Where:** `src/pbe_bsync.sv`, frame start and late join.
+- **Found by:** `tb_can` scenario 4: the reference received the retransmitted frame with ID
+  0x20F instead of 0x0FF (CRC correct: the chip really sent 0x20F).
+- **Cause:** the first unit was taken through the same `src` mux as any unit: `tleft != 0`
+  (a unit cut short by the bit error) selected the stale shift register instead of `q_data`.
+- **Before:** at frame start `tsh <= rest; cur <= nb;` (from `src = tleft != 0 ? tsh : q_data`),
+  and an error left `tleft` as it was.
+- **After:** the frame start and the late join use `q_first`/`q_rest` from `q_data`, and an
+  error (and a dropped transfer outside a frame) clears `tleft`.
+- **Test:** `tb_can` scenario 4. Before: `FAIL: bit error: reference got id 20f ..., expected id
+  0ff`. After: PASS.
+
+## BUG-085 — can_node resent frames that had gone out (program, fixed before commit)
+
+- **Where:** `pbe_v1/programs/can_node.pbe`, `done`.
+- **Found by:** `tb_can`'s first run: every frame was sent again and again (FLAG0 never cleared).
+- **Before:**
+  ```
+  done:   STAT
+          PUSH                 ; clears ISR
+          FLAG 2, IRQ
+          SET  OSR, 0x82
+          JNE  again           ; always taken: ISR is 0
+  ```
+- **After:** compare before `PUSH`, and accept 0x8A too (the host's sticky RX-overflow bit
+  would otherwise make a sent frame look failed):
+  ```
+  done:   STAT
+          SET  OSR, 0x82
+          JEQ  ok
+          SET  OSR, 0x8A
+          JEQ  ok
+          REWIND
+          JMP  rec
+  ok:     FLAG 0, CLR
+  rec:    PUSH
+          FLAG 2, IRQ
+          JMP  idle
+  ```
+- **Test:** `tb_can` scenario 1. Before: `FAIL: 125k chip->ref: engine 0 never finished
+  sending`. After: PASS.
+
+## BUG-086 — tb_can's host read one engine's count too late (testbench, fixed before commit)
+
+- **Where:** `pbe_v1/test/tb_can.sv`, the IRQ reader.
+- **Found by:** scenario 6 (arbitration between the two engines, frames back to back): engine
+  1's record held bytes of its next record.
+- **Cause:** the reader read engine 0's RX_COUNT and all its bytes, then engine 1's RX_COUNT;
+  by then engine 1 had started pushing the next frame's first unit (about 16 bit times after
+  the IRQ). The host protocol (D72) now says to read every count first.
+- **Before:** `for e: if (irq[e]) begin read count; burst-read count bytes; parse; end`
+- **After:** first `for e: if (irq[e]) read count`, then the burst reads.
+- **Test:** `tb_can` scenario 6. Before: `FAIL: engine arbitration: B's frame (engine 1): engine
+  1 status 40, expected 02`. After: PASS.
 

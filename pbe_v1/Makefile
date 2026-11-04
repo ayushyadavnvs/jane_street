@@ -3,7 +3,7 @@
 SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_bsync.sv src/pbe_engine.sv src/tt_um_pbe.sv
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
-.PHONY: test test-proto test-usb test-gl test-sram synth synth-sram timing clean
+.PHONY: test test-proto test-usb test-can test-gl test-sram synth synth-sram timing clean
 
 # The SRAM program memory (D62, a proposal): the wrapper, IHP's model of the macro (FUNCTIONAL
 # selects its behavioural core) and, for synthesis, the macro as a black box.
@@ -41,15 +41,18 @@ test/i2c_target_image.hex: programs/i2c_target.pbe programs/i2c_watch.pbe tools/
 test/usb_image.hex: programs/usb_dev.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/usb_dev.pbe@0
 
+test/can_image.hex: programs/can_node.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/can_node.pbe@0 programs/can_node.pbe@64
+
 test/conc_image.hex: programs/i2c_ctrl.pbe programs/onewire_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/i2c_ctrl.pbe@0 programs/onewire_ctrl.pbe@64
 
-IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb
+IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_engine_restart tb_engine_ops tb_fetch tb_line tb_usb tb_proto tb_pbe; do \
-	  if iverilog -g2012 -o /dev/null $$tb.sv $(addprefix ../,$(SRC)) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
+LINT = cd test && for tb in tb_engine_restart tb_engine_ops tb_fetch tb_line tb_usb tb_proto tb_pbe tb_can; do \
+	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(addprefix ../,$(SRC)) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
 
 test/ops_image.hex: test/ops_test.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/ops_test.pbe@0
@@ -71,6 +74,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
+	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(addprefix ../,$(SRC)) && vvp -n can.vvp
 	$(MAKE) test-sram
 	$(PYTHON) $(V)/spec_boundaries/check_spec_boundaries.py
 	$(MAKE) test-model
@@ -93,6 +97,11 @@ test-sram: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
 test-usb: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
+
+# only CAN (tb_can); ONLY=rates|arb|ack|inject|biterr|busoff|two runs one scenario
+test-can: $(IMAGES:%=test/%_image.hex)
+	$(LINT)
+	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(addprefix ../,$(SRC)) && vvp -n can.vvp $(if $(ONLY),+ONLY=$(ONLY))
 
 # only the device-side and LED protocols (tb_proto), a quicker loop while working on them
 test-proto: $(IMAGES:%=test/%_image.hex)

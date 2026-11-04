@@ -1,0 +1,103 @@
+; CAN 2.0A node (standard 11-bit identifiers) on one engine in bit-synchronous mode (D66, D72).
+; The coder does the bit timing, stuffing, arbitration, readback, ACK, the frame tail, error
+; flags and error counting; the engine computes and checks CRC-15; the program walks the
+; frame's fields. One loop serves transmitter and receiver: a receiver sends nothing (its OUTs
+; get 0xFF from PULL NOWAIT and the coder keeps it silent), and a transmitter that loses
+; arbitration simply keeps receiving the winner's frame, then sends again.
+;
+; Pins: TXD = pin base (to the transceiver), RXD = pin base + 1. The program drives TXD high
+;   (DRV1), so TXD is recessive whenever the coder is not driving it dominant.
+; Engine settings (48 MHz; bit time = CLKDIV + 1 clocks):
+;   CLKDIV = 383 / 191 / 95 / 47 for 125k / 250k / 500k / 1M; JMP_PIN = 1 (RXD);
+;   SHIFT = 0x03 (OUT and IN MSB first); LINE = 0x2D (NRZ, stuffing after 5 equal bits, frames
+;   start with 8-bit units); LINE2 = 0x72 (CAN mode, wait for bus idle, RXD on pin base + 1,
+;   75 % sample point; 0x73 for 87.5 %); CRC_POLY = 0x4599, CRC_CFG = 0x8E (CRC-15, fed by the
+;   received bits), CRC_GOOD = 0; LINE_CFG = 0x40 | done (no parity; TIMEOUT_PC = word 45, the
+;   line-event vector); TIMEOUT = 0.
+;   At 1 Mbit/s use the 75 % sample point: the program queues the next unit within 8 clocks of
+;   the last sample, which 87.5 % (6 clocks left in the bit) does not allow.
+;
+; Host protocol.
+;   To send: write the frame to the TX FIFO, then set FLAG0 (engine 0: FLAG_SET bit 0).
+;     [ID >> 4]                ID[10:4] (the top bit, sent as the start of frame, must be 0)
+;     [(ID & 15) << 4]         ID[3:0] in bits 7..4
+;     [RTR << 7 | DLC3 << 4]   RTR, IDE = 0, r0 = 0, DLC[3]
+;     [DLC[2:0] << 5]
+;     [data bytes]             min(DLC, 8) bytes, none for a remote frame
+;   The engine sends it, and sends it again after lost arbitration or an error, until it goes
+;   out; then it clears FLAG0. To abort: clear FLAG0 (FLAG_CLR); the engine stops at its next
+;   attempt; then flush the TX FIFO (TX_FLUSH). Queue one frame at a time.
+;   Every frame on the bus (the node's own included) gives an RX FIFO record and an IRQ:
+;     [ID[10:4]] [ID[3:0]] [RTR<<3 | IDE<<2 | r0<<1 | DLC3] [DLC[2:0]] [data ...] [status]
+;   status (STAT): bit 7 sent (this node transmitted the frame), 1 CRC ok, 4 error (any bus
+;   error: stuff, bit, form, ACK, CRC), 5 arbitration lost, 6 bit error, 3 RX overflow.
+;   A frame cut short by an error gives a shorter record, still ending with the status. Read the
+;   whole RX FIFO (RX_COUNT bytes) at each IRQ, before the next frame ends: the FIFO holds 16
+;   bytes and the longest record is 13.
+;   The error counters and state are in CAN_TEC, CAN_REC and CAN_STATE (second page +5..+7).
+;
+; Limits (D69): standard frames only. An extended frame (IDE = 1) or r0 = 1 is read as a frame
+; without data, so this node flags an error on it. DLC 9-15 mean 8 data bytes.
+.equ tx 0
+
+start:  PIN  tx, DRV1        ; TXD recessive while the coder does not drive
+idle:   CRCRST               ; a new frame: CRC and frame status cleared
+        MARK                 ; our frame (if any) starts here in the TX FIFO
+w:      JMP  FLAG0, txs      ; the host has a frame to send
+        JMP  PIN_LO, rx      ; RXD dominant: someone started a frame
+        JMP  w
+txs:    PULL NOWAIT          ; {SOF, ID[10:4]}: the coder starts it when the bus is idle, or
+        PIN  tx, OUT         ;   joins a start of frame that comes first
+rx:     IN   tx              ; 8-bit unit: SOF and ID[10:4]
+        LINECTL W4, ARB
+        PULL NOWAIT
+        PIN  tx, OUT         ; ID[3:0]
+        PUSH
+        IN   tx
+        PULL NOWAIT
+        PIN  tx, OUT         ; RTR, IDE, r0, DLC3 (the last unit of the arbitration window)
+        PUSH
+        IN   tx
+        LINECTL W3           ; arbitration is over
+        PULL NOWAIT
+        PIN  tx, OUT         ; DLC[2:0]
+        SET  X, 0            ; data bytes: 0 for a remote frame
+        SET  OSR, 1
+        JEQ  big             ; only DLC3 set: 8 bytes
+        SET  OSR, 0
+        JNE  fix             ; RTR (or IDE, r0): no data
+        PUSH
+        IN   tx
+        MOV  X, ISR          ; DLC 0..7
+        JMP  c8
+big:    SET  X, 8
+fix:    PUSH
+        IN   tx
+c8:     LINECTL W8
+dl:     JMP  X--, db         ; the data field
+        OSRCRC HI, LEFT      ; CRC bits 14..7 (the CRC is fed by every received bit)
+        PIN  tx, OUT
+        PUSH                 ; DLC[2:0] or the last data byte
+        IN   tx
+        LINECTL W7
+        OSRCRC HI, LEFT      ; CRC bits 6..0: the register moved on by the 8 bits just sent
+        PIN  tx, OUT
+        IN   tx
+        LINECTL STUFFOFF     ; the coder runs the tail: delimiters, ACK, EOF
+        IN   tx              ; nothing comes: the frame end (or an error) vectors to done
+done:   STAT                 ; word 45 = TIMEOUT_PC
+        SET  OSR, 0x82       ; sent and CRC ok: our frame went out (test before PUSH clears ISR)
+        JEQ  ok
+        SET  OSR, 0x8A       ; the same with the host's RX overflow bit still set
+        JEQ  ok
+        REWIND               ; not sent (or not ours): the frame is read again next time
+        JMP  rec
+ok:     FLAG 0, CLR
+rec:    PUSH                 ; the status ends the record
+        FLAG 2, IRQ
+        JMP  idle
+db:     PULL NOWAIT
+        PIN  tx, OUT
+        PUSH                 ; the previous unit
+        IN   tx
+        JMP  dl

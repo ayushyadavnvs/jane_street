@@ -147,6 +147,8 @@ module pbe_bsync (
   wire       have  = tleft != 4'd0 || q_valid;
   wire [3:0] start_w = cfg[5] ? 4'd8 : 4'd1;
   wire       q_first = out_msb_first ? q_data[7] : q_data[0];
+  // a frame's first unit always comes from the queue, never from a unit cut short by an error
+  wire [7:0] q_rest  = out_msb_first ? {q_data[6:0], 1'b0} : {1'b0, q_data[7:1]};
 
   // may this node start (or join) a frame now
   wire [4:0] need = (after ? 5'd3 : 5'd11) + (susp ? 5'd8 : 5'd0);
@@ -275,30 +277,30 @@ module pbe_bsync (
         st_en <= st != 2'd0; arb_en <= 1'b1; width <= start_w; rbits <= '0; rsh <= '0;
         slot_stuff <= 1'b0; after <= 1'b0; susp <= 1'b0; tleft <= '0;
         if (q_valid) begin                       // this node's queued unit is the first one
-          tsh     <= rest;
+          tsh     <= q_rest;
           tleft   <= start_w - 4'd1;
           q_valid <= 1'b0;
-          cur     <= nb;
-          own     <= !nb && may_tx;
-          role_tx <= !nb && may_tx;
+          cur     <= q_first;
+          own     <= !q_first && may_tx;
+          role_tx <= !q_first && may_tx;
           silent  <= !may_tx;
-          drv     <= !nb && may_tx;
-          if (!nb && !may_tx) arb_lost <= 1'b1;  // may not start yet: lost before it began
+          drv     <= !q_first && may_tx;
+          if (!q_first && !may_tx) arb_lost <= 1'b1;  // may not start yet: lost before it began
           joinw   <= 1'b0;
         end else begin
           cur <= 1'b1; own <= 1'b0; role_tx <= 1'b0; silent <= 1'b0; drv <= 1'b0;
           joinw <= 1'b1;
         end
       end else if (late_join) begin
-        tsh     <= rest;
+        tsh     <= q_rest;
         tleft   <= width - 4'd1;
         q_valid <= 1'b0;
-        cur     <= nb;
-        own     <= !nb && may_tx;
-        role_tx <= !nb && may_tx;
+        cur     <= q_first;
+        own     <= !q_first && may_tx;
+        role_tx <= !q_first && may_tx;
         silent  <= !may_tx;
-        drv     <= !nb && may_tx;
-        if (!nb && !may_tx) arb_lost <= 1'b1;
+        drv     <= !q_first && may_tx;
+        if (!q_first && !may_tx) arb_lost <= 1'b1;
         joinw   <= 1'b0;
       end else if ((tend || (resync && sampled)) && cs != C_IDLE) begin
         sof <= 1'b0; joinw <= 1'b0;
@@ -462,6 +464,7 @@ module pbe_bsync (
         frame_end <= 1'b1;
         bit_err   <= e_bit;
         q_valid   <= 1'b0;
+        tleft     <= '0;                         // the unit being sent is abandoned too
         rx_valid  <= 1'b0;
         tec       <= tec_add[8:0];
         rec       <= rec_sat;
@@ -476,7 +479,10 @@ module pbe_bsync (
           cs <= C_EFLAG; flag_on <= 1'b0; flag_pas <= passive;
         end
       end
-      if (drop) q_valid <= 1'b0;
+      if (drop) begin
+        q_valid <= 1'b0;
+        if (cs != C_FRAME) tleft <= '0;
+      end
     end
   end
 endmodule

@@ -1668,6 +1668,10 @@ clean (0 design violations).
   - **Line-event vector:** in this mode an IN/OUT issued after a frame end or error jumps to
     `TIMEOUT_PC` (consuming the event, dropping the queued unit) instead of completing, so a
     program needs no `JLINE` after every IN; the 64-word `can_node` fits only this way.
+  - **Stopped engine:** unlike `pbe_line`, which keeps running while its engine is stopped,
+    `pbe_bsync` is held clear while `run = 0` (counters kept). A CAN coder without a running
+    program would still acknowledge frames (with a CRC nobody resets) and send error flags; it
+    did, in `tb_can` (BUG-083).
   - **Join:** a foreign SOF while a unit is queued (or queued before the SOF sample point) is
     joined if this node may start, else the unit goes out silently and "arbitration lost" is set.
 - **Alternatives:**
@@ -1782,3 +1786,39 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   high byte is bits 14..7. Existing param bits unchanged. With the line-fed CRC (D66), `OSRCRC HI,
   LEFT` before each CRC unit gives the next bits to send.
 - JCRCBAD: see D48 (extended).
+
+## D72. can_node.pbe: a CAN 2.0A node in 61 words, and its host protocol
+
+- **Chosen:** one loop for transmitter and receiver (D66): a receiver never needs to OUT, and
+  its OUTs (from `PULL NOWAIT`, 0xFF when nothing is queued) are ignored while it is silent; a
+  transmitter that loses arbitration keeps receiving the winner's frame. The coder starts the
+  node's frame when the bus is idle (or joins a start of frame that comes first), so the
+  program only queues the first unit. The header is split into units the receiver can use
+  directly: {SOF, ID[10:4]} (8), ID[3:0] (4), {RTR, IDE, r0, DLC3} (4, the last unit of the
+  arbitration window), DLC[2:0] (3); then 8-bit data units and 8 + 7 CRC bits (`OSRCRC HI,
+  LEFT` before each, D71). `LINECTL STUFFOFF` hands the tail to the coder; the next `IN` waits
+  for the frame end or an error, which vector to `done` (TIMEOUT_PC = 45).
+- **Host protocol** (in the program's header): the frame in the TX FIFO in wire-order units,
+  then FLAG0; the engine retransmits (`REWIND`) until the frame goes out, then clears FLAG0.
+  Every frame on the bus gives an RX record `[ID[10:4]] [ID[3:0]] [RTR,IDE,r0,DLC3] [DLC[2:0]]
+  [data] [status]` and an IRQ. The host reads the RX_COUNT of each engine that raised the IRQ
+  first (within about 16 bit times: intermission, start of frame and the first unit), then
+  exactly that many bytes.
+- **Size:** 61 of 64 words (`MARK`/`REWIND`, the line-event vector and the hardware tail are
+  what make it fit). Success is "status 0x82 or 0x8A" (sent and CRC ok, with or without the
+  host's sticky RX-overflow bit): a plain 0x82 compare would resend a frame that went out
+  whenever the host had let the RX FIFO overflow (BUG-085).
+- **Timing:** the program must queue the next unit between the last sample of a unit and the
+  start of the next (at most 8 clocks of instructions after the sample, the DLC to data path).
+  125k, 250k, 500k pass at 75 % and 87.5 % sample points (`tb_can +SP=3`); **1 Mbit/s (48 clocks per bit) passes
+  at 75 %** (12 clocks left after the sample) but not at 87.5 % (6 clocks: measured, the first frame never goes out): use LINE2 = 0x72.
+- **Rejected:** a separate receive loop and transmit loop (the loser of arbitration must
+  switch mid-frame; two copies do not fit); the frame tail in the program (D66); host-side
+  retransmission (D70).
+- **Verified:** `tb_can` (D72 scenarios below), 7 scenarios, all passing:
+  DLC 0-8 and remote frames both ways at 125k/250k/500k/1M with two reference nodes at ±0.5 %
+  clock error and 200 ns loop delay; arbitration (the loser receives the winner's frame, then
+  sends); ACK missing (TEC to 128, held by the passive ACK-error rule, then 127 on success);
+  injected CRC, stuff and form errors (CRC error flag in EOF bit 1 to within a quarter bit);
+  a bit error (TEC 8 → 7); error-passive at 128 (flags 1–16 active, 17+ passive) and bus-off at
+  256 with recovery after 1410 bit times (≥ 128 × 11); both engines as two nodes.
