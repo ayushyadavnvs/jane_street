@@ -1692,7 +1692,8 @@ clean (0 design violations).
   idle wait are D65. The tail, ACK and error rules are CAN-only, gated by `LINE2[5]`.
 - **Verified:** `tb_line` E1–E6, `tb_engine_ops` (second engine), `tb_can` (D72).
 - **Cost (`make synth`, IHP typical, hierarchical breakdown):** the whole CAN change is
-  337,253 → 384,756 µm² (+47.5k, +14.1 %), 13,694 → 17,358 cells. `pbe_bsync` is 20.1k µm²
+  337,253 → 384,756 µm² (+47.5k, +14.1 %), 13,694 → 17,358 cells (step 3); with the frame
+  follower (D74) 390,814 µm² (+53.6k, +15.9 %), 17,524 cells. `pbe_bsync` is 20.1k µm²
   per engine (40.3k of the 47.5k). Measured by synthesizing copies with parts removed:
   - general (≈ 14.2k per engine): the shared bit timer, sample point, readback,
     arbitration, units, stuffing, the line-fed CRC, the line-event vector;
@@ -1711,7 +1712,8 @@ clean (0 design violations).
 - **Timing (`make timing`, logic only, IHP slow):** 3.39 ns before CAN; 5.00 ns after step 1
   (worst path from `clkdiv` through the sample-point adders to the counter compare); the
   sample counts are now registered (D65, BUG-088): 3.69 ns, worst path back to the original
-  class (`instr_q[10]` → a multiplexer, +0.30 ns from the new decode terms).
+  class (`instr_q[10]` → a multiplexer, +0.30 ns from the new decode terms); with the frame
+  follower 3.64 ns (from `clkdiv[1]`, the bit timer's end-of-bit compare).
 
 ## D67. LINECTL: EXT sub-op 7 split by param[5]
 
@@ -1874,7 +1876,8 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   program inputs): F1 no drive after arbitration loss in that frame, F2 the error flag (or
   bus-off) starts within one bit of an error detected at a sample point and within two of
   `LINECTL ERROR`, F3 an active flag drives for its whole length; covers reach an arbitration
-  loss and an active flag. Block `default`: bounded equivalence of `pbe_line` (LINE2 = 0) and
+  loss and an active flag. Block `default`: bounded equivalence (BMC: 18 clocks for the line
+  coder, 8 for the engine, the depths the solver completes) of `pbe_line` (LINE2 = 0) and
   `pbe_engine` (LINE2 = 0, the new encodings unused) with the pre-CAN sources of main
   (797314f), so "default configuration = today's behaviour" is checked from any inputs, not only
   by the old tests. FIFO: the old proof with mark/rewind held at 0, plus the `mark` proof (D70).

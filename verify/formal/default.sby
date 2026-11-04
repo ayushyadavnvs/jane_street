@@ -5,8 +5,8 @@ engine
 
 [options]
 mode bmc
-line: depth 24
-engine: depth 10
+line: depth 18
+engine: depth 8
 
 [engines]
 smtbmc yices
