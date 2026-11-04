@@ -266,6 +266,11 @@ module tb_can;
       r = e ? recs1.pop_front() : recs0.pop_front();
       check(r[12:5] == status, $sformatf("%s: engine %0d status %02x, expected %02x", what, e, r[12:5], status));
       check(same(r[92:13], f), $sformatf("%s: engine %0d got %s, expected %s", what, e, fs(r[92:13]), fs(f)));
+`ifdef PBE_SIGROK
+      // every frame on the bus is one record of engine 0: the list sigrok must decode
+      if (e == 0 && (status == 8'h82 || status == 8'h02 || status == 8'h22))
+        $display("SIGROK_EXPECT %03x %0d %0d %016x", f[79:69], f[68], f[67:64], f[63:0]);
+`endif
     end
   endtask
 
@@ -313,7 +318,7 @@ module tb_can;
       nf = (r < 2) ? 3 : 10;
       // chip -> reference
       for (int i = 0; i < nf; i++) begin
-        f = (i == nf - 1) ? mkf(11'h7FF - i, 1, 4'd3, i) : mkf(11'h0A5 + i * 77, 0, nf == 3 ? 4'(i * 4) : 4'(i), i + r);
+        f = (i == nf - 1) ? mkf(11'h7EF - i, 1, 4'd3, i) : mkf(11'h0A5 + i * 77, 0, nf == 3 ? 4'(i * 4) : 4'(i), i + r);
         timing_on = 1; t_last_edge = -1;
         chip_send(0, f);
         wait_flag_clear(0, {name, " chip->ref"});
@@ -406,7 +411,7 @@ module tb_can;
   endtask
 
   int ra_bit_t[$];  // clock numbers of reference A's bit starts in the tail (tail_i 0..9)
-  always @(ra.tqc) if (ra.tqc == 1 && ra.st == ra.S_FRAME && ra.in_tail) ra_bit_t.push_back(clk_n);
+  always @(ra.tqc) if (ra.tqc == 1 && ra.st == 2 /* S_FRAME */ && ra.in_tail) ra_bit_t.push_back(clk_n);
 
   task automatic scenario_injected();
     frame_t f;

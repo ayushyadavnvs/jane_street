@@ -112,8 +112,12 @@ section for how far each one could be checked in this session.
   stop bits. That could test other devices against malformed traffic. Today such faults are
   injected by our testbench models (for example `h_bad_stuff` in `tb_usb.sv`, BUG-040), not by
   a PBE program.
-- **More protocols on the same hardware.** HDLC and CAN framing are covered by the coder's unit
-  tests (D39) but have no full program. Manchester (MIL-STD-1553) and an abort-on-edge vector
+- **CAN with no processor in the bit loop.** `can_node.pbe` is a full CAN 2.0A node in 61 words:
+  bitwise arbitration, readback, ACK and the error rules (error flags, TEC/REC, bus-off) are
+  done by the bit-synchronous coder (D66-D68), which PIO (no readback-compare or error
+  counters) and PRU (software bit loop) would do in instructions.
+- **More protocols on the same hardware.** HDLC framing is covered by the coder's unit tests
+  (D39) but has no full program. Manchester (MIL-STD-1553) and an abort-on-edge vector
   are listed as next steps (D35, D39).
 
 ## How far the external facts were checked

@@ -63,6 +63,11 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-084 | Design (D66, before commit) | After an error, the next frame started from the leftover bits of the abandoned unit | `tb_can` bit-error scenario: retransmitted ID 0x20F for 0x0FF | Fixed |
 | BUG-085 | Program (can_node, before commit) | `done` compared the status after PUSH had cleared ISR, then (fixed) only 0x82: sent frames were resent forever | `tb_can` first run | Fixed |
 | BUG-086 | Testbench (before commit) | The host model read engine 1's RX_COUNT after a long read of engine 0, so engine 1's next record leaked in | `tb_can` two-engine arbitration | Fixed |
+| BUG-087 | Tooling | `make synth` read its own hard-coded source list, without `pbe_bsync.sv` | Parent-session review of step 1 | Fixed (list generated from `SRC`) |
+| BUG-088 | Design (timing) | The new sample-point adders sat on the bit counter's compare path: logic-only worst path 3.39 → 5.00 ns | Parent-session review of step 1 (`make timing`) | Fixed (registered: 3.69 ns) |
+| BUG-089 | Design (D66) | The CAN coder resynchronized on every falling edge, so edges every two clocks could postpone the next bit (and an error flag) forever | New formal block `bsync`, F2 | Fixed (one sync between sample points) |
+| BUG-090 | Testbench | `tb_can` sent ID 0x7F6, which CAN 2.0A forbids (7 MSBs recessive); sigrok's decoder rejected it and lost sync | `make sigrok-can` | Fixed |
+| BUG-091 | Verification (before commit) | `test_bsync_cocotb` checked the error flag's start against the transmitter's bit grid without the clock-error drift | First 40-trial `make diff-can` | Fixed |
 
 ---
 
@@ -2234,4 +2239,74 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **After:** first `for e: if (irq[e]) read count`, then the burst reads.
 - **Test:** `tb_can` scenario 6. Before: `FAIL: engine arbitration: B's frame (engine 1): engine
   1 status 40, expected 02`. After: PASS.
+
+## BUG-087 — `make synth` missed `pbe_bsync.sv` (tool, fixed)
+
+- **Where:** `pbe_v1/synth/synth.ys.in`, `pbe_v1/Makefile` (`synth`).
+- **Found by:** the parent session's review of step 1: `make synth` failed with "Module
+  `\pbe_bsync' ... is not part of the design". The Yosys script had its own copy of the source
+  list; step 1 updated every other list (Makefile `SRC`, formal, vectors, stress, golden-model
+  runners, `test/Makefile`, `info.yaml`, CI lint) but not this one.
+- **Before:** `read_verilog -sv src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_engine.sv src/tt_um_pbe.sv`
+- **After:** `read_verilog -sv $SRC`, which the `synth` rule fills from the Makefile's `SRC`
+  (`sed -e 's#\$$LIB#...#g' -e 's#\$$SRC#$(SRC)#'`), so the list cannot drift again.
+- **Test:** `make synth`. Before: the error above. After: 384,756 µm², 17,358 cells.
+
+## BUG-088 — Sample-point arithmetic on the bit counter's compare path (design timing, fixed)
+
+- **Where:** `src/pbe_line.sv`, `src/pbe_bsync.sv`.
+- **Found by:** the parent session's review of step 1: `make timing` went from 3.39 ns (main,
+  `instr_q[10]` → mux) to 5.00 ns, starting at `clkdiv`. The sample count `floor(P/2) + 1 +
+  N/4 + N/8` (two adders and an incrementer) fed the `cnt == sample` compare every clock.
+- **Before:** `wire [15:0] spv = {1'b0, period_m1[15:1]} + 16'd1 + sp_add;` (bsync) and
+  `wire [15:0] sp_cnt = {1'b0, period_m1[15:1]} + 16'd1 + sp_add;` (line).
+- **After:** `spv` is a register loaded every clock with that sum (bsync); in `pbe_line` the
+  non-default sample points use such a register, the default keeps the old expression
+  (`sample = rcnt == ((sp_sel == 0 || sp_sel[2]) ? sp_base : sp_q)`), so LINE2 = 0 is cycle
+  for cycle unchanged. A CLKDIV or LINE2 change reaches the sample point one clock later.
+- **Test:** `make timing`. Before: `Delay = 4906.91 ps, Start-point = clkdiv[0]` (with the
+  synth list fixed). After: `Delay = 3692.95 ps, Start-point = g_eng[1].u_eng.instr_q[10]`.
+  `tb_line` D1/E6 (sample points), `tb_can`, `make test` and `make formal` still pass.
+
+## BUG-089 — Unlimited resynchronization could postpone the next bit forever (design, fixed)
+
+- **Where:** `src/pbe_bsync.sv`, the bit timer.
+- **Found by:** the new formal block `bsync`, property F2 (error flag within one bit): a
+  counterexample at step 53 with a falling edge on the receive pin every two clocks; each edge
+  before the sample point restarted the current bit, so the next bit (and the error flag that
+  waited for it) never came.
+- **Cause:** ISO 11898-1 allows one synchronization between two sample points; the coder
+  resynchronized on every allowed edge.
+- **Before:** `wire resync = fall && !drv && in_bus;`
+- **After:**
+  ```systemverilog
+  logic synced;   // set by a resync or frame start, cleared at the sample point
+  wire resync = fall && !drv && in_bus && !synced;
+  ```
+- **Test:** `python3 verify/formal/run.py --block bsync`. Before: `bsync_bmc: FAIL` (F2, step
+  53). After: `bsync_bmc: PASS` (depth 70) and both covers reached; `tb_line`, `tb_can` and
+  `make diff-can` still pass.
+
+## BUG-090 — tb_can used a forbidden identifier (testbench, fixed)
+
+- **Where:** `pbe_v1/test/tb_can.sv`, scenario 1's remote frame `mkf(11'h7FF - i, ...)`.
+- **Found by:** `make sigrok-can`: sigrok's `can` decoder reported "Identifier bits 10..4 must
+  not be all recessive" for ID 0x7F6 and lost sync for the rest of the capture. CAN 2.0A forbids
+  such identifiers; the chip and the reference node (which do not check it) passed it.
+- **After:** `mkf(11'h7EF - i, ...)` (bits 10..4 = 1111110).
+- **Test:** `make sigrok-can`. Before: `FAIL 500000 bit/s: 16 frames decoded, 20 expected`.
+  After: PASS at all four bit rates.
+
+## BUG-091 — The CAN differential ignored clock drift in its error-flag window (verification, fixed before commit)
+
+- **Where:** `verify/golden-model/model/test_bsync_cocotb.py`, error trials.
+- **Found by:** the first 40-trial `make diff-can`: `trial 11 error P=96 ppm=7476: flag at
+  89399, bit after the error starts at 89399 (+4)` — the flag began 4 clocks before the
+  window. The other node's clock was 0.75 % slow, and after 5 equal bits without an edge the
+  coder's grid is legitimately up to 6 × 96 × 0.0075 ≈ 4 clocks ahead.
+- **Before:** `assert nxt + LD - 2 <= flag_start <= nxt + LD + period // 2`
+- **After:** `drift = int(6 * period * abs(ppm)) + 2;
+  assert nxt + LD - drift <= flag_start <= nxt + LD + drift + period // 4`
+- **Test:** `make diff-can` (seed 0x43414E, 40 trials of each kind). Before: trial 11 fails.
+  After: see the run recorded in the final report.
 

@@ -82,6 +82,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	$(MAKE) test-coverage-tools
 	$(MAKE) test-sigrok-extract
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
+	$(MAKE) diff-can CAN_TRIALS=3
 
 # The end-to-end testbenches on the SRAM program memory (USE_SRAM, D62). The engine-only
 # testbenches do not use the top level, so they are not repeated.
@@ -126,7 +127,7 @@ test-gl: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
 
 synth:
 	mkdir -p synth
-	sed 's#\$$LIB#$(IHP_LIB)#g' synth/synth.ys.in > synth/synth.ys
+	sed -e 's#\$$LIB#$(IHP_LIB)#g' -e 's#\$$SRC#$(SRC)#' synth/synth.ys.in > synth/synth.ys
 	yosys -q -l synth/synth.log synth/synth.ys
 	@grep "Chip area" synth/synth.log | tail -1
 
@@ -176,6 +177,13 @@ test-model:
 diff-line:
 	$(PYTHON) $(GM)/model/check_line_model.py
 
+# CAN mode (pbe_bsync) against verify/golden-model/model/can_model.py, seeded random (D66)
+CAN_TRIALS ?= 40
+CAN_SEED ?= 0x43414E
+.PHONY: diff-can
+diff-can:
+	$(PYTHON) $(GM)/model/check_bsync_model.py --seed $(CAN_SEED) --trials $(CAN_TRIALS)
+
 .PHONY: diff-engine-line
 diff-engine-line:
 	$(PYTHON) $(GM)/model/check_engine_line_model.py
@@ -184,6 +192,11 @@ SIGROK_CLI ?= sigrok-cli
 .PHONY: sigrok sigrok-full test-sigrok-extract
 sigrok:
 	$(PYTHON) $(GM)/sigrok/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)"
+
+# sigrok's stock can decoder on tb_can's bus at 125k-1M (D72)
+.PHONY: sigrok-can
+sigrok-can:
+	$(PYTHON) $(GM)/sigrok/can_verify.py --sigrok-cli "$(SIGROK_CLI)"
 
 # A strict comparison: libsigrokdecode 0.5.3 intentionally returns nonzero here.
 sigrok-full:

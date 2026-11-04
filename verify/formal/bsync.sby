@@ -1,0 +1,22 @@
+# pbe_bsync (CAN mode) safety properties; see bsync_properties.svh.
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 70
+cover: mode cover
+cover: depth 90
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal -sv bsync_formal.sv
+prep -top pbe_bsync
+async2sync
+dffunmap
+
+[files]
+../../pbe_v1/build/formal/generated/bsync_formal.sv

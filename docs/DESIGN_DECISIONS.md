@@ -1635,6 +1635,9 @@ clean (0 design violations).
   and Modbus RTU's "bus quiet before transmit" (D47's 3.5-character rule is still the program's).
 - **Alternatives:** more bits in `LINE` (it has two reserved bits, not seven); a sample point as
   a full 16-bit count (one more register pair; four fixed points cover CAN's usual 75–87.5 %).
+- **Registered sample point:** the non-default sample points come from a register updated
+  every clock from CLKDIV and LINE2 (one clock late after a change), so the adders are not on
+  the counter's compare path; the default keeps its old combinational value, cycle for cycle.
 - **Verified:** `tb_line` D1–D3 (sample points, edge selection, idle wait), `tb_engine_ops`
   (split pins), `tb_engine_known_reset` (all `LINE2` bits are four-state known after reset).
 
@@ -1684,9 +1687,30 @@ clean (0 design violations).
   - *CRC fed by IN (as in byte mode):* 8 clocks late per byte; see above.
 - **Who else benefits:** units of 1–8 bits suit any protocol with odd field widths (SENT's 4-bit
   nibbles, 9-bit or 7-bit words, I2C's 7-bit address); readback with arbitration is what
-  single-wire CAN, J1850 VPW/PWM and the I2C multi-controller case need; split pins and the
+  single-wire CAN, J1850 VPW/PWM, LIN (whose nodes must compare every bit they send with the
+  bus) and the I2C multi-controller case need; split pins and the
   idle wait are D65. The tail, ACK and error rules are CAN-only, gated by `LINE2[5]`.
 - **Verified:** `tb_line` E1–E6, `tb_engine_ops` (second engine), `tb_can` (D72).
+- **Cost (`make synth`, IHP typical, hierarchical breakdown):** the whole CAN change is
+  337,253 → 384,756 µm² (+47.5k, +14.1 %), 13,694 → 17,358 cells. `pbe_bsync` is 20.1k µm²
+  per engine (40.3k of the 47.5k). Measured by synthesizing copies with parts removed:
+  - general (≈ 14.2k per engine): the shared bit timer, sample point, readback,
+    arbitration, units, stuffing, the line-fed CRC, the line-event vector;
+  - CAN-only (≈ 5.9k per engine, ≈ 11.9k for both, about 3 % of the chip): error
+    confinement ≈ 3.9k (TEC, REC, bus-off recovery, passive) and the frame tail with error
+    flags ≈ 2.0k (D68);
+  - the rest (≈ 7.2k): LINE2 in `pbe_line`, `LINECTL`/vector decode, FIFO mark/rewind,
+    the new registers and readback.
+  **Options evaluated, not taken:** CAN on engine 0 only (a parameter leaving `pbe_bsync`
+  out of engine 1) saves ≈ 20.1k µm² (≈ 5 %), but loses two CAN nodes per chip (`tb_can`
+  scenario 6) and the second general bit-synchronous coder; sharing one timer between
+  `pbe_line` and `pbe_bsync` (they are never both active) would save roughly 1-2k per engine
+  but ties the new mode into the old one's timing, which D66 keeps separate. Both are left to
+  the owner.
+- **Timing (`make timing`, logic only, IHP slow):** 3.39 ns before CAN; 5.00 ns after step 1
+  (worst path from `clkdiv` through the sample-point adders to the counter compare); the
+  sample counts are now registered (D65, BUG-088): 3.69 ns, worst path back to the original
+  class (`instr_q[10]` → a multiplexer, +0.30 ns from the new decode terms).
 
 ## D67. LINECTL: EXT sub-op 7 split by param[5]
 
@@ -1748,9 +1772,11 @@ Known and accepted; each is a choice to keep the hardware small or the program w
 - No overload frames: a dominant bit in the intermission is taken as a start of frame, and a
   receiver ignores a dominant last EOF bit (ISO: an overload frame). Overload frames are
   obsolete in practice (no current controller sends them for internal reasons).
-- Synchronization jump width is unlimited: every allowed falling edge restarts the bit timer
+- Synchronization jump width is unlimited: an allowed falling edge restarts the bit timer
   (ISO limits a resync to SJW). Robust against clock error, less so against glitches inside a
-  bit; the sample point is still where the program sets it.
+  bit; the sample point is still where the program sets it. As ISO requires, there is at most
+  one synchronization between two sample points (added after the formal check F2 found that
+  edges every two clocks could postpone the next bit, and so an error flag, forever: BUG-089).
 - A stuff error on a recessive stuff bit sent during arbitration counts like any transmitter
   error (ISO exception 3b: no TEC increase).
 - Bus-off recovery starts by itself (ISO 11898-1:2015 lets the host request it).
@@ -1822,3 +1848,41 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   injected CRC, stuff and form errors (CRC error flag in EOF bit 1 to within a quarter bit);
   a bit error (TEC 8 → 7); error-passive at 128 (flags 1–16 active, 17+ passive) and bus-off at
   256 with recovery after 1410 bit times (≥ 128 × 11); both engines as two nodes.
+
+## D73. Independent checks of CAN mode
+
+- **sigrok** (`make sigrok-can`, `verify/golden-model/sigrok/can_verify.py`): the stock `can`
+  decoder (libsigrokdecode 0.5.3) decodes `tb_can`'s bus at 125k, 250k, 500k and 1M. Every
+  frame's ID, RTR, DLC and data match the bench's list, its CRC-15 matches one computed in
+  Python, every frame is ACKed and the decoder reports no rule violation. Each frame is decoded
+  on its own (the capture is cut at bus-idle gaps). **Known decoder limitation, kept as an
+  exact exception:** the decoder ends the data field at `dlc2len(DLC)` bytes even for a remote
+  frame (`decoders/can/pd.py`), so a remote frame with DLC > 0 is checked only up to its DLC.
+- **Golden model** (`make diff-can`, `verify/golden-model/model/can_model.py` and
+  `test_bsync_cocotb.py`): a CAN bit-stream model written from ISO 11898-1 and the pbe_bsync
+  header, and a seeded random differential of `pbe_bsync` alone on a wired-AND bus (receive,
+  transmit and stuff-error trials with random bit time, sample point, ±0.8 % clock error, frame
+  and unit widths). A copy with stuffing after 6 bits fails it at the first trial. `make test`
+  runs 3 trials of each kind; the full run is 40 of each. The existing whole-chip random
+  differential (`make diff`) stays as it was: it generates no CAN configurations, so it checks
+  that the default configuration is unchanged.
+- **Formal** (`verify/formal`): block `bsync` (BMC depth 70, 4 clocks per bit, free bus and
+  program inputs): F1 no drive after arbitration loss in that frame, F2 the error flag (or
+  bus-off) starts within one bit of an error detected at a sample point and within two of
+  `LINECTL ERROR`, F3 an active flag drives for its whole length; covers reach an arbitration
+  loss and an active flag. Block `default`: bounded equivalence of `pbe_line` (LINE2 = 0) and
+  `pbe_engine` (LINE2 = 0, the new encodings unused) with the pre-CAN sources of main
+  (797314f), so "default configuration = today's behaviour" is checked from any inputs, not only
+  by the old tests. FIFO: the old proof with mark/rewind held at 0, plus the `mark` proof (D70).
+- **Vectors:** CRC-15/CAN (check 0x059E for "123456789") was already a row of the RevEng
+  catalogue test (`make test-crc-vectors`); `tb_engine_ops` checks the same value through the
+  engine in CAN mode (line-fed CRC, `OSRCRC LEFT` = 0x0B3C).
+- **Coverage bins** (`verify/coverage/prepare.py`): new engine bins (the four PULL-group kinds,
+  both LINECTL forms, the line-event vector, status bits 5-7 set and clear) and `pbe_bsync` bins
+  (every state, own/foreign/late-join starts, arbitration lost, bit error, sent, detected error,
+  active and passive flags, stuff slots, ACK given, units of 1/3/4/7/8 bits, bus-off recovery);
+  `tb_can` joins the campaign. **Not rerun here:** the campaign needs the OSS CAD Suite's
+  Verilator (5.05x; the recorded 92/92 used 5.051). This environment has Ubuntu's 5.020 (no
+  `--compiler-include`) and PyPI's 5.38 (no coroutine flags; it also rejects `tb_proto`'s
+  `disable`), and building the suite was not permitted.
+

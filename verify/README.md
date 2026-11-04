@@ -7,8 +7,8 @@ to the ignored `pbe_v1/build/`.
 
 | Directory | What it is | Make target (in `pbe_v1/`) |
 |---|---|---|
-| `golden-model/` | Python model, random differential, sigrok decoding, third-party bus models; all reports and recorded evidence (both rounds) | `make test-model`, `make diff`, `make sigrok`, `make test-buses` (see its README) |
-| `formal/` | SymbiYosys properties of the FIFO, host SPI, line coder and engine, with a source-aware runner | `make formal [FORMAL_BLOCK=fifo\|host\|line\|engine]` |
+| `golden-model/` | Python model, random differential, sigrok decoding, third-party bus models; all reports and recorded evidence (both rounds); CAN: `model/can_model.py` and the `pbe_bsync` differential, `sigrok/can_verify.py` (D73) | `make test-model`, `make diff`, `make diff-can`, `make sigrok`, `make sigrok-can`, `make test-buses` (see its README) |
+| `formal/` | SymbiYosys properties of the FIFO (and its mark/rewind), host SPI, line coder, engine and CAN coder (`bsync`), and the default-configuration equivalence with the pre-CAN design (`default`), with a source-aware runner | `make formal [FORMAL_BLOCK=fifo\|host\|line\|engine\|bsync\|default]` |
 | `vectors/crc/` | CRC unit against the RevEng catalogue and crccheck | `make test-crc-vectors` |
 | `vectors/protocols/` | USB (LUNA, usb-protocol) and Modbus (PyModbus) packets through the chip's pins | `make test-protocol-vectors` |
 | `coverage/` | Verilator line/toggle/branch/expression coverage and named functional bins | `make coverage`, `make test-coverage-tools` |

@@ -164,8 +164,15 @@ module pbe_line (
       default: sp_add = 16'd0;
     endcase
   end
-  wire [15:0] sp_cnt = {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
-  wire        sample = rcnt == sp_cnt;
+  // The default sample point is computed as before. The others come from a register,
+  // updated every clock from CLKDIV and LINE2, so the adders are not on the counter's
+  // compare path (timing review of D65); a change of either takes effect one clock later.
+  wire [15:0] sp_base = {1'b0, period_m1[15:1]} + 16'd1;
+  logic [15:0] sp_q;
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) sp_q <= '0;
+    else sp_q <= sp_base + sp_add;
+  wire        sample = rcnt == ((sp_sel == 3'd0 || sp_sel[2]) ? sp_base : sp_q);
   // LINE2[6]: idle bit times seen at the sample point (saturating at 11), and whether the
   // last thing on the line was the end of a frame (then 3 idle bits are enough)
   logic [3:0] icnt;

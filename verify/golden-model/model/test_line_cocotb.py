@@ -34,6 +34,7 @@ async def differential_line(dut):
 
     dut.clk.value = 0
     dut.rst_n.value = 0
+    dut.cfg2.value = 0   # LINE2 (D65) off: the original contract
     base = dict(clear=True, cfg=0, sync=0, period_m1=0, out_msb_first=False,
                 in_msb_first=False, a_in=1, b_in=0, tx_put=False, tx_end=False,
                 tx_data=0, rx_take=False)

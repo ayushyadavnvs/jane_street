@@ -46,6 +46,8 @@ async def differential_engine_line(dut):
                     host_ovf_clr=False, host_lerr_clr=False)
     dut.clk.value = 0
     dut.rst_n.value = 0
+    for name in ('coder_cfg2', 'host_arb_clr', 'host_berr_clr', 'host_sent_clr'):
+        getattr(dut, name).value = 0   # LINE2 off, no new host clears (D65-D71)
     for key, value in dict(model.config, **defaults).items():
         getattr(dut, key).value = int(value)
     dut.instr.value = 0xd800

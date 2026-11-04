@@ -10,7 +10,7 @@ def prepare(out=None):
  def add(module,name,cond):
   manifests.append(dict(module=module,name=name,condition=cond))
   return f'    pbe_cov_{name}: cover ({cond});\n'
- eng='  reg [4:0] pbe_cov_previous_status;\n  always @(posedge clk) begin\n    if (!rst_n) pbe_cov_previous_status <= 0;\n    else pbe_cov_previous_status <= status;\n    if (rst_n) begin\n'
+ eng='  reg [7:0] pbe_cov_previous_status;\n  always @(posedge clk) begin\n    if (!rst_n) pbe_cov_previous_status <= 0;\n    else pbe_cov_previous_status <= status;\n    if (rst_n) begin\n'
  for op in range(8):eng+=add('pbe_engine',f'opcode_{op}',f'exec && op == 3\'d{op}')
  for op,count,expr in [(0,8,'pin_act'),(5,2,'arg_hi'),(6,4,'flag_act'),(7,8,'ext_op')]:
   for sub in range(count):eng+=add('pbe_engine',f'sub_{op}_{sub}',f'exec && op == 3\'d{op} && {expr} == {sub}')
@@ -18,7 +18,10 @@ def prepare(out=None):
  for flag in range(2):
   for cond in range(4):eng+=add('pbe_engine',f'wait_{flag}_{cond}',f'exec && op == OP_WAIT && arg[5] == {flag} && wait_cnd == {cond}')
  eng+=add('pbe_engine','timeout_taken','tmo_hit')+add('pbe_engine','rx_overflow','ovf_now')+add('pbe_engine','d50_refetch','run && pm_wr && iv')
- for bit in range(5):
+ for kind in range(4):eng+=add('pbe_engine',f'pull_kind_{kind}',f'exec && op == OP_FIFO && !arg_hi && arg[7:6] == {kind}')
+ eng+=add('pbe_engine','linectl_width','lctl && bsm && !arg[4]')+add('pbe_engine','linectl_action','lctl && bsm && arg[4]')
+ eng+=add('pbe_engine','line_event_vector','lv_hit')
+ for bit in range(8):
   eng+=add('pbe_engine',f'status_{bit}_set',f'status[{bit}] && !pbe_cov_previous_status[{bit}]')
   eng+=add('pbe_engine',f'status_{bit}_clear',f'!status[{bit}] && pbe_cov_previous_status[{bit}]')
  eng+='    end\n  end\n'
@@ -28,9 +31,22 @@ def prepare(out=None):
    for pair in range(2):
     for byte in range(2):line+=add('pbe_line',f'line_{mode}_{stuff}_{pair}_{byte}',f'cfg[1:0] == {mode} && cfg[3:2] == {stuff} && cfg[4] == {pair} && cfg[5] == {byte}')
  line+='  end\n'
+ bs='  always @(posedge clk) if (rst_n && !clear) begin\n'
+ for st,name in enumerate(['integ','idle','frame','tail','eflag','edwait','edelim','busoff']):
+  bs+=add('pbe_bsync',f'bsync_state_{name}',f'cs == 3\'d{st}')
+ for name,cond in [('own_start','own_start'),('foreign_start','hard'),('late_join','late_join'),
+                   ('arbitration_lost','arb_lost'),('bit_error','bit_err'),('frame_sent','sent'),
+                   ('error_detected','e_now'),('passive_flag','cs == C_EFLAG && flag_on && flag_pas'),
+                   ('active_flag','cs == C_EFLAG && flag_on && !flag_pas'),('stuff_slot','sample && slot_stuff'),
+                   ('ack_given','cs == C_TAIL && drv'),('unit_1','sample && cs == C_FRAME && width == 1 && rx_valid == 0 && rbits == 0'),
+                   ('unit_3','sample && cs == C_FRAME && width == 3 && rbits == 2'),('unit_4','sample && cs == C_FRAME && width == 4 && rbits == 3'),
+                   ('unit_7','sample && cs == C_FRAME && width == 7 && rbits == 6'),('unit_8','sample && cs == C_FRAME && width == 8 && rbits == 7'),
+                   ('busoff_recovered','cs == C_BUSOFF && sample && rseq == 7\'d127 && rrun == 4\'d10 && b')]:
+  bs+=add('pbe_bsync',f'bsync_{name}',cond)
+ bs+='  end\n'
  top='  always @(posedge clk) if (rst_n) begin\n'+add('tt_um_pbe','both_engines','run == 2\'b11')+'  end\n'
  for source in sorted((PBE/'src').glob('*.sv')):
-  s=source.read_text();extra={'pbe_engine.sv':eng,'pbe_line.sv':line,'tt_um_pbe.sv':top}.get(source.name,'')
+  s=source.read_text();extra={'pbe_engine.sv':eng,'pbe_line.sv':line,'tt_um_pbe.sv':top,'pbe_bsync.sv':bs}.get(source.name,'')
   # Every used top can dump after final() in the simulator's normal shutdown path.
   extra+='\n  final begin $c("VerilatedCov::write();"); end\n'
   (out/source.name).write_text(s.replace('endmodule',extra+'\nendmodule'))

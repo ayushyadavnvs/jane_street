@@ -20,7 +20,8 @@ Each engine has:
   a delay of 0–15 ticks;
 - a CRC unit (any polynomial up to 16 bits), a parity bit and a wait timeout;
 - an optional line coder: NRZ/NRZI, bit stuffing and a differential pair with SE0, as
-  low-speed USB needs;
+  low-speed USB needs; or a bit-synchronous coder for CAN (readback, arbitration, error
+  frames and error counters in hardware);
 - 16-byte TX and RX FIFOs to the host, and a window of 4 of 8 shared flags.
 
 The two engines share a 128 × 16-bit program memory, so two protocols can run at once.
@@ -32,7 +33,9 @@ Programs written and tested so far (in `pbe_v1/programs`):
 - 1-Wire controller;
 - Modbus RTU master (RS-485);
 - WS2812 LEDs;
-- a USB 1.1 low-speed device (control endpoint).
+- a USB 1.1 low-speed device (control endpoint);
+- a CAN 2.0A node (standard IDs, 125k-1M bit/s): arbitration, ACK, CRC-15, error flags,
+  error-passive and bus-off handled by the chip.
 
 The full documentation, register map and design decisions are in the repository: `pbe_v1/README.md`,
 `docs/DESIGN_DECISIONS.md` and `docs/BUG_LOG.md`.
@@ -70,6 +73,8 @@ Other protocols are set up the same way. Each program's header lists its setting
 None needed for the loopback test. Depending on the protocol loaded:
 - pull-up resistors for I2C or 1-Wire;
 - an RS-485 transceiver for Modbus RTU;
+- a CAN transceiver (for example a 3.3 V one such as the TCAN334 or SN65HVD230) for CAN: TXD
+  on the engine's pin base, RXD on pin base + 1, and the bus terminated with 120 Ω at each end;
 - WS2812 LEDs;
 - for USB low speed: a 1.5 kΩ pull-up on D− (`uio[0]`) and a USB connector. The electrical
   levels are still to be checked against the I/O pads.

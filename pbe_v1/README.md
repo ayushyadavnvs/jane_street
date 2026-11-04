@@ -15,7 +15,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 128-word hex image; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
 | `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
@@ -69,9 +69,9 @@ runs from an instruction register and must fetch the jump's target first (D50).
 | 010 | `WAIT p, LOW/HIGH/RISE/FALL` (or `WAIT FLAG n, …`) | Block until true; checked every clock; restarts the tick timer |
 | 011 | `JMP [cond,] label` | ALWAYS, X--, PIN_HI, PIN_LO, TX_EMPTY, TX_READY, FLAG0, FLAG1 (6-bit address) |
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
-| 101 | `PULL` / `PUSH` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full) |
+| 101 | `PULL [NOWAIT]` / `PUSH` / `MARK` / `REWIND` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full); `NOWAIT`: an empty TX FIFO gives 0xFF; `MARK`/`REWIND` hold the TX FIFO read position and read again from it, for retransmission (D70) |
 | 110 | `FLAG n, SET/CLR/IRQ`, `MOV dst, src` | Shared flags between engines, or interrupt the host. Action 3 is `MOV` between X, OSR and ISR (source `0` = zero); with no destination it does nothing: the assembler's `NOP` (`0xD800`) |
-| 111 | `CRCRST`, `OSRCRC LO/HI [, INV]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). Sub-op 7 free |
+| 111 | `CRCRST`, `OSRCRC LO/HI [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); param[5] = 1 is kept for a `PAGE` instruction (D62) |
 
 **Timeout:** if `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks (engine register
 +C/+D, 0 = never), the engine abandons it and jumps to `TIMEOUT_PC` (`LINE_CFG[5:0]`, +E).
@@ -106,6 +106,14 @@ that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
   `STATUS[4]` (line error). `JCRCBAD` treats it as a bad packet. `CRCRST` clears it (a new
   checked packet starts); `STAT` reports it without clearing it; the host clears it by writing
   `STATUS[3]` = 1.
+
+**LINE2 and the bit-synchronous (CAN) coder** (second page +4, D65-D68): [2:0] sample point
+(0 default, 1/2/3 = 62.5/75/87.5 %), [3] resync on falling edges only, [4] receive on pin base +
+1, [5] bit-synchronous mode (`pbe_bsync`: one bit timer, readback, arbitration, units of 1-8
+bits, the CRC fed from the line, the CAN frame tail, error flags, TEC/REC, bus-off), [6] wait
+for bus idle before a frame. Error counters: +5 `CAN_TEC`, +6 `CAN_REC`, +7 `CAN_STATE`
+([0] TEC[8], [1] error-passive, [2] bus-off). `STATUS` write bits [4]/[5]/[6] clear
+arbitration lost / bit error / frame sent.
 
 **FIFO counts:**
 - `RX_COUNT` (0x0A, 0x0B) and `TX_COUNT` (0x0C, 0x0D) give the bytes in each engine's FIFOs.
@@ -219,6 +227,16 @@ pull-up), D+ = pin base + 1.
   any transfer in progress.
 
 The engine answers every token itself in about 3 bit times.
+
+## CAN host protocol (`programs/can_node.pbe`)
+
+A CAN 2.0A node (standard IDs) in 61 words, TXD on pin base, RXD on pin base + 1 to a CAN
+transceiver. Settings, the frame format in the TX FIFO, the RX records and the limits are in
+the program's header (D72). 125k, 250k and 500k at a 75 % or 87.5 % sample point; 1 Mbit/s at
+75 % only. Tested by `tb_can` against two reference nodes written from ISO 11898-1 (DLC 0-8,
+remote frames, arbitration, missing ACK, CRC/stuff/form/bit errors, error-passive, bus-off and
+recovery, both engines as nodes), by sigrok's `can` decoder (`make sigrok-can`) and by a random
+differential of the coder (`make diff-can`).
 
 ## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)
 

@@ -4,8 +4,9 @@
 //
 // Timing. One timer, period_m1 + 1 clocks per bit. The sample point is LINE2[2:0] (as in
 // pbe_line). On the bus-idle level a falling edge hard-synchronizes (it is a start of frame);
-// inside a frame every falling edge resynchronizes, except while this node drives a dominant
-// bit (its own edge, delayed by the transceiver). An edge after the sample point starts the
+// inside a frame a falling edge resynchronizes, except while this node drives a dominant
+// bit (its own edge, delayed by the transceiver), and at most once between two sample points
+// (ISO 11898-1). An edge after the sample point starts the
 // next bit at once; an edge before it restarts the current bit.
 //
 // Transfers. OUT queues a unit of `width` bits (the top bits of OSR when MSB first); one unit
@@ -103,7 +104,12 @@ module pbe_bsync (
       default: sp_add = 16'd0;
     endcase
   end
-  wire [15:0] spv = {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
+  // the sample count, registered: the adders stay off the counter's compare path; a change
+  // of CLKDIV or LINE2 takes effect one clock later
+  logic [15:0] spv;
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) spv <= '0;
+    else spv <= {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
 
   logic [2:0]  cs;
   logic        drv;                  // driving dominant in this bit
@@ -134,7 +140,9 @@ module pbe_bsync (
 
   wire fall   = a_d && !a_in;
   wire in_bus = cs != C_IDLE;
-  wire resync = fall && !drv && in_bus;
+  // ISO 11898-1: at most one synchronization between two sample points
+  logic synced;
+  wire resync = fall && !drv && in_bus && !synced;
   wire hard   = fall && cs == C_IDLE;
   wire tend   = cnt == period_m1;
   wire sample = cnt == spv && !sampled;
@@ -221,7 +229,7 @@ module pbe_bsync (
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      cnt <= '0; sampled <= 1'b0; a_d <= 1'b1; cs <= C_INTEG; drv <= 1'b0; cur <= 1'b1;
+      cnt <= '0; sampled <= 1'b0; a_d <= 1'b1; cs <= C_INTEG; drv <= 1'b0; cur <= 1'b1; synced <= 1'b0;
       slot_stuff <= 1'b0; sof <= 1'b0; q_valid <= 1'b0; q_data <= '0; tsh <= '0; tleft <= '0;
       width <= 4'd1; last <= 1'b1; stuff_pend <= 1'b0; st_en <= 1'b0; arb_en <= 1'b0; run <= '0;
       silent <= 1'b0; own <= 1'b0; role_tx <= 1'b0; joinw <= 1'b0; rsh <= '0; rbits <= '0;
@@ -232,7 +240,7 @@ module pbe_bsync (
       crc_bit <= 1'b0; arb_lost <= 1'b0; bit_err <= 1'b0; sent <= 1'b0;
     end else if (clear) begin
       // the error counters survive a restart (ISO: only bus-off recovery or a reset clears them)
-      cnt <= '0; sampled <= 1'b0; a_d <= 1'b1; cs <= (cs == C_BUSOFF) ? C_BUSOFF : C_INTEG;
+      cnt <= '0; sampled <= 1'b0; a_d <= 1'b1; cs <= (cs == C_BUSOFF) ? C_BUSOFF : C_INTEG; synced <= 1'b0;
       drv <= 1'b0; cur <= 1'b1;
       slot_stuff <= 1'b0; sof <= 1'b0; q_valid <= 1'b0; q_data <= '0; tsh <= '0; tleft <= '0;
       width <= 4'd1; last <= 1'b1; stuff_pend <= 1'b0; st_en <= 1'b0; arb_en <= 1'b0; run <= '0;
@@ -259,6 +267,8 @@ module pbe_bsync (
       end else if (resync) cnt <= '0;            // a late edge: the current bit restarts
       else cnt <= cnt + 16'd1;
       if (sample) sampled <= 1'b1;
+      if (sample) synced <= 1'b0;
+      else if (resync || fstart) synced <= 1'b1;
 
       // ---- LINECTL ----
       if (ctl) begin
