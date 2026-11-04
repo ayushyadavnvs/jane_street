@@ -7,6 +7,15 @@
 //   cfg[3:2]  stuffing   0 none, 1 after 6 ones (USB), 2 after 5 ones (HDLC), 3 after 5 equal (CAN)
 //   cfg[4]    pair       pin a carries the line, pin b its complement; both low (SE0) ends a frame
 //   cfg[5]    bytes      the engine transfers whole bytes (else single bits)
+//   cfg2      LINE2 (D65), every bit 0 = the behaviour described below:
+//     [2:0]   sample point: 0 the default, floor(period_m1/2)+1; 1, 2, 3 add N/8, N/4, 3N/8
+//             (N = period_m1 + 1, shifted copies, no multiplier): 62.5 %, 75 %, 87.5 % of the
+//             bit when N is a multiple of 8. 4-7 are reserved and act as 0.
+//     [3]     resynchronize the receive timer on falling edges only (else on every edge)
+//     [4]     the receive pin is pin_base+1 (handled by the engine; pair mode must be off)
+//     [5]     bit-synchronous (CAN) mode: pbe_bsync replaces this module's timing (engine)
+//     [6]     before a frame starts, wait until the line has been idle for 11 bit times, or
+//             for 3 after the end of a received frame (counted at the receive sample point)
 //
 // Transmit: tx_put queues a byte (or a bit in tx_data[0]), tx_end queues "end of frame"; one
 // entry is buffered (tx_ready). A frame starts with 2 idle bit times (an inter-packet gap) and
@@ -55,6 +64,7 @@ module pbe_line (
     input  logic        rst_n,
     input  logic        clear,
     input  logic [7:0]  cfg,
+    input  logic [7:0]  cfg2,
     input  logic [7:0]  sync,
     input  logic [15:0] period_m1,
     input  logic        out_msb_first,
@@ -78,7 +88,10 @@ module pbe_line (
     output logic        err          // pulse: stuff error, receive overrun or transmit underrun
 );
   wire       nrzi  = cfg[1:0] == 2'd2;
-  wire       _unused = &{cfg[7:6], 1'b0};  // reserved
+  wire       _unused = &{cfg[7:6], cfg2[7], cfg2[5:4], 1'b0};  // reserved; [5:4] are the engine's
+  wire [2:0] sp_sel = cfg2[2:0];
+  wire       fall_only = cfg2[3];
+  wire       idle_wait = cfg2[6];
   wire [1:0] st    = cfg[3:2];
   wire       pair  = cfg[4];
   wire       bytes = cfg[5];
@@ -139,7 +152,25 @@ module pbe_line (
   logic [3:0]  rbits;
 
   wire        se0    = pair && !a_in && !b_in;
-  wire        sample = rcnt == {1'b0, period_m1[15:1]} + 16'd1;
+  // sample point (LINE2[2:0]); 0 is the original floor(period_m1/2)+1
+  wire [15:0] n_per  = period_m1 + 16'd1;
+  wire        _unused_nper = &{n_per[1:0], 1'b0};
+  logic [15:0] sp_add;
+  always_comb begin
+    case (sp_sel)
+      3'd1:    sp_add = {3'b0, n_per[15:3]};
+      3'd2:    sp_add = {2'b0, n_per[15:2]};
+      3'd3:    sp_add = {2'b0, n_per[15:2]} + {3'b0, n_per[15:3]};
+      default: sp_add = 16'd0;
+    endcase
+  end
+  wire [15:0] sp_cnt = {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
+  wire        sample = rcnt == sp_cnt;
+  // LINE2[6]: idle bit times seen at the sample point (saturating at 11), and whether the
+  // last thing on the line was the end of a frame (then 3 idle bits are enough)
+  logic [3:0] icnt;
+  logic       after_end;
+  wire        tx_ok = !idle_wait || icnt == 4'd11 || (after_end && icnt >= 4'd3);
   wire        r_bit  = nrzi ? (a_in == rprev) : a_in;
   wire        r_exp  = ones ? 1'b0 : !rlast;           // value a stuff bit must have
   logic [2:0] r_run;
@@ -160,6 +191,7 @@ module pbe_line (
       rs <= R_IDLE; rcnt <= '0; a_d <= 1'b1; rprev <= 1'b1; rlast <= 1'b1; rstuff <= 1'b0;
       hunting <= 1'b0; rrun <= '0; ridle <= '0; win <= '0; rsh <= '0; rbits <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0;
+      icnt <= '0; after_end <= 1'b0;
     end else if (clear) begin
       ts <= T_IDLE; tcnt <= '0; gap2 <= 1'b0; kick <= 1'b0;
       q_valid <= 1'b0; q_end <= 1'b0; q_data <= '0; tsh <= '0; tbits <= '0;
@@ -168,6 +200,7 @@ module pbe_line (
       rs <= R_IDLE; rcnt <= '0; a_d <= 1'b1; rprev <= 1'b1; rlast <= 1'b1; rstuff <= 1'b0;
       hunting <= 1'b0; rrun <= '0; ridle <= '0; win <= '0; rsh <= '0; rbits <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0;
+      icnt <= '0; after_end <= 1'b0;
     end else begin
       frame_end <= 1'b0;
       err       <= 1'b0;
@@ -184,7 +217,7 @@ module pbe_line (
         T_IDLE:
           if (q_valid) begin
             if (q_end) q_valid <= 1'b0;  // end with no frame: nothing to do
-            else begin
+            else if (tx_ok) begin
               ts   <= T_GAP;
               gap2 <= 1'b0;
             end
@@ -248,7 +281,13 @@ module pbe_line (
       // ---- receive (off while transmitting: half duplex) ----
       a_d <= a_in;
       if (rx_take) rx_valid <= 1'b0;
-      rcnt <= (a_in != a_d || rcnt == period_m1) ? 16'd0 : rcnt + 16'd1;
+      rcnt <= ((fall_only ? (a_d && !a_in) : (a_in != a_d)) || rcnt == period_m1) ? 16'd0 : rcnt + 16'd1;
+      if (sample) begin
+        if (!a_in || ts != T_IDLE || rs != R_IDLE) icnt <= 4'd0;
+        else if (icnt != 4'd11) icnt <= icnt + 4'd1;
+      end
+      if (frame_end) after_end <= 1'b1;
+      else if (sample && !a_in) after_end <= 1'b0;
       if (ts != T_IDLE) rs <= R_IDLE;
       else case (rs)
         R_IDLE:

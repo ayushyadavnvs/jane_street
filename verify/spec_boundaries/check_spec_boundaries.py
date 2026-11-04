@@ -16,7 +16,7 @@ def main():
     subprocess.run([
         os.environ.get("IVERILOG", "iverilog"), "-g2012", "-s", "tb_spec_boundaries",
         "-o", str(executable), str(HERE / "tb_spec_boundaries.sv"),
-        *(str(ROOT.parent / "src" / name) for name in ("pbe_engine.sv", "pbe_line.sv", "pbe_crc.sv")),
+        *(str(ROOT.parent / "src" / name) for name in ("pbe_engine.sv", "pbe_line.sv", "pbe_bsync.sv", "pbe_crc.sv")),
     ], check=True)
     cases = [
         ("documented_contract", None, 0, "PASS: BUG-058/059"),

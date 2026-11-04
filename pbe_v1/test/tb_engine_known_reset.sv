@@ -2,10 +2,13 @@
 // Four-state supplement: formal's two-state bit vectors cannot prove absence of X.
 module tb_engine_known_reset;
   logic clk=0,rst_n=0,restart=0,run=0;
-  logic [7:0] coder_cfg=0;
+  logic [7:0] coder_cfg=0, coder_cfg2=0;
   logic [15:0] instr=16'hd800;
   wire [7:0] pins_out,pins_oe,rx_data;
-  wire [4:0] status;
+  wire [7:0] status;
+  wire [8:0] can_tec;
+  wire [7:0] can_rec;
+  wire [1:0] can_state;
   wire [15:0] crc_now;
   wire [6:0] pc;
   wire [20:0] pc_copy;
@@ -15,28 +18,32 @@ module tb_engine_known_reset;
   pbe_engine dut(.clk,.rst_n,.run,.restart,.clkdiv(16'd3),
     .pin_base(3'd0),.jmp_pin(3'd0),.out_msb_first(1'b0),.in_msb_first(1'b0),
     .start_pc(7'd0),.crc_poly(16'h8005),.crc_cfg(8'h3f),.timeout(16'd0),
-    .line_cfg(8'h40),.coder_cfg,.sync(8'h80),.crc_good(16'd0),
+    .line_cfg(8'h40),.coder_cfg,.coder_cfg2,.sync(8'h80),.crc_good(16'd0),
     .host_crc_init(1'b0),.host_tmo_clr(1'b0),.host_ovf_clr(1'b0),.host_lerr_clr(1'b0),
-    .status,.crc_now,.pc,.pc_copy,.instr,.pm_wr(1'b0),
+    .host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),
+    .status,.can_tec,.can_rec,.can_state,.crc_now,.pc,.pc_copy,.instr,.pm_wr(1'b0),
     .pins_in(8'h01),.pins_out,.pins_oe,.tx_data(8'ha5),.tx_empty(1'b1),
-    .tx_pop,.rx_data,.rx_full(1'b0),.rx_push,.flags(4'd0),.flag_set,.flag_clr,.irq);
+    .tx_pop,.tx_mark(),.tx_rewind(),.rx_data,.rx_full(1'b0),.rx_push,.flags(4'd0),.flag_set,.flag_clr,.irq);
   task automatic known;
-    if ($isunknown({pins_out,pins_oe,flag_set,flag_clr,tx_pop,rx_push,irq,rx_data,status,crc_now,pc,pc_copy}))
-      $fatal(1,"engine reset/restart has an unknown output cfg=%h",coder_cfg);
+    // two checks: Icarus 12 misreports $isunknown on this concatenation once it is 106 bits wide
+    if ($isunknown({pins_out,pins_oe,flag_set,flag_clr,tx_pop,rx_push,irq,rx_data,status,crc_now,pc,pc_copy})
+        || $isunknown({can_tec,can_rec,can_state}))
+      $fatal(1,"engine reset/restart has an unknown output cfg=%h cfg2=%h",coder_cfg,coder_cfg2);
   endtask
   initial begin
     repeat(3) begin @(posedge clk); #1; known(); end
     @(negedge clk); rst_n=1; run=1; instr=16'h0080; // known drive-high word
     repeat(10) @(negedge clk);
-    for (int c=0;c<64;c++) begin
-      coder_cfg=8'(c); restart=1;
+    // every LINE bit field, with LINE2 off, in bit-synchronous (CAN) mode, and all LINE2 bits
+    for (int c=0;c<192;c++) begin
+      coder_cfg=8'(c%64); coder_cfg2=c<64 ? 8'h00 : c<128 ? 8'h20 : 8'h7f; restart=1;
       @(posedge clk); #1; known();
       if(pins_oe!==0) $fatal(1,"restart must release enables cfg=%h",coder_cfg);
       @(negedge clk); restart=0; instr=16'hd800;
       repeat(3) begin @(posedge clk); #1; known(); @(negedge clk); end
     end
-    $display("PASS: four-state reset/restart outputs, all 64 coder bit-field combinations");
+    $display("PASS: four-state reset/restart outputs, all 64 coder bit-field combinations x LINE2 off, CAN mode, all LINE2 bits");
     $finish;
   end
-  initial begin #20000; $fatal(1,"known-output regression timeout"); end
+  initial begin #60000; $fatal(1,"known-output regression timeout"); end
 endmodule

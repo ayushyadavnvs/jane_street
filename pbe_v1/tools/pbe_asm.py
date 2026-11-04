@@ -19,13 +19,17 @@ Syntax (case-insensitive, ';' starts a comment):
     WAIT FLAG n, LOW|HIGH|RISE|FALL
     JMP  [ALWAYS|X--|PIN_HI|PIN_LO|TX_EMPTY|TX_READY|FLAG0|FLAG1,] label
     SET  X|OSR, value
-    PULL | PUSH
+    PULL [NOWAIT] | PUSH      NOWAIT: an empty TX FIFO gives 0xFF instead of waiting
+    MARK | REWIND             hold the TX FIFO read position / read again from it (D70)
     FLAG n, SET|CLR|IRQ
     NOP
     MOV  X|OSR|ISR, X|OSR|ISR|0                      (FLAG action 3 with a non-zero move)
-    CRCRST | OSRCRC LO|HI [, INV] | STAT | JCRCBAD label     (opcode 111)
+    CRCRST | OSRCRC LO|HI [, INV] [, LEFT] | STAT | JCRCBAD label     (opcode 111)
+                              LEFT: the CRC left-justified to 16 bits (CRC-15: bits 14..7 high)
     JEQ label | JNE label     jump if ISR == OSR / ISR != OSR    (opcode 111)
     JLINE label               jump if the line coder saw the end of a frame; clears it
+    LINECTL W1..W8 [, ARB]    bit-synchronous coder: unit width, arbitration window on (D67)
+    LINECTL STUFFOFF|STUFFON|ERROR [, ...]   stuffing off / on, start an error flag
 Any instruction may end with [d], d = 0..15 extra ticks of delay.
 """
 import argparse
@@ -35,9 +39,11 @@ import sys
 MEM_WORDS = 128   # program memory
 PROG_WORDS = 64   # one program: jump targets are 6 bits, relative to its start
 
-OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "FLAG": 6, "NOP": 6, "MOV": 6}
+OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "MARK": 5, "REWIND": 5,
+       "FLAG": 6, "NOP": 6, "MOV": 6}
 PIN_ACT = {"DRV0": 0, "DRV1": 1, "REL": 2, "TOG": 3, "OUT": 4, "OUTOD": 5, "OUTPAR": 6, "END": 7}
-EXT_OPS = {"CRCRST": 0, "OSRCRC": 1, "STAT": 2, "JCRCBAD": 3, "JEQ": 4, "JNE": 5, "JLINE": 6}
+EXT_OPS = {"CRCRST": 0, "OSRCRC": 1, "STAT": 2, "JCRCBAD": 3, "JEQ": 4, "JNE": 5, "JLINE": 6, "LINECTL": 7}
+LINECTL_ACT = {"STUFFOFF": 1, "STUFFON": 2, "ERROR": 4}
 MOV_REG = {"X": 1, "OSR": 2, "ISR": 3}
 WAIT_CND = {"LOW": 0, "HIGH": 1, "RISE": 2, "FALL": 3}
 JMP_CND = {"ALWAYS": 0, "X--": 1, "PIN_HI": 2, "PIN_LO": 3, "TX_EMPTY": 4, "TX_READY": 5, "FLAG0": 6, "FLAG1": 7}
@@ -122,11 +128,28 @@ def assemble(text, base, name="<src>"):
         if mnem in EXT_OPS:
             sub = EXT_OPS[mnem] << 6
             if mnem == "OSRCRC":
-                inv = len(args) == 2 and args[1].upper() == "INV"
-                if inv:
-                    args = args[:1]
+                mods = [a.upper() for a in args[1:]]
+                for m_ in mods:
+                    if m_ not in ("INV", "LEFT"):
+                        raise AsmError(f"{name}:{n}: OSRCRC takes INV and LEFT, got '{m_}'")
+                args = args[:1]
                 need(1)
-                arg = sub | (int(inv) << 1) | pick({"LO": 0, "HI": 1}, args[0], n, "CRC byte")
+                arg = (sub | (int("LEFT" in mods) << 2) | (int("INV" in mods) << 1)
+                       | pick({"LO": 0, "HI": 1}, args[0], n, "CRC byte"))
+            elif mnem == "LINECTL":
+                if not args:
+                    raise AsmError(f"{name}:{n}: LINECTL needs a width (W1..W8) or actions")
+                m_ = re.fullmatch(r"W([1-8])", args[0].upper())
+                if m_:
+                    rest = [a.upper() for a in args[1:]]
+                    if rest not in ([], ["ARB"]):
+                        raise AsmError(f"{name}:{n}: LINECTL W<n> takes only ARB")
+                    arg = sub | (int(m_.group(1)) - 1) | (int(bool(rest)) << 3)
+                else:
+                    acts = 0
+                    for a in args:
+                        acts |= pick(LINECTL_ACT, a, n, "LINECTL action")
+                    arg = sub | (1 << 4) | acts
             elif mnem in ("JCRCBAD", "JEQ", "JNE", "JLINE"):
                 need(1)
                 t = args[0].lower()
@@ -166,9 +189,16 @@ def assemble(text, base, name="<src>"):
             if dst not in ("X", "OSR"):
                 raise AsmError(f"{name}:{n}: SET target must be X or OSR")
             arg = ((1 << 8) if dst == "OSR" else 0) | num(args[1], n, 0, 255)
-        elif mnem in ("PULL", "PUSH"):
+        elif mnem == "PULL":
+            if args and args[0].upper() == "NOWAIT":
+                args = args[1:]
+                arg = 1 << 6
+            else:
+                arg = 0
             need(0)
-            arg = (1 << 8) if mnem == "PUSH" else 0
+        elif mnem in ("PUSH", "MARK", "REWIND"):
+            need(0)
+            arg = {"PUSH": 1 << 8, "MARK": 2 << 6, "REWIND": 3 << 6}[mnem]
         elif mnem == "MOV":
             need(2)
             dst = pick(MOV_REG, args[0], n, "MOV destination")

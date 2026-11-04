@@ -1,6 +1,6 @@
 # Requires: iverilog, yosys, python3.  IHP_LIB points at an IHP sg13g2 standard-cell liberty file
 # (github.com/IHP-GmbH/IHP-Open-PDK, ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/).
-SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_engine.sv src/tt_um_pbe.sv
+SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_bsync.sv src/pbe_engine.sv src/tt_um_pbe.sv
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
 .PHONY: test test-proto test-usb test-gl test-sram synth synth-sram timing clean
@@ -54,10 +54,13 @@ LINT = cd test && for tb in tb_engine_restart tb_engine_ops tb_fetch tb_line tb_
 test/ops_image.hex: test/ops_test.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/ops_test.pbe@0
 
+test/can_ops_image.hex: test/can_ops.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ test/can_ops.pbe@0
+
 test/fetch_image.hex: test/fetch_timing.pbe test/fetch_host.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0 test/fetch_host.pbe@64
 
-test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/fetch_image.hex
+test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
 	$(LINT)
 	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
 	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(addprefix ../,$(SRC)) && vvp -n known_reset.vvp

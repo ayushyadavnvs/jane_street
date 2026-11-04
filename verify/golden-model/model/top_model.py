@@ -14,26 +14,36 @@ class FIFO:
     def __init__(self):
         self.mem = [None] * 16
         self.rptr = self.wptr = 0
+        self.mark = None   # the held read position (D70), None while no mark is held
 
     @property
     def count(self): return (self.wptr-self.rptr) & 31
     @property
     def empty(self): return self.count == 0
     @property
-    def full(self): return self.count == 16
+    def full(self):
+        # while a mark is held, the bytes from the mark on cannot be overwritten
+        return ((self.wptr - (self.rptr if self.mark is None else self.mark)) & 31) == 16
     @property
     def data(self): return self.mem[self.rptr & 15]
     @property
     def contents(self): return [self.mem[(self.rptr+i) & 15] for i in range(self.count)]
 
-    def edge(self, push=False, data=0, pop=False, flush=False):
+    def edge(self, push=False, data=0, pop=False, flush=False, mark=False, rewind=False):
         # Boundary acceptance uses occupancy before this edge, including simultaneous operations.
         accept_push, accept_pop = push and not self.full, pop and not self.empty
         if accept_push: self.mem[self.wptr & 15] = data
-        if flush: self.rptr = self.wptr = 0
+        if flush:
+            self.rptr = self.wptr = 0
+            self.mark = None
         else:
             if accept_push: self.wptr = (self.wptr+1) & 31
-            if accept_pop: self.rptr = (self.rptr+1) & 31
+            old_rptr = self.rptr
+            if rewind:
+                # back to the held position; with no mark held this reads nothing again
+                if self.mark is not None: self.rptr = self.mark
+            elif accept_pop: self.rptr = (self.rptr+1) & 31
+            if mark and not rewind: self.mark = old_rptr
 
 
 class HostSPI:
@@ -207,6 +217,7 @@ class PBEModel:
             self.irq |= bool(s['irq']) << e
             flush=wa == 0 and bool(wd & (64 << e))
             self.tx[e].edge(push=wa == 0x16+16*e,data=wd,pop=s['tx_pop'],
+                            mark=s.get('tx_mark',False),rewind=s.get('tx_rewind',False),
                             flush=flush or (wa == 14 and bool(wd & 1 << e)))
             self.rx[e].edge(push=s['rx_push'],data=s['rx_data'],pop=rd == 0x16+16*e,flush=flush)
         self.flags=(self.flags | sets) & ~clears & 255

@@ -16,7 +16,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[3] / 'pbe_v1'  # the design
 SOURCES = [ROOT/'src'/f'{name}.sv' for name in
-           ('pbe_fifo','pbe_host_spi','pbe_crc','pbe_line','pbe_engine','tt_um_pbe')]
+           ('pbe_fifo','pbe_host_spi','pbe_crc','pbe_line','pbe_bsync','pbe_engine','tt_um_pbe')]
 
 
 def queue(data):

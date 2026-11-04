@@ -21,6 +21,7 @@ project:
     - "pbe_host_spi.sv"
     - "pbe_crc.sv"
     - "pbe_line.sv"
+    - "pbe_bsync.sv"
     - "pbe_engine.sv"
     - "tt_um_pbe.sv"
 

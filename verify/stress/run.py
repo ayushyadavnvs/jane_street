@@ -25,7 +25,7 @@ def main():
     result=out/'observations.json';result.unlink(missing_ok=True)
     os.environ.update(PBE_ROOT=str(ROOT),PBE_STRESS_OUTPUT=str(result),PBE_STRESS_SEED=str(a.seed),
                       PBE_STRESS_REQUIRED_ONLY=str(int(a.required_only)),PBE_STOCK_I2C='0',PBE_STOCK_SPI='0')
-    sources=[ROOT/'src'/f'{n}.sv' for n in ('pbe_fifo','pbe_host_spi','pbe_crc','pbe_line','pbe_engine','tt_um_pbe')]
+    sources=[ROOT/'src'/f'{n}.sv' for n in ('pbe_fifo','pbe_host_spi','pbe_crc','pbe_line','pbe_bsync','pbe_engine','tt_um_pbe')]
     r=get_runner('icarus')
     r.build(sources=sources+[HERE/'stress_top.sv'],hdl_toplevel='stress_top',build_dir=out,build_args=['-g2012'],timescale=('1ns','1ps'))
     xml=out/'results.xml';xml.unlink(missing_ok=True)

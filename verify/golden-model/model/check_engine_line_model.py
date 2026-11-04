@@ -11,7 +11,7 @@ if __name__ == '__main__':
     root = here.parents[2] / 'pbe_v1'                  # the design (src, build)
     build = root / 'build' / 'engine_line_model'
     runner = get_runner('icarus')
-    runner.build(sources=[root / ('src/' + name) for name in ('pbe_crc.sv', 'pbe_line.sv', 'pbe_engine.sv')],
+    runner.build(sources=[root / ('src/' + name) for name in ('pbe_crc.sv', 'pbe_line.sv', 'pbe_bsync.sv', 'pbe_engine.sv')],
                  hdl_toplevel='pbe_engine', build_dir=build, always=True,
                  build_args=['-g2012'], timescale=('1ns', '1ps'))
     results = runner.test(hdl_toplevel='pbe_engine', test_module='test_engine_line_cocotb',

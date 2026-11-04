@@ -30,7 +30,7 @@ def main():
     os.environ['PBE_STOCK_SPI'] = '1' if args.stock_spi else '0'
     runner = get_runner('icarus')
     sources = [ROOT/'src'/name for name in (
-        'pbe_fifo.sv', 'pbe_host_spi.sv', 'pbe_crc.sv', 'pbe_line.sv',
+        'pbe_fifo.sv', 'pbe_host_spi.sv', 'pbe_crc.sv', 'pbe_line.sv', 'pbe_bsync.sv',
         'pbe_engine.sv', 'tt_um_pbe.sv')]
     build = HERE/'sim_build'
     runner.build(sources=sources+[HERE/'bus_top.sv'], hdl_toplevel='bus_top',

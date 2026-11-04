@@ -30,22 +30,40 @@
 //                                             4 TX_EMPTY, 5 TX_READY, 6 FLAG0, 7 FLAG1
 //  100  SET         [8] 0 = X, 1 = OSR; [7:0] value
 //  101  PULL/PUSH   [8] 0 = PULL (TX FIFO -> OSR), 1 = PUSH (ISR -> RX FIFO, then clear ISR)
+//                   PULL group [7:6] (D70): 0 PULL (waits while empty), 1 PULL NOWAIT (an empty
+//                   FIFO gives OSR = 0xFF, no wait), 2 MARK (hold the TX FIFO's read position),
+//                   3 REWIND (read the TX FIFO again from the held position)
 //  110  FLAG        [8:7] 0 SET, 1 CLR, 2 IRQ, 3 MOV; [1:0] flag
 //                   MOV: [5:4] destination, [3:2] source: 1 X, 2 OSR, 3 ISR (source 0: zero);
 //                   destination 0 does nothing (0xD800 is the assembler's NOP)
 //  111  EXT         [8:6] sub-op, [5:0] param
 //                   0 CRCRST      load the CRC's initial value and clear the line error: a new
 //                                 checked packet starts
-//                   1 OSRCRC      OSR <= CRC byte (param[0]: 0 low, 1 high; param[1]: inverted)
-//                   2 STAT        ISR <= {3'b0, line error, RX overflow, timeout happened, CRC ok,
-//                                 parity error}; then clears parity and timeout (not the line
-//                                 error: a JCRCBAD after STAT must still see it)
+//                   1 OSRCRC      OSR <= CRC byte (param[0]: 0 low, 1 high; param[1]: inverted;
+//                                 param[2]: the CRC left-justified to 16 bits first, so CRC-15's
+//                                 high byte is bits 14..7, D71)
+//                   2 STAT        ISR <= {frame sent, bit error, arbitration lost, line error,
+//                                 RX overflow, timeout happened, CRC ok, parity error} (bits 7..5
+//                                 from the bit-synchronous coder, D71); then clears parity and
+//                                 timeout (not the line error: a JCRCBAD after STAT must still see
+//                                 it). CRCRST clears line error, arbitration lost, bit error and
+//                                 frame sent: they describe one packet.
 //                   3 JCRCBAD a   jump to a if the packet is bad: the CRC is not ok (not at its
 //                                 good value) or the line coder saw an error since the last CRCRST
+//                                 (in bit-synchronous mode every bus error, bit errors included,
+//                                 is a line error)
 //                   4 JEQ a       jump to a if ISR == OSR
 //                   5 JNE a       jump to a if ISR != OSR
 //                   6 JLINE a     jump to a if the line coder saw the end of a frame; clears it
-//                   7             reserved, executes as nothing
+//                   7 param[5]=0: LINECTL (D67), the bit-synchronous coder's controls
+//                                 param[4]=0: unit width = param[2:0] + 1 bits for OUT and IN,
+//                                             arbitration window = param[3]
+//                                 param[4]=1: [0] stuffing off (ends the stuffed region: the
+//                                             coder runs the CAN frame tail), [1] stuffing on,
+//                                             [2] error now (an error flag from the next bit)
+//                                 without bit-synchronous mode LINECTL does nothing
+//                     param[5]=1: reserved for a program-memory PAGE instruction (D62
+//                                 proposal), executes as nothing
 //
 // Parity: OUT/OUTOD bits since the last OSR load make the send parity; OUTPAR drives it
 // (inverted for odd parity). IN bits since the last STAT make the receive parity; with the
@@ -64,6 +82,12 @@
 // one per clock afterwards; the next instruction waits until they are in.
 // Timeout: if WAIT, PULL or PUSH stays blocked for timeout ticks (0 = never), the engine
 // abandons it, jumps to timeout_pc and sets the "timeout happened" status bit.
+// Bit-synchronous (CAN) mode (LINE2[5], pbe_bsync, D66): OUT queues a unit of the current
+// width from the top of OSR (OSR is not shifted), IN takes a unit into ISR right-justified,
+// and the CRC is fed by the coder with every bit of the stuffed region as it is sampled (not
+// by OUT or IN). A transfer (IN, OUT, OUTOD, END) issued while a frame-end or error event is
+// pending is abandoned: the engine consumes the event, drops the queued unit and jumps to
+// timeout_pc (the line-event vector) without setting "timeout happened".
 //
 // WAIT, PULL and PUSH block until they can complete. While blocked the engine checks
 // every clock (not every tick), and when it unblocks the tick divider restarts, so
@@ -122,13 +146,21 @@ module pbe_engine (
     input  logic [15:0] timeout,      // ticks a blocked instruction may wait (0 = forever)
     input  logic [7:0]  line_cfg,     // [5:0] timeout_pc, [6] no parity, [7] odd parity
     input  logic [7:0]  coder_cfg,    // line coder, see pbe_line (0 = off)
+    input  logic [7:0]  coder_cfg2,   // LINE2 (D65): sample point, resync, pins, CAN mode, idle wait
     input  logic [7:0]  sync,         // line coder frame start pattern
     input  logic [15:0] crc_good,     // the CRC value that means "ok"
     input  logic        host_crc_init,
     input  logic        host_tmo_clr,
     input  logic        host_ovf_clr,
     input  logic        host_lerr_clr,
-    output logic [4:0]  status,       // {line error, RX overflow, timeout happened, CRC ok, parity error}
+    input  logic        host_arb_clr,
+    input  logic        host_berr_clr,
+    input  logic        host_sent_clr,
+    output logic [7:0]  status,       // {sent, bit error, arbitration lost, line error, RX overflow,
+                                      //  timeout happened, CRC ok, parity error}
+    output logic [8:0]  can_tec,      // bit-synchronous mode's error counters and state
+    output logic [7:0]  can_rec,
+    output logic [1:0]  can_state,    // {bus-off, error-passive}
     output logic [15:0] crc_now,      // the CRC unit's current value, for the host
     // program memory
     output logic [6:0]  pc,           // program memory read address (absolute): the next word
@@ -144,6 +176,8 @@ module pbe_engine (
     input  logic [7:0]  tx_data,
     input  logic        tx_empty,
     output logic        tx_pop,
+    output logic        tx_mark,      // hold the TX FIFO's read position (D70)
+    output logic        tx_rewind,    // read the TX FIFO again from it
     // RX FIFO (engine to host)
     output logic [7:0]  rx_data,
     input  logic        rx_full,
@@ -157,7 +191,7 @@ module pbe_engine (
   localparam logic [2:0] OP_PIN = 3'd0, OP_IN = 3'd1, OP_WAIT = 3'd2, OP_JMP = 3'd3,
                          OP_SET = 3'd4, OP_FIFO = 3'd5, OP_FLAG = 3'd6, OP_EXT = 3'd7;
   localparam logic [2:0] E_CRCRST = 3'd0, E_OSRCRC = 3'd1, E_STAT = 3'd2, E_JCRCBAD = 3'd3,
-                         E_JEQ = 3'd4, E_JNE = 3'd5, E_JLINE = 3'd6;
+                         E_JEQ = 3'd4, E_JNE = 3'd5, E_JLINE = 3'd6, E_LINECTL = 3'd7;
 
   logic [15:0] div_cnt;
   logic [3:0]  dly_cnt;
@@ -168,7 +202,7 @@ module pbe_engine (
   logic        par_out, par_in, tmo_seen, rx_ovf;
   logic [15:0] tmo_cnt;
   logic [7:0]  pout, poe;   // the pin unit's own drive; the line coder can take over its pins
-  logic        line_ev, line_err;
+  logic        line_ev, line_err, arb_st, berr_st, sent_st;
   logic [3:0]  cf_cnt;      // byte mode: CRC bits still to feed
   logic [7:0]  cf_sh;
   logic [15:0] instr_q;     // the current instruction
@@ -204,12 +238,20 @@ module pbe_engine (
 
   // ---- line coder ----
   wire       coder_on = coder_cfg[1:0] != 2'd0;
-  wire       coder_bytes = coder_cfg[5];
-  wire       coder_pair = coder_cfg[4];
+  wire       bsm = coder_on && coder_cfg2[5];            // bit-synchronous (CAN) mode, D66
+  wire       coder_bytes = coder_cfg[5] && !bsm;         // byte transfers of pbe_line
+  wire       coder_unit = coder_cfg[5] || bsm;           // OUT/IN move whole registers
+  wire       coder_pair = coder_cfg[4] && !bsm;
   wire [2:0] base1 = pin_base + 3'd1;
+  wire       rx_pin = coder_cfg2[4] ? pins_in[base1] : pins_in[pin_base];  // LINE2[4]: split pins
   wire       is_txop = coder_on && op == OP_PIN && (pin_act == 3'd4 || pin_act == 3'd5 || pin_act == 3'd7);
   logic       l_drive, l_a, l_b, l_ready, l_rxv, l_end, l_err;
   logic [7:0] l_rxd;
+  // pbe_line's and pbe_bsync's own outputs; l_* is the one in use
+  logic       p_drive, p_a, p_b, p_ready, p_rxv, p_end, p_err;
+  logic [7:0] p_rxd;
+  logic       s_drive, s_ready, s_rxv, s_end, s_err, s_crc_step, s_crc_bit, s_arb, s_berr, s_sent;
+  logic [7:0] s_rxd;
 
   // ---- issue and readiness ----
   wire tick_due = coder_on || (div_cnt >= clkdiv);
@@ -233,7 +275,7 @@ module pbe_engine (
   always_comb begin
     case (op)
       OP_WAIT: ready = wait_ok;
-      OP_FIFO: ready = arg_hi ? !rx_full : !tx_empty;
+      OP_FIFO: ready = arg_hi ? !rx_full : (arg[7:6] != 2'd0 || !tx_empty);  // only PULL blocks
       OP_PIN:  ready = !is_txop || l_ready;
       OP_IN:   ready = !coder_on || l_rxv || line_ev;
       default: ready = 1'b1;
@@ -241,8 +283,13 @@ module pbe_engine (
     if (cf_cnt != 4'd0) ready = 1'b0;  // byte-mode CRC feed still running
   end
 
+  // Bit-synchronous mode (D66): a transfer (IN, OUT, OUTOD, END) issued after the end of a
+  // frame or an error is abandoned, and the engine jumps to TIMEOUT_PC, the line-event vector.
+  // The event is consumed and the queued unit dropped.
+  wire lv_hit = bsm && issue && !restart && line_ev && (op == OP_IN || is_txop);
+
   // A restart in the same cycle cancels the instruction, so it has no side effects.
-  wire exec = issue && ready && !restart;
+  wire exec = issue && ready && !restart && !lv_hit;
 
   // A blocked instruction that has waited `timeout` ticks is abandoned.
   wire tmo_hit = run && !restart && iv && blocked && !ready && timeout != 16'd0 && tmo_cnt >= timeout;
@@ -250,9 +297,11 @@ module pbe_engine (
   // ---- CRC unit, fed by the bits the engine shifts ----
   wire is_out = exec && op == OP_PIN && (pin_act == 3'd4 || pin_act == 3'd5);
   wire is_in  = exec && op == OP_IN && (!coder_on || l_rxv);  // not an IN ended by end of frame
+  // bit-synchronous mode feeds the CRC as bits are sampled, not when IN takes them
   wire in_bit = coder_on ? l_rxd[0] : pin_now;
-  wire crc_out = is_out && !arg[0] && crc_cfg[6];
-  wire crc_in  = is_in && !arg[5] && crc_cfg[7];
+  wire crc_out = is_out && !arg[0] && crc_cfg[6] && !bsm;
+  wire crc_in  = is_in && !arg[5] && crc_cfg[7] && !bsm;
+  wire crc_line = bsm && s_crc_step && crc_cfg[7];
   logic [15:0] crc_value;
   logic        crc_ok;
 
@@ -266,8 +315,8 @@ module pbe_engine (
   pbe_crc u_crc (
       .clk, .rst_n,
       .init     (host_crc_init || restart || (exec && op == OP_EXT && ext_op == E_CRCRST)),
-      .step     (cf_cnt != 4'd0 || (!cf_start && (crc_out || crc_in))),
-      .bit_in   (cf_cnt != 4'd0 ? cf_sh[0] : is_out ? out_bit : in_bit),
+      .step     (cf_cnt != 4'd0 || (!cf_start && (crc_out || crc_in)) || crc_line),
+      .bit_in   (cf_cnt != 4'd0 ? cf_sh[0] : crc_line ? s_crc_bit : is_out ? out_bit : in_bit),
       .poly     (crc_poly),
       .width_m1 (crc_cfg[3:0]),
       .init_ones(crc_cfg[4]),
@@ -277,32 +326,75 @@ module pbe_engine (
       .ok       (crc_ok)
   );
 
-  assign status  = {line_err, rx_ovf, tmo_seen, crc_ok, par_err};
+  assign status  = {sent_st, berr_st, arb_st, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
   assign crc_now = crc_value;
 
   pbe_line u_line (
       .clk, .rst_n,
-      .clear        (restart || !coder_on),
+      .clear        (restart || !coder_on || bsm),
       .cfg          (coder_cfg),
+      .cfg2         (coder_cfg2),
       .sync,
       .period_m1    (clkdiv),
       .out_msb_first,
       .in_msb_first,
-      .a_in         (pins_in[pin_base]),
+      .a_in         (rx_pin),
       .b_in         (pins_in[base1]),
-      .drive        (l_drive),
-      .a_out        (l_a),
-      .b_out        (l_b),
-      .tx_put       (exec && is_txop && pin_act != 3'd7),
-      .tx_end       (exec && is_txop && pin_act == 3'd7),
+      .drive        (p_drive),
+      .a_out        (p_a),
+      .b_out        (p_b),
+      .tx_put       (exec && is_txop && pin_act != 3'd7 && !bsm),
+      .tx_end       (exec && is_txop && pin_act == 3'd7 && !bsm),
       .tx_data      (coder_bytes ? osr : {7'b0, out_bit}),
-      .tx_ready     (l_ready),
-      .rx_valid     (l_rxv),
-      .rx_data      (l_rxd),
-      .rx_take      (exec && coder_on && op == OP_IN && l_rxv),
-      .frame_end    (l_end),
-      .err          (l_err)
+      .tx_ready     (p_ready),
+      .rx_valid     (p_rxv),
+      .rx_data      (p_rxd),
+      .rx_take      (exec && coder_on && op == OP_IN && l_rxv && !bsm),
+      .frame_end    (p_end),
+      .err          (p_err)
   );
+
+  wire lctl = exec && op == OP_EXT && ext_op == E_LINECTL && !arg[5];
+  pbe_bsync u_bsync (
+      .clk, .rst_n,
+      .clear        (restart || !bsm),
+      .cfg          (coder_cfg),
+      .cfg2         (coder_cfg2),
+      .period_m1    (clkdiv),
+      .out_msb_first,
+      .in_msb_first,
+      .a_in         (rx_pin),
+      .drive        (s_drive),
+      .tx_put       (exec && is_txop && pin_act != 3'd7 && bsm),
+      .tx_data      (osr),
+      .tx_ready     (s_ready),
+      .rx_valid     (s_rxv),
+      .rx_data      (s_rxd),
+      .rx_take      (exec && op == OP_IN && l_rxv && bsm),
+      .frame_end    (s_end),
+      .err          (s_err),
+      .ctl          (lctl && bsm),
+      .ctl_param    (arg[4:0]),
+      .drop         (lv_hit),
+      .crc_ok,
+      .crc_step     (s_crc_step),
+      .crc_bit      (s_crc_bit),
+      .arb_lost     (s_arb),
+      .bit_err      (s_berr),
+      .sent         (s_sent),
+      .tec          (can_tec),
+      .rec          (can_rec),
+      .passive      (can_state[0]),
+      .busoff       (can_state[1])
+  );
+  assign l_drive = bsm ? s_drive : p_drive;
+  assign l_a     = bsm ? 1'b0 : p_a;       // bit-synchronous mode drives only dominant (low)
+  assign l_b     = p_b;
+  assign l_ready = bsm ? s_ready : p_ready;
+  assign l_rxv   = bsm ? s_rxv : p_rxv;
+  assign l_rxd   = bsm ? s_rxd : p_rxd;
+  assign l_end   = bsm ? s_end : p_end;
+  assign l_err   = bsm ? s_err : p_err;
 
   // the coder's pins override the pin unit while it drives them
   wire [7:0] l_mask = l_drive ? ((8'd1 << pin_base) | (coder_pair ? 8'd1 << base1 : 8'd0)) : 8'd0;
@@ -357,6 +449,8 @@ module pbe_engine (
     endcase
   end
   wire [6:0] jump_pc = start_pc + {1'b0, arg[5:0]};
+  // OSRCRC param[2]: the CRC left-justified to 16 bits (CRC-15: bits 14..7 in the high byte)
+  wire [15:0] crc_osr = arg[2] ? (crc_value << (4'd15 - crc_cfg[3:0])) : crc_value;
 
   // ---- fetch address ----
   logic [6:0] pc_next;
@@ -366,11 +460,11 @@ module pbe_engine (
     else begin
       if (!iv) pc_next = pc + 1'b1;  // the fetch fills instr_q: read on
       if (exec) pc_next = jump ? jump_pc : pc + 1'b1;
-      if (tmo_hit) pc_next = start_pc + {1'b0, tmo_pc};
+      if (tmo_hit || lv_hit) pc_next = start_pc + {1'b0, tmo_pc};
       // A host write to the program memory may change the current or the next word: fetch the
       // instruction that runs next again (a jump fetches its target anyway). pm_wr appears only
       // in `if`s: the unit testbenches leave it unconnected, and z must read as no write.
-      if (pm_wr && !(exec && jump) && !tmo_hit) pc_next = (iv && !exec) ? pc - 1'b1 : pc;
+      if (pm_wr && !(exec && jump) && !tmo_hit && !lv_hit) pc_next = (iv && !exec) ? pc - 1'b1 : pc;
     end
   end
 
@@ -391,7 +485,11 @@ module pbe_engine (
   end
 
   // ---- side-effect pulses (combinational, valid in the exec cycle) ----
-  assign tx_pop   = exec && op == OP_FIFO && !arg_hi;
+  // PULL group, arg[7:6]: 0 PULL (blocks while empty), 1 PULL NOWAIT (an empty FIFO gives
+  // 0xFF, the idle level of most lines), 2 MARK, 3 REWIND (D70)
+  assign tx_pop    = exec && op == OP_FIFO && !arg_hi && arg[7] == 1'b0 && !tx_empty;
+  assign tx_mark   = exec && op == OP_FIFO && !arg_hi && arg[7:6] == 2'd2;
+  assign tx_rewind = exec && op == OP_FIFO && !arg_hi && arg[7:6] == 2'd3;
   assign rx_push  = exec && op == OP_FIFO && arg_hi;
   assign rx_data  = isr;
   assign flag_set = (exec && op == OP_FLAG && flag_act == 2'd0) ? (4'b0001 << arg[1:0]) : 4'b0000;
@@ -413,6 +511,9 @@ module pbe_engine (
       poe        <= '0;
       line_ev    <= 1'b0;
       line_err   <= 1'b0;
+      arb_st     <= 1'b0;
+      berr_st    <= 1'b0;
+      sent_st    <= 1'b0;
       cf_cnt     <= '0;
       cf_sh      <= '0;
       pins_prev  <= '0;
@@ -433,6 +534,9 @@ module pbe_engine (
       poe      <= '0;  // release every pin; keep pout so a line held high cannot glitch low
       line_ev  <= 1'b0;
       line_err <= 1'b0;
+      arb_st   <= 1'b0;
+      berr_st  <= 1'b0;
+      sent_st  <= 1'b0;
       cf_cnt   <= '0;
       par_out  <= 1'b0;
       par_in   <= 1'b0;
@@ -445,9 +549,15 @@ module pbe_engine (
       if (host_tmo_clr) tmo_seen <= 1'b0;
       if (host_ovf_clr) rx_ovf <= 1'b0;
       else if (ovf_now) rx_ovf <= 1'b1;
-      line_ev <= (line_ev && !jline_take) || l_end;
+      line_ev <= (line_ev && !jline_take && !lv_hit) || l_end;
       if (host_lerr_clr) line_err <= 1'b0;
       else if (l_err) line_err <= 1'b1;
+      if (host_arb_clr) arb_st <= 1'b0;
+      else if (bsm && s_arb) arb_st <= 1'b1;
+      if (host_berr_clr) berr_st <= 1'b0;
+      else if (bsm && s_berr) berr_st <= 1'b1;
+      if (host_sent_clr) sent_st <= 1'b0;
+      else if (bsm && s_sent) sent_st <= 1'b1;
       if (cf_cnt != 4'd0) begin
         cf_cnt <= cf_cnt - 4'd1;
         cf_sh  <= {1'b0, cf_sh[7:1]};
@@ -485,7 +595,7 @@ module pbe_engine (
           case (op)
             OP_PIN: begin
               if (coder_on && is_txop) begin
-                if (!coder_bytes && pin_act != 3'd7) osr <= osr_shifted;  // bit mode shifts
+                if (!coder_unit && pin_act != 3'd7) osr <= osr_shifted;  // bit mode shifts
               end else case (pin_act)
                 3'd0: begin pout[pin_idx] <= 1'b0;                 poe[pin_idx] <= 1'b1;     end
                 3'd1: begin pout[pin_idx] <= 1'b1;                 poe[pin_idx] <= 1'b1;     end
@@ -501,7 +611,7 @@ module pbe_engine (
             end
             OP_IN: begin
               if (!coder_on) isr <= isr_shifted;
-              else if (l_rxv) isr <= coder_bytes ? l_rxd
+              else if (l_rxv) isr <= coder_unit ? l_rxd
                                                  : (in_msb_first ? {isr[6:0], l_rxd[0]} : {l_rxd[0], isr[7:1]});
               par_in <= par_in ^ in_bit;
             end
@@ -525,20 +635,25 @@ module pbe_engine (
               endcase
             OP_FIFO: begin
               if (arg_hi) isr <= '0;
-              else begin
-                osr     <= tx_data;
+              else if (arg[7] == 1'b0) begin
+                osr     <= (arg[6] && tx_empty) ? 8'hFF : tx_data;
                 par_out <= 1'b0;
               end
             end
             OP_EXT: begin
               case (ext_op)
                 E_OSRCRC: begin
-                  osr     <= (arg[0] ? crc_value[15:8] : crc_value[7:0]) ^ {8{arg[1]}};
+                  osr     <= (arg[0] ? crc_osr[15:8] : crc_osr[7:0]) ^ {8{arg[1]}};
                   par_out <= 1'b0;
                 end
-                E_CRCRST:  if (!l_err) line_err <= 1'b0;  // an error in this very clock stays
+                E_CRCRST: begin  // a new packet: its status starts again
+                  if (!l_err) line_err <= 1'b0;  // an error in this very clock stays
+                  if (!(bsm && s_arb)) arb_st <= 1'b0;
+                  if (!(bsm && s_berr)) berr_st <= 1'b0;
+                  if (!(bsm && s_sent)) sent_st <= 1'b0;
+                end
                 E_STAT: begin
-                  isr      <= {3'b0, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
+                  isr      <= status;
                   par_in   <= 1'b0;
                   tmo_seen <= 1'b0;
                 end
@@ -551,11 +666,11 @@ module pbe_engine (
         end
 
         // timeout: abandon the blocked instruction and jump to the timeout routine
-        if (tmo_hit) begin
+        if (tmo_hit || lv_hit) begin
           iv       <= 1'b0;
           blocked  <= 1'b0;
           dly_cnt  <= '0;
-          tmo_seen <= 1'b1;
+          if (tmo_hit) tmo_seen <= 1'b1;
         end
       end
 

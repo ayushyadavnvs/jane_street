@@ -130,7 +130,9 @@ class EngineModel:
         if op == 2:
             ready = wait_ok
         elif op == 5:
-            ready = not (p['rx_full'] if arg & 256 else p['tx_empty'])
+            # PUSH waits for room; only plain PULL (arg[7:6] = 0) waits for data. PULL NOWAIT,
+            # MARK and REWIND never wait (D70).
+            ready = not (p['rx_full'] if arg & 256 else (p['tx_empty'] and not arg >> 6 & 3))
         elif txop:
             ready = self.line.tx_ready
         elif op == 1 and self.coder_on:
@@ -174,7 +176,10 @@ class EngineModel:
         p = self._context(**inputs)
         ex, op, arg = p['execute'], p['op'], p['arg']
         flag_act = arg >> 7
-        return dict(tx_pop=bool(ex and op == 5 and not arg & 256),
+        pull_kind = arg >> 6 & 3
+        return dict(tx_pop=bool(ex and op == 5 and not arg & 256 and pull_kind < 2 and not p['tx_empty']),
+                    tx_mark=bool(ex and op == 5 and not arg & 256 and pull_kind == 2),
+                    tx_rewind=bool(ex and op == 5 and not arg & 256 and pull_kind == 3),
                     rx_push=bool(ex and op == 5 and arg & 256), rx_data=self.isr,
                     flag_set=(1 << (arg & 3)) if ex and op == 6 and flag_act == 0 else 0,
                     flag_clr=(1 << (arg & 3)) if ex and op == 6 and flag_act == 1 else 0,
@@ -323,8 +328,10 @@ class EngineModel:
                     elif op == 5:
                         if arg & 256:
                             self.isr = 0
-                        else:
+                        elif arg >> 6 & 3 == 0:
                             self.osr, self.par_out = p['tx_data'], 0
+                        elif arg >> 6 & 3 == 1:   # PULL NOWAIT: an empty FIFO reads as 0xFF
+                            self.osr, self.par_out = 0xFF if p['tx_empty'] else p['tx_data'], 0
                     elif op == 6 and arg >> 7 == 3 and arg >> 4 & 3:
                         value = (0, self.x, self.osr, self.isr)[arg >> 2 & 3]
                         dest = arg >> 4 & 3
@@ -338,7 +345,10 @@ class EngineModel:
                         if sub == 0 and not line_error:
                             self.line_err = False
                         elif sub == 1:
-                            self.osr = ((old_crc >> (8 if arg & 1 else 0)) & 255) ^ (255 if arg & 2 else 0)
+                            crc = old_crc
+                            if arg & 4:   # LEFT: the CRC left-justified to 16 bits (D71)
+                                crc = (crc << (15 - (c['crc_cfg'] & 15))) & 0xFFFF
+                            self.osr = ((crc >> (8 if arg & 1 else 0)) & 255) ^ (255 if arg & 2 else 0)
                             self.par_out = 0
                         elif sub == 2:
                             self.isr = old_status

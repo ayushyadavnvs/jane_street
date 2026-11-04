@@ -53,6 +53,11 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-044 | Tooling | Yosys merged the copies of the read address back into one register, `keep` on the variable notwithstanding | Flip-flop count after synthesis | Fixed |
 | BUG-045 | Tooling | Verilator 5.020 rejects a default value on a module input, which the unit testbenches needed for `pm_wr` | Lint before the first run | Worked around |
 | BUG-074 | Design (D62 prototype) | With the SRAM, one refetch after a host write took the macro's stale output | Timing review; `tb_fetch` (a) as a mutation | Fixed (second refetch) |
+| BUG-077 | Tooling | Icarus 12 `$isunknown` gave a wrong answer on a wide all-known concatenation in `tb_engine_known_reset` | Extending the bench to the CAN outputs | Worked around (split check) |
+| BUG-078 | Tooling | Icarus 12 aborts on a queue `push_back` of a wider value and on a variable declared inside a loop body in an automatic task | Writing `tb_line` E | Worked around |
+| BUG-079 | Verification | New FIFO mark/rewind formal property compared a pointer difference with a 32-bit constant, so it went negative when the pointers wrapped | First `fifo_mark` run (induction and depth-40 BMC fail) | Fixed |
+| BUG-080 | Design (D68, before commit) | The CAN error flag took its type from the counter after the error's own increment, so the error that reached TEC 128 sent a passive flag | Writing the reference node from ISO 11898-1 | Fixed |
+| BUG-081 | Testbench (before commit) | `tb_line` D1 expected the sample at `P/2+1`; the rule is `floor((P-1)/2)+1` | First run of `tb_line` D | Fixed |
 
 ---
 
@@ -2046,3 +2051,97 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
     count=31`), `diff` survived, as in round 2's recorded rerun
     (`evidence/round2/mutations/fifo-gap-rerun/M21.json`). A scratch copy also passes
     `make test-sram`, the spec-boundary check, the 24 model tests and the tool tests.
+
+## BUG-077 — Icarus 12 `$isunknown` misreported a wide concatenation (tool, worked around)
+
+- **Where:** `pbe_v1/test/tb_engine_known_reset.sv`, the four-state check after reset/restart.
+- **Found by:** adding the CAN outputs (`can_tec`, `can_rec`, `can_state`, 19 bits) to the
+  concatenation passed to `$isunknown`. The bench failed in reset with every signal printing as
+  a known value; checking each signal alone with `$isunknown` gave 0 for all of them.
+- **Repro (no design):** in Icarus 12, `$isunknown({a,a,a,a,a,a,a,a,b,e,a,a})` with all-zero
+  8-, 21- and 7-bit wires returns 1 (87 bits); a different 106-bit concatenation of the same
+  wires returns 0. The result depends on the concatenation, not on the values.
+- **Before:**
+  ```systemverilog
+  if ($isunknown({pins_out,pins_oe,flag_set,flag_clr,tx_pop,rx_push,irq,rx_data,status,crc_now,pc,pc_copy,can_tec,can_rec,can_state}))
+  ```
+- **After:** the original concatenation (which Icarus evaluates correctly, as before) and a
+  second one for the new outputs:
+  ```systemverilog
+  if ($isunknown({pins_out,pins_oe,flag_set,flag_clr,tx_pop,rx_push,irq,rx_data,status,crc_now,pc,pc_copy})
+      || $isunknown({can_tec,can_rec,can_state}))
+  ```
+- **Test:** `tb_engine_known_reset` (now also every LINE bit field in CAN mode and with all
+  LINE2 bits). Before: `FATAL ... unknown output cfg=00 cfg2=00` at 6 ns. After: PASS.
+
+## BUG-078 — Icarus 12 aborts on two testbench constructs (tool, worked around)
+
+- **Where:** `pbe_v1/test/tb_line_can.svh` (new, `tb_line` part E).
+- **Found by:** the first run of part E: `vvp` aborted with
+  `vthread_get_rd_context_item: Assertion 'running_thread && running_thread->rd_context' failed`
+  and, after the first fix, `pop_value: Assertion 'value.size() == wid' failed`.
+- **Before:**
+  ```systemverilog
+  for (int i = 0; i < cline.size(); i++) begin
+    logic dom;                                   // a variable in the loop body
+    ...
+  for (int i = 10; i >= 0; i--) cbits.push_back(11'h123 >> i);   // 11 bits into a 1-bit queue
+  ```
+- **After:** the variable is declared at the top of the task, and pushed values are cast to the
+  queue's element type: `cbits.push_back(logic'(11'h123 >> i));`.
+- **Test:** `tb_line` part E runs (before: simulator abort, no result; after: E1–E6 pass).
+  Same family as BUG-024 (Icarus 12 and queues).
+
+## BUG-079 — FIFO mark/rewind formal property overflowed when the pointers wrapped (verification, fixed)
+
+- **Where:** `verify/formal/fifo_properties.svh`, the new `F_MARK` section (task `mark` in
+  `fifo.sby`).
+- **Found by:** the first runs of the task: induction failed, and a depth-40 BMC failed at step
+  34, the first step after `wptr` wrapped from 31 to 0, with every pointer equal to the model's.
+- **Cause:** `(g_w - g_base) <= F_DEPTH`: `F_DEPTH` is a 32-bit integer, so the subtraction is
+  done in 32 bits, and after a wrap `0 - 18` is negative, not 14. The RTL computes it in 5 bits.
+- **Before:**
+  ```systemverilog
+  wire g_full = (g_w - g_base) == F_DEPTH;
+  assert((g_w - g_base) <= F_DEPTH);
+  assert((g_r - g_base) <= (g_w - g_base));
+  ```
+- **After:**
+  ```systemverilog
+  wire [ADDR_BITS:0] g_used = g_w - g_base, g_ahead = g_r - g_base;
+  wire g_full = g_used == F_DEPTH;
+  assert(g_used <= F_DEPTH);
+  assert(g_ahead <= g_used);
+  ```
+- **Test:** `make formal FORMAL_BLOCK=fifo`. Before: `fifo_mark: FAIL` (BMC step 34) / `UNKNOWN`
+  (induction). After: `fifo_mark: PASS` by induction (depth 32), with `fifo` and `fifo_cover`.
+
+## BUG-080 — CAN error flag type taken after the error's own count (design, fixed before commit)
+
+- **Where:** `src/pbe_bsync.sv`, the error branch.
+- **Found by:** writing the reference node (`can_ref_node.sv`) from ISO 11898-1, which counts
+  "when a transmitter sends an error flag": the flag is sent in the state the node was in when
+  it detected the error. The RTL decided the flag type after adding the error's own +8.
+- **Effect:** the 16th transmit error (TEC 120 → 128) sent a recessive (passive) flag instead
+  of a dominant one: one error frame early.
+- **Before:**
+  ```systemverilog
+  wire pas_new = tec_add >= 10'd128 || rec_sat >= 9'd128;
+  ...
+  cs <= C_EFLAG; flag_on <= 1'b0; flag_pas <= pas_new;
+  ```
+- **After:** `cs <= C_EFLAG; flag_on <= 1'b0; flag_pas <= passive;` (the state before the count).
+- **Test:** `tb_can` scenario "error passive and bus-off" checks the flag type of every attempt
+  on the chip's TXD against the reference node's state. Before the fix the 16th flag is
+  recessive (`flag 16: passive, expected active`); after, the 16th is active and the 17th passive.
+
+## BUG-081 — `tb_line` D1 expected the wrong sample count (testbench, fixed before commit)
+
+- **Where:** `pbe_v1/test/tb_line_can.svh`, `run_line2_tests` and `run_bsync_tests` E6.
+- **Found by:** the first run: every sample point read 0 at both probe positions.
+- **Cause:** the expected sample count was `P/2+1`; the RTL's documented rule (pbe_line header)
+  is `floor(period_m1/2)+1` = `(P-1)/2+1`, one clock earlier for even `P`.
+- **Before:** `sp = P / 2 + 1 + k * (P / 8);`  **After:** `sp = (P - 1) / 2 + 1 + k * (P / 8);`
+- **Test:** `tb_line` D1 and E6. Before: `LINE2 sample point 0: X=18 read 0, X=19 read 0`.
+  After: all four sample points read 1 then 0 at the two probe positions.
+

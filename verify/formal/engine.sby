@@ -22,12 +22,12 @@ instruction_window: expect fail
 smtbmc yices
 
 [script]
-activity: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
-invariants: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
-fetch: read -formal -D F_KIND=1 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
-pc_window: read -formal -D F_KIND=2 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
-instruction_window: read -formal -D F_KIND=3 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
-timeout: read -formal -D F_KIND=4 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv
+activity: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
+invariants: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
+fetch: read -formal -D F_KIND=1 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
+pc_window: read -formal -D F_KIND=2 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
+instruction_window: read -formal -D F_KIND=3 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
+timeout: read -formal -D F_KIND=4 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
 prep -top engine_formal
 async2sync
 dffunmap
@@ -37,3 +37,4 @@ dffunmap
 engine_formal.sv
 ../../src/pbe_crc.sv
 ../../src/pbe_line.sv
+../../src/pbe_bsync.sv

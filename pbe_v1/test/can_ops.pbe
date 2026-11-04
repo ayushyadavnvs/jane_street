@@ -1,0 +1,47 @@
+; Unit test program for tb_engine_ops' second engine, in bit-synchronous (CAN) mode alone on a
+; bus: split pins (TX = pin 0, RX = pin 1), PULL NOWAIT, MARK, REWIND, LINECTL width and
+; stuffing, the CRC fed from the line, OSRCRC LEFT, and the line-event vector (TIMEOUT_PC = vec).
+; CRC unit: CRC-15/CAN (poly 0x4599, init 0). "123456789" after a dominant SOF gives 0x059E;
+; left-justified that is 0x0B3C.
+        PIN  0, DRV1
+        PULL NOWAIT          ; the TX FIFO is empty: 0xFF
+        MOV  ISR, OSR
+        PUSH                 ; -> ff
+        WAIT FLAG 0, HIGH    ; the testbench has queued "123456789"
+        MARK
+        PULL
+        MOV  ISR, OSR
+        PUSH                 ; -> 31
+        PULL
+        MOV  ISR, OSR
+        PUSH                 ; -> 32
+        REWIND
+        PULL                 ; the first byte again
+        MOV  ISR, OSR
+        PUSH                 ; -> 31
+        REWIND               ; and the whole frame from the start
+        CRCRST
+        SET  OSR, 0x00       ; SOF (a 1-bit unit, MSB first)
+        PIN  0, OUT
+        IN   0
+        LINECTL W8, ARB
+        SET  X, 8
+l:      PULL
+        PIN  0, OUT
+        IN   0
+        PUSH                 ; -> 31 .. 39, read back
+        JMP  X--, l
+        OSRCRC HI, LEFT
+        MOV  ISR, OSR
+        PUSH                 ; -> 0b
+        OSRCRC LO, LEFT
+        MOV  ISR, OSR
+        PUSH                 ; -> 3c
+        LINECTL STUFFOFF     ; the coder runs the tail: no ACK on this bus, an ACK error
+        IN   0               ; never completes: the frame ends in an error, so the vector
+        SET  OSR, 0xEE
+        MOV  ISR, OSR
+        PUSH                 ; -> (never)
+vec:    STAT
+        PUSH                 ; -> 10: line error only
+end:    JMP  end

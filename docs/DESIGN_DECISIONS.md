@@ -131,9 +131,9 @@ mark the old one **Changed** instead of deleting it.
 | 010 | `WAIT` | Wait for a pin or flag level or edge: start bits, clock edges, I2C clock stretching |
 | 011 | `JMP cond` | Loops (X--), ACK/NACK and glitch checks (pin), host handshakes (FIFO, flags) |
 | 100 | `SET X/OSR` | Bit counts and constants (USB SYNC) |
-| 101 | `PULL/PUSH` | Bytes to and from the host |
+| 101 | `PULL/PUSH` | Bytes to and from the host. **Changed (CAN):** `PULL`'s free bits [7:6] add `PULL NOWAIT`, `MARK` and `REWIND` (D70) |
 | 110 | `FLAG` | Coordination between engines and with the host; host interrupt |
-| 111 | `EXT` sub-ops: `CRCRST`, `OSRCRC`, `STAT`, `JCRCBAD`, `JEQ`, `JNE`, `JLINE` (7 of 8 used) | **Changed:** was reserved; v2 used it for USB (D20, retired). Then general extensions (D29–D31). **Changed again (USB in v1):** sub-ops 4–6 are the compare and line-event jumps (D40); sub-op 7 stays free |
+| 111 | `EXT` sub-ops: `CRCRST`, `OSRCRC`, `STAT`, `JCRCBAD`, `JEQ`, `JNE`, `JLINE` (7 of 8 used) | **Changed:** was reserved; v2 used it for USB (D20, retired). Then general extensions (D29–D31). **Changed again (USB in v1):** sub-ops 4–6 are the compare and line-event jumps (D40); sub-op 7 stays free. **Changed (CAN):** sub-op 7 is split by param[5]: 0 = `LINECTL` (D67), 1 = reserved for the proposed `PAGE` (D62) |
 
 - **`NOP` — Changed (USB):** The assembler originally emitted opcode 111 with argument 0 for
   `NOP`. That was harmless in v1 but in v2 the same word is `UTX`. `NOP` is now `FLAG` with
@@ -972,6 +972,9 @@ clean (0 design violations).
   treats status bit 4 as bad, like bit 1 clear. Modbus uses `STAT` without the line coder, so
   its line error is always 0; no other program uses `JCRCBAD`.
 - **Cost:** one OR gate and the clear on `CRCRST`.
+- **Extended (CAN, D71):** in bit-synchronous mode every bus error (stuff, bit, form, ACK, CRC)
+  is a line error, so `JCRCBAD` also jumps on a bit error. `CRCRST` also clears the new
+  per-packet bits (arbitration lost, bit error, frame sent).
 
 ## D49. USB host firmware: resend an IN packet whose ACK was lost; handle bus reset
 
@@ -1528,7 +1531,9 @@ clean (0 design violations).
   area. Programs longer than 64 words need wider jump targets, and no ARG bit is free (`JMP`
   and the EXT jumps use `[8:6]` + `[5:0]`): proposed a `PAGE p` instruction on EXT sub-op 7,
   the last free one (taken jumps go to `START_PC + {p, target}`; restart and the timeout reset
-  the page).
+  the page). **Changed (CAN, D67):** sub-op 7 with param[5] = 0 is now `LINECTL`; `PAGE` keeps
+  param[5] = 1, so `p` has at most 5 bits (32 pages of 64 words: far more than any memory
+  considered here).
 - **Expected:** ≈ 185k µm² saved (≈ 50 % → ≈ 29 % utilization), ≈ 1,800 fewer hold buffers,
   ≈ 9k fewer cells, D45's worst path gone. Not measured in the flow yet.
 - **Measured** (`make synth-sram`): 337,264 → 142,892 µm² of standard cells, plus 2 × 28,127 µm²
@@ -1608,3 +1613,172 @@ clean (0 design violations).
 - **Numbering:** main and round 2 both used D55-D56 and BUG-058. Round 2's numbers are kept
   (its evidence cites them); main's were renumbered: SRAM proposal D55 → D62, directory move
   D56 → D63, SRAM refetch bug BUG-058 → BUG-074.
+
+## D65. LINE2: a second line-coder register for timing, pins and bus access
+
+- **Problem:** the competition brief names CAN. The line coder (D39) could not do it: it
+  samples at a fixed 50 %, resynchronizes on every edge, drives and reads the same pin, and
+  starts a frame whenever data is queued.
+- **Chosen:** a per-engine register `LINE2` at second-page offset +4 (0x34 / 0x44), reset 0, read
+  back. Every bit at 0 is the old behaviour, so no existing program or test changes:
+  - `[2:0]` sample point: 0 the old `floor(period_m1/2)+1`; 1, 2, 3 add `N/8`, `N/4`, `3N/8`
+    (`N = period_m1 + 1`): 62.5 / 75 / 87.5 % when `N` is a multiple of 8. Shifted copies of
+    the period and one adder, no multiplier. 4–7 reserved (act as 0).
+  - `[3]` resynchronize on falling edges only.
+  - `[4]` receive on `pin_base + 1` (separate TXD/RXD for a transceiver; pair mode must be off).
+  - `[5]` bit-synchronous mode (D66).
+  - `[6]` before a frame starts, wait until the line has been idle for 11 bit times, or 3 after a
+    received frame end (counted at the sample point).
+- **Who else benefits:** the sample point and falling-edge-only resync help any NRZ receiver
+  with a slow or asymmetric edge (LIN, RS-485 with long stubs, J1708); split pins help every
+  protocol behind a transceiver (LIN, RS-485 half duplex, J1708, CAN); the idle wait is J1708's
+  and Modbus RTU's "bus quiet before transmit" (D47's 3.5-character rule is still the program's).
+- **Alternatives:** more bits in `LINE` (it has two reserved bits, not seven); a sample point as
+  a full 16-bit count (one more register pair; four fixed points cover CAN's usual 75–87.5 %).
+- **Verified:** `tb_line` D1–D3 (sample points, edge selection, idle wait), `tb_engine_ops`
+  (split pins), `tb_engine_known_reset` (all `LINE2` bits are four-state known after reset).
+
+## D66. Bit-synchronous (CAN) mode: one bit timer, readback, arbitration, the frame tail
+
+- **Problem:** CAN is not "send a frame, then receive one". Every node, the transmitter
+  included, reads every bit at the sample point and compares it with what it drove (bitwise
+  arbitration, bit errors, ACK); stuffing follows the bus; a node that loses arbitration must
+  become a receiver within the same bit. `pbe_line` has separate TX and RX timers, a 2-bit gap
+  and sync byte before every frame, and suppresses RX while it transmits.
+- **Chosen:** a new module `pbe_bsync`, selected by `LINE2[5]` instead of `pbe_line` (the
+  engine muxes their outputs; `pbe_line` is held clear). One timer: hard sync on the
+  start-of-frame edge, resync on falling edges, but not while this node drives dominant (its own
+  edge, delayed by the transceiver, ISO 11898-1 §11.3.2). Each bit start drives the next bit of
+  the current unit, the queued unit's first bit, or recessive if nothing is queued; each sample
+  point removes stuff bits, checks them, delivers the bit, feeds the CRC and compares it with the
+  driven level. A receiver therefore needs no OUT at all, and a transmitter that loses
+  arbitration just keeps receiving.
+  - **Units:** OUT and IN move units of 1–8 bits (`LINECTL`, D67): OUT takes the top bits of
+    OSR, IN gives them right-justified. A frame starts in units of 8 (`LINE[5]`) or 1. This lets a
+    program split the CAN header into fields the host and the program can use directly (`DLC`
+    lands in ISR alone).
+  - **CRC from the line:** the coder feeds the CRC with every bit of the stuffed region as it is
+    sampled, so the CRC is current at every sample point (a byte-mode IN would feed it 8 clocks
+    late, too late at 500 kbit/s to send the CRC on time). Feeding the received CRC field too
+    leaves the register at 0 for a good frame for transmitter and receiver alike, and shifts the
+    CRC left as it is sent, so `OSRCRC HI, LEFT` gives the next 8 CRC bits each time (D71).
+  - **The tail in hardware:** "stuffing off" ends the stuffed region (after a stuff bit already
+    due); the coder then runs CRC delimiter, ACK slot, ACK delimiter and EOF by itself, drives the
+    ACK if it did not transmit and `crc_ok`, and checks ACK, form and CRC errors.
+  - **Line-event vector:** in this mode an IN/OUT issued after a frame end or error jumps to
+    `TIMEOUT_PC` (consuming the event, dropping the queued unit) instead of completing, so a
+    program needs no `JLINE` after every IN; the 64-word `can_node` fits only this way.
+  - **Join:** a foreign SOF while a unit is queued (or queued before the SOF sample point) is
+    joined if this node may start, else the unit goes out silently and "arbitration lost" is set.
+- **Alternatives:**
+  - *Extend `pbe_line`:* its TX and RX paths are independent state machines with a different
+    frame model (gap, sync, SE0); merging the shared timer, readback and tail into it would make
+    every existing mode depend on CAN logic. A separate module keeps the default path untouched
+    (the default-config formal and the old tests are the proof) at the cost of a second timer.
+  - *Tail in the program:* about 15 more words (bit loop, role branch, ACK branch, form checks)
+    and a 6-clock deadline after each tail bit at 1 Mbit/s; the 64-word program does not fit.
+  - *CRC fed by IN (as in byte mode):* 8 clocks late per byte; see above.
+- **Who else benefits:** units of 1–8 bits suit any protocol with odd field widths (SENT's 4-bit
+  nibbles, 9-bit or 7-bit words, I2C's 7-bit address); readback with arbitration is what
+  single-wire CAN, J1850 VPW/PWM and the I2C multi-controller case need; split pins and the
+  idle wait are D65. The tail, ACK and error rules are CAN-only, gated by `LINE2[5]`.
+- **Verified:** `tb_line` E1–E6, `tb_engine_ops` (second engine), `tb_can` (D72).
+
+## D67. LINECTL: EXT sub-op 7 split by param[5]
+
+- **Chosen:** `EXT` sub-op 7 with param[5] = 0 is `LINECTL`, the bit-synchronous coder's
+  controls; param[5] = 1 stays reserved for D62's proposed `PAGE` and executes as nothing.
+  - param[4] = 0: unit width = param[2:0] + 1, arbitration window = param[3] (written together:
+    in CAN the window always ends at a unit boundary, after RTR).
+  - param[4] = 1: [0] stuffing off, [1] stuffing on, [2] error now (an error flag from the next
+    bit start, counted like any error).
+  - Without bit-synchronous mode `LINECTL` does nothing.
+- **Why split, not take the whole sub-op:** it is the last free sub-op and D62 needs it for
+  `PAGE`; `PAGE p` needs few bits (5 bits give 32 pages of 64 words).
+- **Alternatives:** an `OUT` variant (`PIN` act 7 is `END`; no act code free); a host register
+  (too slow: these change several times per frame); separate width and flag instructions (more
+  program words).
+- **Assembler:** `LINECTL W1..W8 [, ARB]`, `LINECTL STUFFOFF|STUFFON|ERROR [, ...]`.
+
+## D68. CAN error flags and error confinement in hardware
+
+- **Error flags (owner's choice):** on a stuff, bit, form, ACK or CRC error (or `LINECTL ERROR`)
+  the coder pulses its error and frame-end outputs, drops the queued unit, and from the next bit
+  sends 6 dominant bits (error-active) or 6 recessive bits that end after 6 equal bits on the
+  bus (error-passive), then the delimiter (wait for recessive, then 8 recessive bits). A CRC error
+  starts after the ACK delimiter (ISO 11898-1), an ACK error in the ACK delimiter.
+- **Error confinement — chosen: counters in hardware** (`TEC` 9 bits, `REC` 8 bits, a 7-bit
+  recovery counter), with the ISO rules: transmitter +8 (except an error-passive transmitter's
+  ACK error with no dominant bit in its passive flag), receiver +1, +8 for a receiver that reads
+  dominant right after its flag, +8 for a bit error in its own active flag, +8 after 14 dominant
+  bits following an active flag (8 after a passive one) and each 8 more, −1 on success (REC above
+  127 becomes 119). Error-passive at ≥ 128; bus-off at TEC > 255 (silent, no flags, no ACK) until
+  128 runs of 11 recessive bits, then both counters 0. An error-passive transmitter waits 8 more
+  bits (suspend transmission) before its next start. Host read: second page +5/+6/+7.
+- **Alternatives considered:**
+  1. *Counters in the program:* the engine has one 8-bit counter (X) that only decrements; +8,
+     −1 and the comparisons do not fit in the 64 words left by the frame code.
+  2. *Counters in the host, with a hardware "passive" bit and "bus-off" stop:* the flag type
+     must change at the very next error after the counter crosses 128, and the node must stop at
+     the error that takes TEC past 255. Two errors can be one error frame apart (about 25 bit
+     times, 50 µs at 500 kbit/s); a host on SPI that is slower than that sends the wrong flag or
+     keeps transmitting while bus-off. Exact timing cannot be guaranteed, which the owner ruled out
+     ("the protocol should behave correctly").
+  3. *Hardware counters (chosen):* about 30 flip-flops and the adders, CAN-only logic against
+     CLAUDE.md's "general" rule. Justified because the alternatives are either impossible (1) or
+     not exact (2), the logic is gated by `LINE2[5]`, and a CAN node that cannot leave the bus is
+     a hazard to every other node on it.
+- **Choices inside the rules:** the flag type is the state in which the error was detected
+  (ISO 11898-1 counts "when a transmitter sends an error flag", so the error that takes TEC to
+  128 still sends an active flag; the next one a passive flag); the counters are updated at
+  once; the node goes bus-off at once when TEC passes 255 (its flag would have been passive,
+  so recessive, anyway); REC saturates at 255; success after the last
+  EOF bit for receivers too (ISO: after the ACK slot; the net count is the same unless an error
+  hits EOF); the counters survive an engine restart (only reset or recovery clears them).
+- **Verified:** `tb_line` E3–E5 (flag in the next bit, TEC/REC), `tb_can` (D72: passive and
+  bus-off transitions against a reference node).
+
+## D69. Deviations from ISO 11898-1 (classic CAN)
+
+Known and accepted; each is a choice to keep the hardware small or the program within 64 words.
+- No overload frames: a dominant bit in the intermission is taken as a start of frame, and a
+  receiver ignores a dominant last EOF bit (ISO: an overload frame). Overload frames are
+  obsolete in practice (no current controller sends them for internal reasons).
+- Synchronization jump width is unlimited: every allowed falling edge restarts the bit timer
+  (ISO limits a resync to SJW). Robust against clock error, less so against glitches inside a
+  bit; the sample point is still where the program sets it.
+- A stuff error on a recessive stuff bit sent during arbitration counts like any transmitter
+  error (ISO exception 3b: no TEC increase).
+- Bus-off recovery starts by itself (ISO 11898-1:2015 lets the host request it).
+- `can_node.pbe` (D72): standard (11-bit) frames only; an extended frame, or a standard frame
+  with r0 recessive, is received as a remote frame with no data, so the node flags a stuff,
+  form or CRC error on it. DLC 9–15 are handled (8 bytes).
+- The "arbitration window" covers RTR, IDE, r0 and DLC3 (the program's unit boundary): a
+  mismatch there counts as lost arbitration, not a bit error. With unique IDs (which CAN
+  requires) the two can only differ at IDE.
+
+## D70. TX FIFO mark/rewind and PULL NOWAIT, for retransmission
+
+- **Problem:** CAN retransmits a frame after an error or lost arbitration, but `PULL` consumes
+  the TX FIFO: the frame is gone after the first attempt.
+- **Chosen:** `PULL`'s free bits [7:6]: `MARK` holds the TX FIFO read position, `REWIND` reads
+  again from it, `PULL NOWAIT` gives 0xFF instead of waiting when the FIFO is empty (a receiver
+  runs the transmitter's loop without data). While a mark is held the FIFO's `full` counts from
+  the mark, so the host cannot overwrite bytes a rewind still needs; without a mark `full`,
+  `empty` and `count` are exactly as before (the FIFO formal and robustness bench).
+- **Who else benefits:** any protocol that retransmits on its own: a USB device resending IN
+  data after a lost ACK (D49 left that to the host), Modbus or LIN retries, HDLC.
+- **Alternatives:** the host re-queues the frame (slow: the bus is idle meanwhile and the node
+  misses the arbitration right after the error frame); a copy of the frame in program memory
+  (no instructions read data memory).
+
+## D71. STAT/STATUS bits, OSRCRC LEFT
+
+- `STAT` and the host `STATUS` register (+F) gain [5] arbitration lost, [6] bit error and [7]
+  frame sent (the frame this node transmitted ended without error); the existing positions are
+  unchanged. Host clears are `STATUS` write bits [4], [5], [6]. `CRCRST` clears them with the
+  line error (they describe one packet, D48).
+- `OSRCRC` param[2] (`LEFT`) left-justifies the CRC to 16 bits before taking a byte: CRC-15's
+  high byte is bits 14..7. Existing param bits unchanged. With the line-fed CRC (D66), `OSRCRC HI,
+  LEFT` before each CRC unit gives the next bits to send.
+- JCRCBAD: see D48 (extended).

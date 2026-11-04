@@ -10,6 +10,14 @@
 //  C  Two coders back to back, CAN style (NRZ, stuff after 5 equal bits, single bits) and
 //     HDLC style (NRZI, stuff after 5 ones, bytes): what goes in comes out, and the line never
 //     holds more than the allowed run.
+//  D  LINE2 (D65) on pbe_line: the four sample points, falling-edge-only resync, and the
+//     bus-idle wait before a frame (11 idle bits, or 3 after a received frame end).
+//  E  The bit-synchronous (CAN) coder, pbe_bsync (D66), on a wired-AND bus with a 4-clock
+//     transceiver loop delay, against a CAN bit-stream encoder written here: integration
+//     and the 11-bit idle wait, readback of its own frame with no resync on its own edges
+//     (every bit exactly P clocks), the tail with an ACK, arbitration lost to a lower ID
+//     (stops driving at once, keeps receiving), the error flag in the bit after a stuff error,
+//     a bit error and LINECTL "error now", the four sample points with falling-edge-only resync.
 module tb_line;
   localparam int P = 32;  // clocks per bit (USB low speed at 48 MHz)
   logic clk = 0, rst_n = 0;
@@ -23,6 +31,7 @@ module tb_line;
   endtask
 
   // ---- coder under test (u) and a second one for the loopback tests (v) ----
+  logic [7:0] cfg2_u = 0;
   logic [7:0] cfg_u = 0, cfg_v = 0, sync_u = 0, sync_v = 0;
   logic       a_in = 1, b_in = 0, use_loop = 0;
   logic       put_u = 0, end_u = 0, take_u = 0, put_v = 0, end_v = 0, take_v = 0;
@@ -33,7 +42,7 @@ module tb_line;
   wire        line_v = drive_v ? ao_v : 1'b1;  // v transmits into u in the loopback tests
 
   pbe_line u (
-      .clk, .rst_n, .clear(1'b0), .cfg(cfg_u), .sync(sync_u), .period_m1(16'(P - 1)),
+      .clk, .rst_n, .clear(1'b0), .cfg(cfg_u), .cfg2(cfg2_u), .sync(sync_u), .period_m1(16'(P - 1)),
       .out_msb_first(1'b0), .in_msb_first(1'b0),
       .a_in(use_loop ? line_v : a_in), .b_in(use_loop ? 1'b0 : b_in),
       .drive(drive_u), .a_out(ao_u), .b_out(bo_u),
@@ -41,7 +50,7 @@ module tb_line;
       .rx_valid(rv_u), .rx_data(rd_u), .rx_take(take_u), .frame_end(fe_u), .err(err_u)
   );
   pbe_line v (
-      .clk, .rst_n, .clear(1'b0), .cfg(cfg_v), .sync(sync_v), .period_m1(16'(P - 1)),
+      .clk, .rst_n, .clear(1'b0), .cfg(cfg_v), .cfg2(8'h00), .sync(sync_v), .period_m1(16'(P - 1)),
       .out_msb_first(1'b0), .in_msb_first(1'b0),
       .a_in(1'b1), .b_in(1'b0),
       .drive(drive_v), .a_out(ao_v), .b_out(bo_v),
@@ -254,14 +263,18 @@ module tb_line;
     check(n_err_u == 0, "HDLC-style RX: stuff error on a good frame");
     $display("C: HDLC style (NRZI, stuff after 5 ones, bytes): %0d bytes round trip", got.size());
 
+    run_line2_tests();
+    run_bsync_tests();
     if (errors == 0) begin
       $display("PASS: line coder");
       $finish;
     end else $fatal(1, "FAILED with %0d error(s)", errors);
   end
 
+  `include "tb_line_can.svh"
+
   initial begin
-    #20ms;
+    #80ms;
     $fatal(1, "FAILED: timeout");
   end
 endmodule

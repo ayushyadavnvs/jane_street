@@ -22,7 +22,7 @@ USB_STACK = ('usb_signalling:dp=p1:dm=p0:signalling=low-speed,'
              'usb_packet:signalling=low-speed,usb_request:in_request_start=submit')
 
 SRC = [ROOT / 'src' / (x + '.sv') for x in
-       ('pbe_fifo', 'pbe_host_spi', 'pbe_crc', 'pbe_line', 'pbe_engine', 'tt_um_pbe')]
+       ('pbe_fifo', 'pbe_host_spi', 'pbe_crc', 'pbe_line', 'pbe_bsync', 'pbe_engine', 'tt_um_pbe')]
 
 
 def call(command, output, *, cwd=ROOT):

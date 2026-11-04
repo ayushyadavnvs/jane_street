@@ -14,11 +14,11 @@ module tb_spec_boundaries;
     .clkdiv(16'd0), .pin_base(3'd0), .jmp_pin(3'd0),
     .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(7'd0),
     .crc_poly(16'd0), .crc_cfg(8'd0), .timeout(16'd0), .line_cfg(8'd0),
-    .coder_cfg(8'd0), .sync(8'd0), .crc_good(16'd0),
-    .host_crc_init(1'b0), .host_tmo_clr(1'b0), .host_ovf_clr(1'b0), .host_lerr_clr(1'b0),
-    .status(), .crc_now(), .pc, .pc_copy(), .instr(prog[pc]), .pm_wr,
+    .coder_cfg(8'd0),.coder_cfg2(8'd0), .sync(8'd0), .crc_good(16'd0),
+    .host_crc_init(1'b0), .host_tmo_clr(1'b0), .host_ovf_clr(1'b0), .host_lerr_clr(1'b0),.host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),
+    .status(), .crc_now(),.can_tec(),.can_rec(),.can_state(), .pc, .pc_copy(), .instr(prog[pc]), .pm_wr,
     .pins_in(8'd0), .pins_out, .pins_oe,
-    .tx_data(8'd0), .tx_empty(1'b1), .tx_pop(),
+    .tx_data(8'd0), .tx_empty(1'b1), .tx_pop(),.tx_mark(),.tx_rewind(),
     .rx_data(), .rx_full(1'b0), .rx_push(),
     .flags(4'd0), .flag_set(), .flag_clr(), .irq()
   );

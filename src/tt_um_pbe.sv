@@ -42,15 +42,24 @@
 //      +E LINE_CFG   [5:0] TIMEOUT_PC (where a timeout jumps), [6] no parity, [7] odd parity
 //      +F STATUS     R: [0] receive parity error, [1] CRC ok (at CRC_GOOD), [2] timeout happened,
 //                       [3] RX overflow (a PUSH found the RX FIFO full; also raises IRQ),
-//                       [4] line error (line coder: stuff error, receive overrun, send underrun)
+//                       [4] line error (line coder: stuff error, receive overrun, send underrun;
+//                           bit-synchronous mode: any bus error), [5] arbitration lost,
+//                       [6] bit error, [7] frame sent (bit-synchronous mode, D71)
 //                    W: [0] = 1 restarts the CRC, [1] = 1 clears "timeout happened",
-//                       [2] = 1 clears "RX overflow", [3] = 1 clears "line error"
+//                       [2] = 1 clears "RX overflow", [3] = 1 clears "line error",
+//                       [4] = 1 clears "arbitration lost", [5] = 1 clears "bit error",
+//                       [6] = 1 clears "frame sent"
 //      +6 FIFO data: W pushes the TX FIFO, R pops the RX FIFO (each FIFO holds 16 bytes)
 //   0x30+0x10*e   engine e, second page:
 //      +0 LINE       line coder, see pbe_line: [1:0] mode (0 off, 1 NRZ, 2 NRZI), [3:2] stuffing
 //                    (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5 equal), [4] pair, [5] bytes
 //      +1 SYNC       frame start pattern (0 = none)
 //      +2 CRC_GOOD_L, +3 CRC_GOOD_H   the CRC value that means "ok" (0 unless the CRC is sent inverted)
+//      +4 LINE2      line coder (D65): [2:0] sample point (0 default, 1 62.5 %, 2 75 %, 3 87.5 %),
+//                    [3] resync on falling edges only, [4] receive on pin_base+1, [5] bit-synchronous
+//                    (CAN) mode, see pbe_bsync, [6] wait for bus idle before a frame. Reset 0.
+//      +5 CAN_TEC  R transmit error counter [7:0]; +6 CAN_REC R receive error counter
+//      +7 CAN_STATE R [0] TEC[8], [1] error-passive, [2] bus-off (bit-synchronous mode, D68)
 //
 // Edge/reset contract, clarified by the round-2 model audit (no logic changes):
 // Host pins and protocol pins pass through two clk registers; engines/host SPI consume
@@ -70,7 +79,9 @@
 // unqualified head storage (possibly stale/unknown); only a nonempty pop changes count.
 // Unmapped register reads return 0 and unmapped writes do nothing. Only the documented
 // low-width configuration bits are stored/read; other readback bits are 0. LINE[7:6]
-// are stored but reserved; unsupported mode 3 has no architectural guarantee.
+// are stored but reserved; unsupported mode 3 has no architectural guarantee. LINE2[7] is
+// stored but reserved. The CAN counters survive a restart; only reset (or bus-off recovery)
+// clears them.
 module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the name
     input  wire [7:0] ui_in,
     output wire [7:0] uo_out,
@@ -120,8 +131,11 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [5:0]  flag_base;  // 3 bits per engine
   logic [31:0] crc_poly, timeout;
   logic [15:0] crc_cfg, line_cfg;
-  logic [9:0]  e_status;   // 5 bits per engine
-  logic [15:0] coder_cfg, sync;
+  logic [15:0] e_status;   // 8 bits per engine
+  logic [15:0] coder_cfg, coder_cfg2, sync;
+  logic [17:0] can_tec;    // 9 bits per engine
+  logic [15:0] can_rec;
+  logic [3:0]  can_state;  // {bus-off, passive} per engine
   logic [31:0] crc_good;
   logic [31:0] e_crc;      // each engine's current CRC value
   logic [31:0] clkdiv;
@@ -139,7 +153,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [41:0] pc_copy;  // 3 x 7 bits per engine
   logic [31:0] instr;
   logic [15:0] e_out, e_oe, tx_data, rx_din, rx_dout;
-  logic [1:0]  tx_empty, tx_full, tx_pop, rx_empty, rx_full, rx_push, e_irq;
+  logic [1:0]  tx_empty, tx_full, tx_pop, tx_mark, tx_rewind, rx_empty, rx_full, rx_push, e_irq;
   logic [9:0]  tx_count, rx_count;  // 5 bits per engine
   logic [7:0]  f_set, f_clr;  // engine-relative, 4 bits per engine
   logic [15:0] p_set, p_clr;  // the same, mapped to physical flags, 8 bits per engine
@@ -172,6 +186,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       start_pc <= '0;
       pm_ptr   <= '0;
       coder_cfg <= '0;
+      coder_cfg2 <= '0;
       sync     <= '0;
       crc_good <= '0;
     end else begin
@@ -232,6 +247,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
           4'h1: if (wr_p1) sync[15:8] <= wr_data; else sync[7:0] <= wr_data;
           4'h2: if (wr_p1) crc_good[23:16] <= wr_data; else crc_good[7:0] <= wr_data;
           4'h3: if (wr_p1) crc_good[31:24] <= wr_data; else crc_good[15:8] <= wr_data;
+          4'h4: if (wr_p1) coder_cfg2[15:8] <= wr_data; else coder_cfg2[7:0] <= wr_data;
           default: ;
         endcase
       end
@@ -259,7 +275,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       4'hC:    eng_rd = rd_e1 ? timeout[23:16] : timeout[7:0];
       4'hD:    eng_rd = rd_e1 ? timeout[31:24] : timeout[15:8];
       4'hE:    eng_rd = rd_e1 ? line_cfg[15:8] : line_cfg[7:0];
-      4'hF:    eng_rd = {3'b0, rd_e1 ? e_status[9:5] : e_status[4:0]};
+      4'hF:    eng_rd = rd_e1 ? e_status[15:8] : e_status[7:0];
       4'h6:    eng_rd = rd_e1 ? rx_dout[15:8] : rx_dout[7:0];
       default: eng_rd = 8'h00;
     endcase
@@ -274,6 +290,10 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       4'h1:    pg_rd = rd_p1 ? sync[15:8] : sync[7:0];
       4'h2:    pg_rd = rd_p1 ? crc_good[23:16] : crc_good[7:0];
       4'h3:    pg_rd = rd_p1 ? crc_good[31:24] : crc_good[15:8];
+      4'h4:    pg_rd = rd_p1 ? coder_cfg2[15:8] : coder_cfg2[7:0];
+      4'h5:    pg_rd = rd_p1 ? can_tec[16:9] : can_tec[7:0];
+      4'h6:    pg_rd = rd_p1 ? can_rec[15:8] : can_rec[7:0];
+      4'h7:    pg_rd = {5'b0, rd_p1 ? {can_state[3:2], can_tec[17]} : {can_state[1:0], can_tec[8]}};
       default: pg_rd = 8'h00;
     endcase
   end
@@ -344,6 +364,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .push (wr_en && wr_addr == FIFO_ADDR),
         .din  (wr_data),
         .pop  (tx_pop[e]),
+        .mark (tx_mark[e]),
+        .rewind(tx_rewind[e]),
         .dout (tx_data[e*8+:8]),
         .empty(tx_empty[e]),
         .full (tx_full[e]),
@@ -356,6 +378,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .push (rx_push[e]),
         .din  (rx_din[e*8+:8]),
         .pop  (rd_done && rd_addr == FIFO_ADDR),
+        .mark (1'b0),
+        .rewind(1'b0),
         .dout (rx_dout[e*8+:8]),
         .empty(rx_empty[e]),
         .full (rx_full[e]),
@@ -386,13 +410,20 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .timeout      (timeout[e*16+:16]),
         .line_cfg     (line_cfg[e*8+:8]),
         .coder_cfg    (coder_cfg[e*8+:8]),
+        .coder_cfg2   (coder_cfg2[e*8+:8]),
         .sync         (sync[e*8+:8]),
         .crc_good     (crc_good[e*16+:16]),
         .host_crc_init(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[0]),
         .host_tmo_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[1]),
         .host_ovf_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[2]),
         .host_lerr_clr(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[3]),
-        .status       (e_status[e*5+:5]),
+        .host_arb_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[4]),
+        .host_berr_clr(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[5]),
+        .host_sent_clr(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[6]),
+        .status       (e_status[e*8+:8]),
+        .can_tec      (can_tec[e*9+:9]),
+        .can_rec      (can_rec[e*8+:8]),
+        .can_state    (can_state[e*2+:2]),
         .crc_now      (e_crc[e*16+:16]),
         .pc           (pc[e*7+:7]),
         .pc_copy      (pc_copy[e*21+:21]),
@@ -405,6 +436,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .tx_data      (tx_data[e*8+:8]),
         .tx_empty     (tx_empty[e]),
         .tx_pop       (tx_pop[e]),
+        .tx_mark      (tx_mark[e]),
+        .tx_rewind    (tx_rewind[e]),
         .rx_data      (rx_din[e*8+:8]),
         .rx_full      (rx_full[e]),
         .rx_push      (rx_push[e]),
