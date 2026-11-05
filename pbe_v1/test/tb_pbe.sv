@@ -372,7 +372,12 @@ module tb_pbe;
   real mb_gap_chars = 0;  // ...for this many character times (11 bits)
   int mb_bad = -1, mb_frames = 0, mb_par_err = 0, mb_stop_err = 0, mb_de_err = 0, mb_k, mb_m;
   real mb_max_gap = 0;
-  realtime mb_t_end;
+  // If >= 0: the response's first start bit begins this many ns after the master turned its
+  // driver off (instead of 1 bit after 3.5 characters of silence), to place it exactly
+  // against the program's idle timeouts (BUG-100).
+  real mb_resp_at = -1;
+  realtime mb_t_end, mb_de_off = 0, mb_rsp_start = 0;
+  always @(negedge bus[2]) if (mb_en) mb_de_off = $realtime;
   logic [7:0] mb_req_got[$], mb_resp[$];
   logic [7:0] mb_c, mb_o;
   bit mb_p, mb_s, mb_more, mb_first;
@@ -407,10 +412,12 @@ module tb_pbe;
     if (bus[2]) mb_de_err++;  // the master must have turned its driver off by now
     ext_drive[1] = 1;
     ext_val[1] = 1;
-    #(MB_BIT);
+    if (mb_resp_at >= 0 && mb_de_off + mb_resp_at > $realtime) #(mb_de_off + mb_resp_at - $realtime);
+    else #(MB_BIT);
     for (mb_m = 0; mb_m < mb_resp.size(); mb_m++) begin
       mb_o = mb_resp[mb_m];
       if (mb_m == mb_gap_at) #(mb_gap_chars * 11 * MB_BIT);  // a pause inside the frame
+      if (mb_m == 0) mb_rsp_start = $realtime;
       ext_val[1] = 0;  // start
       #(MB_BIT);
       for (mb_k = 0; mb_k < 8; mb_k++) begin
@@ -888,18 +895,33 @@ module tb_pbe;
 
     // round 0: normal; 1: response parity error; 2: response CRC corrupted; 3: normal at 115200;
     // 4: 8N2 at 19200; 5, 6: a 2-character pause inside the response at 19200 and 115200 (the
-    // frame is invalid, BUG-039); 7, 8: a 1-character pause at 115200 and 19200 (allowed)
-    for (int round = 0; round < 9; round++) begin
+    // frame is invalid, BUG-039); 7, 8: a 1-character pause at 115200 and 19200 (allowed);
+    // 9..15: the response's start edge lands just after an idle timeout, while the program runs
+    // the timeout routine between two WAITs (BUG-100): 0.1, 1.5 and 2.9 ticks after it at
+    // 19200, 0.1 and 2.9 at 115200, 0.1 at 8N2; 15: 0.1 ticks with the device 1% fast (an
+    // edge just after the timeout is seen ~3 ticks late, the worst case for sampling, D78)
+    for (int round = 0; round < 16; round++) begin
       bit invalid;
+      real mb_after;
 `ifdef PBE_SIGROK
       sigrok_phase = 50 + round;  // isolate each baud/parity/error scenario
 `endif
-      mb_baud = (round == 3 || round == 6 || round == 7) ? 115200.0 : 19200.0;
-      mb_npar = (round == 4);
+      mb_baud = (round == 3 || round == 6 || round == 7 || round == 12 || round == 13) ? 115200.0 : 19200.0;
+      mb_npar = (round == 4 || round == 14);
       reg_write(7'h1E, mb_npar ? 8'h41 : 8'h01);  // LINE_CFG: even parity, or a second stop bit
       mb_config;
+      // The idle program times out every TIMEOUT + 3 engine ticks after the driver goes off
+      // (WAIT, then tmo and JMP TX_EMPTY before the next WAIT); start just after the third.
+      case (round)
+        9, 12, 14, 15: mb_after = 0.1;
+        10:            mb_after = 1.5;
+        11, 13:        mb_after = 2.9;
+        default:   mb_after = -1;
+      endcase
+      mb_resp_at = (mb_after < 0) ? -1 : (3 * (mb_tmo + 3) + mb_after) * (mb_div + 1) * CLK_NS;
+      if (round == 15) MB_BIT = MB_BIT / 1.01;  // the device's clock 1% fast
       mb_bad = (round == 1) ? 3 : -1;
-      mb_gap_at = (round >= 5) ? 4 : -1;
+      mb_gap_at = (round >= 5 && round <= 8) ? 4 : -1;
       mb_gap_chars = (round == 5 || round == 6) ? 2.0 : 1.0;
       mb_resp = '{8'h01, 8'h03, 8'h04, 8'h12, 8'h34, 8'h56, 8'h78, 8'h81, 8'h07};
       if (round == 2) mb_resp[8] = 8'h06;  // wrong CRC high byte
@@ -908,6 +930,11 @@ module tb_pbe;
       mb_send;
       mb_receive;
       check(uo_out[1], "Modbus: no IRQ at the end of the response");
+      if (mb_resp_at >= 0)
+        check(mb_rsp_start - mb_de_off >= mb_resp_at - 1.0 && mb_rsp_start - mb_de_off <= mb_resp_at + 1.0,
+              $sformatf("Modbus round %0d: response started %0.0f ns after DE off, wanted %0.0f",
+                        round, mb_rsp_start - mb_de_off, mb_resp_at));
+      mb_resp_at = -1;
       flag_get(0, 3, invalid);             // FLAG3: the frame had a pause of over 1.5 characters
       flag_clear(0, 3);
       flag_clear(0, 2);
@@ -937,6 +964,9 @@ module tb_pbe;
         check(mb_max_gap <= 1.5 * 11 * MB_BIT, $sformatf("Modbus round %0d: %0.0f ns gap inside a request", round, mb_max_gap));
         $display("  round %0d at %0.0f baud %s: request with hardware CRC ok; response %0d parity error(s), CRC ok = %b",
                  round, mb_baud, mb_npar ? "8N2" : "8E1", mb_perr, mb_x[1]);
+        if (mb_after >= 0)
+          $display("    (its start edge %0.1f ticks after an idle timeout%0s)", mb_after,
+                   round == 15 ? ", the device 1% fast" : "");
       end
     end
     mb_npar = 0;

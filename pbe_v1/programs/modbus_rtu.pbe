@@ -69,7 +69,9 @@ fend:   FLAG 0, CLR
         FLAG 0, IRQ
 init:   PIN  tx, DRV1        ; line idles at mark (1)
         PIN  de, DRV0        ; driver off: listen
-idle:   WAIT rx, FALL [3]    ; start bit of a new frame (or a timeout -> tmo); then 1/2 bit
+idle:   WAIT rx, LOW [3]     ; start bit of a new frame (or a timeout -> tmo); then 1/2 bit.
+                             ; LOW, not FALL: a start edge during the timeout routine (the 3
+                             ; ticks before this WAIT runs again) is still seen (BUG-100, D78)
         JMP  PIN_HI, idle    ; line high again: a glitch
         SET  X, 6
         FLAG 0, SET          ; in a frame

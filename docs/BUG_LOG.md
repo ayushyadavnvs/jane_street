@@ -2451,3 +2451,32 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   the decoder is changed.
 - **Test:** `make sigrok-debug`. Before: `FAIL swd` (exit 1). After: `PASS jtag` and `PASS swd`
   at 20 ns, `PASS jtag` and `XFAIL swd` at 50 ns, exit 0.
+
+## BUG-100 — Modbus RTU: a response whose start edge came during the idle timeout routine was lost
+
+- **Where:** `pbe_v1/programs/modbus_rtu.pbe`, the idle wait.
+- **Found by:** review, recorded as a known limit in D47: while idle the program's `TIMEOUT`
+  (1.5 characters) fires every `TIMEOUT` + 3 ticks so it can poll the TX FIFO; the timeout
+  routine (`tmo: JMP FLAG0, gap`, `JMP TX_EMPTY, idle`) runs for 3 ticks before
+  `WAIT rx, FALL` waits again. `WAIT FALL` compares this clock's pin with the previous clock's
+  and an edge is not latched (the cycle contract in `pbe_engine.sv`), so a start edge in those 3
+  ticks was never seen. The program then took the first later falling edge inside the
+  character for a start bit: the frame came out shifted, with parity errors and a bad CRC.
+  Decision: D78.
+- **Before (62 words):**
+  ```
+  idle:   WAIT rx, FALL [3]    ; start bit of a new frame (or a timeout -> tmo); then 1/2 bit
+  ```
+- **After (62 words):**
+  ```
+  idle:   WAIT rx, LOW [3]     ; start bit of a new frame (or a timeout -> tmo); then 1/2 bit.
+  ```
+- **Test (Test 5, `tb_pbe.sv`):** the device model can start its response a given time after
+  the master turns its driver off (`mb_resp_at`); rounds 9–15 start it 0.1, 1.5 or 2.9 engine
+  ticks after the third idle timeout (3 × (`TIMEOUT` + 3) ticks), at 19200 and 115200 baud, 8E1
+  and 8N2, and once (round 15, 0.1 tick: the latest sampling) with the device's clock 1 % fast. The testbench checks
+  that the response started where it was asked to.
+  - Before: rounds 9–15 fail, e.g. `FAIL: Modbus round 9: host got 8 response bytes`,
+    `FAIL: Modbus round 9 response byte 0: c0`, `FAIL: Modbus round 9: engine reported 4 parity
+    errors`, `FAIL: Modbus round 9: CRC ok = 0`, and the same for rounds 10–15.
+  - After: all 16 rounds and the RX overflow test pass.

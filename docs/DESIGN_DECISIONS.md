@@ -910,7 +910,7 @@ clean (0 design violations).
     job limit.
   - Area, timing and the comparison with the estimates are in D45.
 
-## D47. Modbus RTU: a pause of more than 1.5 characters makes a frame invalid
+## D47. Modbus RTU: a pause of more than 1.5 characters makes a frame invalid — **Changed (idle start-bit wait, D78)**
 
 - **Rule:** Modbus over serial line, §2.5.1.1: the characters of a frame follow each other with
   at most 1.5 character times of silence; a frame with a longer pause must be discarded. A
@@ -945,6 +945,8 @@ clean (0 design violations).
 - **Known limit (not new):** while idle, a timeout every 1.5 characters runs 2 instructions
   (`tmo`, `JMP TX_EMPTY`) before `WAIT rx, FALL` waits again; a start edge in those 2 ticks
   would be missed. It was the same with 3.5 characters, only rarer.
+  **Changed (D78, BUG-100):** the window is 3 ticks (the `WAIT` itself issues on the third),
+  and the idle wait is now `WAIT rx, LOW`, which sees a start bit that began during it.
 - **Tested (Test 5):** a 2-character pause in a response at 19200 and 115200 baud is reported
   invalid (4 characters before the pause, none after); a 1-character pause at both rates is a
   valid frame; all earlier rounds (parity error, bad CRC, 8N2, RX overflow) still pass.
@@ -2087,3 +2089,62 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   rising edge).
 - **Unchanged:** no RTL change, so the golden model, the random differential, formal, coverage
   and stress need no change; `make test` (with `make diff N=2`) passes; `src/` is untouched.
+
+## D78. Modbus RTU: the idle wait for a start bit is level-based (`WAIT rx, LOW`)
+
+- **Problem (BUG-100, D47's known limit):** while idle, `modbus_rtu.pbe` times out every
+  `TIMEOUT` + 3 ticks (1.5 characters) to poll the TX FIFO. After each timeout `tmo` and
+  `JMP TX_EMPTY, idle` run before `WAIT rx, FALL` issues again, on the third tick. `WAIT FALL`
+  compares this clock's pin with the previous clock's and does not latch edges (the cycle
+  contract in `pbe_engine.sv`), so a start edge in those 3 ticks was missed and the next
+  falling edge inside the character was taken for the start bit: a lost response. With start
+  bits arriving at random phases that is 3 of every 144 ticks, about 2 % of responses.
+- **Chosen:** `idle: WAIT rx, LOW [3]` (same word, 62 of 64 words), as `uart_rx.pbe` already waits
+  for its start bit.
+  - **Normal case unchanged:** while the WAIT is blocked, `LOW` is met on the same clock as
+    `FALL` (the first clock the synchronized pin is 0), so a start edge during the WAIT is
+    timed exactly as before. Measured: first data bit sampled 1.504 bits after the start edge
+    at 19200 and 115200 baud, as before.
+  - **In the window:** the WAIT sees the line already low and goes on at once; the start bit is
+    timed from the WAIT, not from its edge, so sampling is late by up to 3 ticks (3/8 bit).
+    Measured: 1.869 bits (start edge 0.1 tick after the timeout), 1.693 (1.5 ticks), 1.518
+    (2.9 ticks).
+  - **The other paths need nothing:** after a timeout inside a frame `gap`/`gw` already poll the
+    level (`JMP PIN_LO`); `inframe` keeps `WAIT rx, FALL`, since it starts right after the
+    parity sample, more than a bit before the next start edge can come; the program reaches
+    `idle` after its own request, after 3.5 characters of silence or after an idle timeout,
+    with the line idle unless a start bit has just begun. `JMP PIN_HI, idle` still rejects a
+    glitch.
+- **Sample margin:** a character's sampling is timed from its start; the last sampled bit is
+  the parity (or the 2nd stop) bit, bit 9 after the start bit, sampled at 9.5 + L bit times
+  with lateness L. It must fall inside the sender's bit 9, from 9/r to 10/r for a sender r
+  times faster than the engine:
+
+  | Case | L (measured) | Sender may be faster by | slower by |
+  |---|---|---|---|
+  | start edge during the WAIT (always before) | 0.004 bit | 5.2 % | 5.3 % |
+  | start edge in the window, worst | 0.369 bit | 1.3 % | 8.8 % |
+
+  Only the window case (about 2 % of responses) loses margin, and only toward a fast sender;
+  before this change that case lost the frame at any rate. Test 5 runs the worst case with the
+  device 1 % fast. The engine's own rate error (the divider rounds to whole clocks: 313 instead
+  of 312.5 at 19200 baud, 0.16 %) is included in the measurement.
+- **Alternatives:**
+  - **Centre the window case (2 words, 64 of 64):** after a timeout, test the line once more
+    before the WAIT (`JMP PIN_LO, late` just before `idle`, and `late: JMP idle+1`): a start bit
+    seen there is timed from the test, and its lateness becomes −2 to +1 ticks (estimated
+    −2.7 % / +3.9 % in the window, normal case unchanged; not simulated). Not taken: it uses the program's last two words for
+    the rare case; a later Modbus fix would have no room. It stays the next step if a device
+    more than 1.3 % fast must be supported.
+  - **`WAIT rx, LOW [2]`:** centres the error over both cases (−1 to +2 ticks), but costs margin
+    in the normal case (−4.0 %) to give it to the rare one. Not taken.
+  - **An edge latch for `WAIT RISE/FALL` in the engine:** a WAIT would see an edge from before it
+    issued. That changes the meaning of every RISE/FALL wait (19 in `i2c_target`, `i2c_watch`,
+    `spi_periph` and Modbus's `inframe`, all written against "edges after the WAIT") and
+    needs a rule for when the latch is armed and cleared; each program would have to be checked
+    again. Not needed: the program fix is enough. No RTL change.
+- **Tested (Test 5, `tb_pbe.sv`):** rounds 9–15 start the response 0.1, 1.5 or 2.9 ticks after
+  the third idle timeout (3 × (`TIMEOUT` + 3) ticks after the master's driver goes off), at
+  19200 and 115200 baud, 8E1 and 8N2, and round 15 at 0.1 tick with the device 1 % fast; every
+  byte, the parity status and the CRC must be right. Rounds 0–8 (19200/115200, 8E1/8N2, parity
+  error, bad CRC, the 1.5-character gap rule) and the RX overflow test still pass.
