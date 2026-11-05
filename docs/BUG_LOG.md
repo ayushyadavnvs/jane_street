@@ -2434,3 +2434,20 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   requests in scenarios 1–7 are still checked (a malformed request after a line reset that is
   not the switch sequence still counts).
 
+## BUG-099 — sigrok's swd decoder samples the target's bits at the falling edge (tool limitation, recorded as an expected failure)
+
+- **Where:** libsigrokdecode 0.5.3 `decoders/swd/pd.py` (unchanged): `next_state` sets
+  `sample_edge = FALLING` for the ACK and read-data states.
+- **Found by:** `make sigrok-debug` after BUG-096 raised the models' TCO to 50 ns: `FAIL swd:
+  annotation 4: decoded 'ERROR', expected 'OK'` and 38 more ACKs decoded as ERROR or NOREPLY.
+  At 8 MHz SWCLK is high for 41.7 ns, so at the falling edge a 50 ns-late target still shows
+  the previous bit. ADIv5 requires the target's bit only at the host's sample point (before the
+  next rising edge); `swd.pbe` reads it 62.5 ns after the rising edge, and the testbench passes.
+- **Before:** one capture, with `make test`'s 50 ns targets, compared exactly.
+- **After:** `debug_verify.py` decodes a capture with 20 ns targets (`-DPBE_TCO=20.0`), which
+  must match exactly, and the 50 ns capture, where JTAG must match and SWD must show the exact
+  signature: `['LINERESET', 'JTAG->SWD', 'LINERESET', 'IDCODE', 'ERROR']` (the host's bits,
+  sampled at rising edges, right; the first ACK read one bit late), reported as XFAIL. Nothing in
+  the decoder is changed.
+- **Test:** `make sigrok-debug`. Before: `FAIL swd` (exit 1). After: `PASS jtag` and `PASS swd`
+  at 20 ns, `PASS jtag` and `XFAIL swd` at 50 ns, exit 0.

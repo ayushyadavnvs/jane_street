@@ -1986,7 +1986,7 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   registers would be needed, the engine has one output shift register (OSR); a flag to share
   the shift loop between commands 1 and 2 (uses a host-visible flag for 5 words the window does
   not need: the program is 42 of 64 words).
-- **Verified:** `tb_debug` against `jtag_tap.sv`, a TAP written from 1149.1 (the 16-state
+- **Verified:** `tb_debug` (D77) against `jtag_tap.sv`, a TAP written from 1149.1 (the 16-state
   controller, 4-bit IR capturing 0001, IDCODE selected by Test-Logic-Reset, BYPASS for unused
   opcodes, a 32-bit USER register; TDO changes at falling edges, 50 ns late): reset and IDCODE,
   IR = BYPASS with the 1-bit delay, 32-bit USER write and read-back, 1- and 7-bit scans, a chain
@@ -2050,7 +2050,7 @@ Known and accepted; each is a choice to keep the hardware small or the program w
 - **If more were needed:** a "keep the send parity" variant of `PULL` (the parity not reset by
   an OSR load) would let `OUTPAR` send the parity of a word of any length; it would also serve
   multi-byte parities elsewhere. Not made: the program meets the protocol without it.
-- **Verified:** `tb_debug` against `swd_dp.sv`, an SW-DP written from ADIv5.2 (SWJ-DP
+- **Verified:** `tb_debug` (D77) against `swd_dp.sv`, an SW-DP written from ADIv5.2 (SWJ-DP
   switch, watched in both modes, line reset and the DPIDR-first rule, request parity/Stop/Park checking with lockout,
   CTRL/STAT, SELECT, RDBUFF, ABORT, sticky errors and FAULT, WDATAERR on a write parity error,
   posted AP reads, a MEM-AP-like AP with CSW, TAR, DRW and IDR, configurable WAIT, FAULT and
@@ -2061,3 +2061,29 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   JTAG on the other engine, and a DPIDR read at CLKDIV = 0xFFFF. The host and the target never
   drive SWDIO together, and the host never changes it while SWCLK is high.
 
+## D77. Independent checks of JTAG and SWD
+
+- **Target models from the standards** (`pbe_v1/test/jtag_tap.sv`, `swd_dp.sv`), written before
+  the programs were run against them and not from the programs. `tb_debug` runs four phases:
+  JTAG alone, SWD alone, both at once (JTAG on engine 0, SWD on engine 1, two host processes
+  sharing the host port), all at CLKDIV = 0 (the fastest); then both at once at CLKDIV = 0xFFFF
+  (the slowest: an IDCODE and a DPIDR read, about 45 cycles each, are 15 million clocks; the
+  full scenario sets would take hours of simulation). It measures every TCK and SWCLK phase.
+- **sigrok** (`make sigrok-debug`, `verify/golden-model/sigrok/debug_verify.py`): the
+  concurrent phase's pins decoded by the stock `jtag` and `swd` decoders of libsigrokdecode
+  0.5.3, unchanged, on a capture with targets driving 20 ns after their clock edge. JTAG: all 14
+  IR/DR scans (1 to 64 bits, one and two TAPs) from the decoder's own TAP state machine equal
+  the host's TDI and TDO. SWD: the decoder's 99 annotations equal the expected sequence: the
+  switch (LINERESET, JTAG->SWD, LINERESET), 33 transactions (register name, ACK, data)
+  including WAIT and FAULT, a final line reset, and its parity-error annotation on exactly the
+  two transactions with a deliberate parity error. `jtag_arm` is not used: it decodes ARM's
+  JTAG-DP registers, which the TAP model does not have.
+- **Expected failure (decoder limitation, BUG-099):** the `swd` decoder samples the target's
+  bits at the falling edge of SWCLK. ADIv5 needs them only at the host's sample point, and
+  `swd.pbe` reads them 62.5 ns after the rising edge; at 8 MHz the falling edge is at 41.7 ns.
+  On a second capture with `make test`'s 50 ns targets the decoder reads every target bit one
+  cycle late. The script checks that exact signature (switch and first request right, the first
+  ACK `ERROR`) and reports XFAIL; JTAG passes on that capture too (its decoder samples TDO at the
+  rising edge).
+- **Unchanged:** no RTL change, so the golden model, the random differential, formal, coverage
+  and stress need no change; `make test` (with `make diff N=2`) passes; `src/` is untouched.

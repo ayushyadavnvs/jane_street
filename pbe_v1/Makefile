@@ -210,6 +210,11 @@ sigrok:
 sigrok-can:
 	$(PYTHON) $(GM)/sigrok/can_verify.py --sigrok-cli "$(SIGROK_CLI)"
 
+# sigrok's stock jtag and swd decoders on tb_debug's pins (D77)
+.PHONY: sigrok-debug
+sigrok-debug:
+	$(PYTHON) $(GM)/sigrok/debug_verify.py --sigrok-cli "$(SIGROK_CLI)"
+
 # A strict comparison: libsigrokdecode 0.5.3 intentionally returns nonzero here.
 sigrok-full:
 	$(PYTHON) $(GM)/sigrok/sigrok_verify.py --sigrok-cli "$(SIGROK_CLI)" --full-usb-request
