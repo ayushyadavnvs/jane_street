@@ -41,6 +41,7 @@ mark the old one **Changed** instead of deleting it.
 | USB | New per-engine settings, but +0..+F were full | Second register page per engine at 0x30 / 0x40 | D32, D44 |
 | USB (its firmware) | Burst reads could lose a byte; a flush on SETUP threw away an OUT record | `RX_COUNT`/`TX_COUNT` registers, `TX_FLUSH` | D43, BUG-030, BUG-031 |
 | 48 MHz (USB, D18) in the first routed run | 0.586 ns of setup slack: pc → program memory → decode → next pc in one clock, through long buffer chains | An instruction register with a prefetch; four copies of the read address. A taken jump costs one clock more at CLKDIV = 0 | D7, D18, D50 |
+| JTAG | Nothing: a program on the existing instructions | — | D75 |
 
 ---
 
@@ -1935,4 +1936,61 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   and the IDE/r0 bit. Then a standard frame (engine 0) and an extended frame (reference) with
   the same base ID 0x123 start together: the standard frame wins on SRR/IDE, the extended
   sender receives it and then sends its own, intact (checked by a second reference node).
+
+
+## D75. jtag.pbe: an IEEE 1149.1 JTAG controller in 42 words, a program only
+
+- **Problem:** the competition brief names JTAG. It is to be a program: no RTL change.
+- **Pins:** TCK = pin base, TMS = + 1, TDI = + 2 (outputs), TDO = + 3 (input). The 1149.1 signal
+  order, outputs first like `spi_ctrl` (SCLK, MOSI, MISO, CS). Four pins leave the other engine
+  four. Board: a pull-up on TDO (the target leaves it
+  high-impedance outside Shift-xR), and a pull-down on TCK (a restart releases the engine's pins
+  for a few clocks, and a pulled-up TCK would rise); TMS and TDI usually have pull-ups at the target.
+- **Host protocol:** records of 3 TX bytes, `[command] [n - 1] [bits]`, n = 1..8, LSB first:
+  0 = clock n cycles with TMS = the bits (state navigation, TDI kept); 1 = shift n bits with
+  TMS = 0; 2 = shift n bits, TMS = 1 on the last (exit to Exit1-xR). A shift record returns one
+  RX byte with the n TDO bits in its top n bits (RX >> (8 − n)). A scan of any length is a
+  sequence of shift records (32 bits: three 1s and a 2). TDI held constant (BYPASS, don't care)
+  is just 0xFF or 0x00 as the data. Run-Test/Idle, Pause and every other state are reached with
+  TMS records.
+- **Why records of up to 8 bits, not a byte count plus a last-byte bit count:** the engine has one
+  counter (X); OSR and ISR hold the data. A byte count would need a second counter for the bits
+  of each byte. Per-byte records cost the host 2 bytes per 8 bits and the TCK a pause between
+  records (TCK may stop low indefinitely, 1149.1 4.1), and allow any length. The command is
+  decoded with the `JMP X--` chain (one word per command, as `MOV X, OSR` loads it).
+- **TMS = 1 on the last bit:** it must be set before the last rising edge, and `JMP X--` only
+  says "zero" after a bit. So command 2 has its own loop over n − 1 bits (entered through a
+  `JMP X--` that also decrements X), then the last bit with TMS = 1: 5 words more than sharing
+  one loop and a flag, which would take the host's flags.
+- **TDO in the top bits:** `IN` (LSB first) shifts into bit 7. Right-justifying would need 8 − n
+  more shifts without a TCK edge; the host's shift is free.
+- **Timing (1149.1 4.2, 4.5):** TMS and TDI change one tick after the falling edge of TCK; TDO
+  is read while TCK is high. One TCK period is 5 ticks (high 2, low 3). A pin reaches the engine
+  3 clocks after it changes (two synchronizer stages, then the engine's registered decision):
+  the `IN` right after the rising edge at CLKDIV = 0 sees TDO as it was 3 clocks (62.5 ns) after
+  the falling edge that launched it, just before the rising edge; at CLKDIV ≥ 2 it sees it at or
+  after the rising edge. Both read the bit that is on TDO at that rising edge, since the target
+  changes TDO only at falling edges.
+  - **Speed:** at CLKDIV = 0 a taken jump's fetch clock (D50) lengthens the low phase:
+    6 clocks, **TCK = 8 MHz at 48 MHz, the maximum** (high 41.7 ns, low 83.3 ns, TMS/TDI set up
+    20.8 ns before the rising edge). CLKDIV ≥ 1: TCK = 48 MHz / (5 (CLKDIV + 1)), 4.8 MHz at
+    CLKDIV = 1, down to 146 Hz at 0xFFFF.
+  - **Target delay budget** at CLKDIV = 0: TDO must be valid 62.5 ns after the falling edge,
+    minus the board and pad delays. Measured in `tb_debug`: a TAP with TDO 60 ns after the
+    edge passes, 66 ns fails. A larger CLKDIV gives more.
+- **Limitations:** no TRST* (Test-Logic-Reset by five TMS ones, which 1149.1 allows); no RTCK
+  (adaptive clocking): TCK is set by CLKDIV only; the host's TX FIFO feeds 16 bytes, 5 records,
+  so long scans run at the host's rate with TCK pauses between records; a TMS record returns no
+  TDO.
+- **Rejected:** a TMS byte and a TDI byte per bit group (TMS and TDI both from data): two shift
+  registers would be needed, the engine has one output shift register (OSR); a flag to share
+  the shift loop between commands 1 and 2 (uses a host-visible flag for 5 words the window does
+  not need: the program is 42 of 64 words).
+- **Verified:** `tb_debug` against `jtag_tap.sv`, a TAP written from 1149.1 (the 16-state
+  controller, 4-bit IR capturing 0001, IDCODE selected by Test-Logic-Reset, BYPASS for unused
+  opcodes, a 32-bit USER register; TDO changes at falling edges, 50 ns late): reset and IDCODE,
+  IR = BYPASS with the 1-bit delay, 32-bit USER write and read-back, 1- and 7-bit scans, a chain
+  of two TAPs (both IDCODEs in one 64-bit scan, an 8-bit IR scan, a 33-bit DR through one TAP's
+  BYPASS); at CLKDIV = 0, and the IDCODE read at CLKDIV = 0xFFFF. TMS and TDI never change
+  while TCK is high.
 

@@ -1,0 +1,74 @@
+; JTAG controller (IEEE 1149.1 test access port host), D75.
+; Pins (relative to pin base): TCK = 0, TMS = 1, TDI = 2 are outputs; TDO = 3 is an input
+; (a pull-up on TDO is usual: the target leaves it high-impedance outside Shift-DR/Shift-IR).
+; Engine settings: SHIFT = 0x00 (OUT and IN LSB first, as JTAG shifts); TIMEOUT = 0;
+;   LINE_CFG = 0; CRC off; JMP_PIN unused.
+; Timing (1149.1): TMS and TDI change only while TCK is low, one tick after its falling edge;
+;   TDO is sampled while TCK is high, from the rising edge on (the target changes TDO on the
+;   falling edge). One TCK period is 5 ticks: high 2, low 3. CLKDIV = 0 adds the taken jump's
+;   fetch clock to the low phase: 6 clocks, TCK = 8 MHz at 48 MHz. CLKDIV >= 1:
+;   TCK = 48 MHz / (5 * (CLKDIV + 1)), e.g. 4.8 MHz at CLKDIV = 1, 1 MHz at CLKDIV = 9.
+;   TCK may stop low between records (between bytes), which 1149.1 allows.
+;
+; Host protocol: records in the TX FIFO, each [command] [n - 1] [bits], n = 1..8 bits, LSB first.
+;   [0x00] [n-1] [tms]   clock n TCK cycles with TMS = the bits (state navigation); TDI keeps its
+;                        level; no RX byte.
+;   [0x01] [n-1] [tdi]   shift n bits with TMS = 0 (stay in Shift-DR/IR); RX: one TDO byte.
+;   [0x02] [n-1] [tdi]   shift n bits, TMS = 1 on the last one (exit to Exit1-DR/IR); RX: one byte.
+;   A shift record's RX byte holds the n TDO bits in its top n bits: TDO bit i (i = 0 first) is
+;   RX bit 8 - n + i, so the host takes RX >> (8 - n). A longer scan is several records: e.g. a
+;   32-bit DR scan is three [0x01][7][..] and one [0x02][7][..], giving 4 TDO bytes in order.
+;   TDI held constant (BYPASS, or "don't care"): send 0xFF (or 0x00) as the data bytes.
+;   Example, from any state: [0][4][0x1F] five TMS ones = Test-Logic-Reset; [0][3][0x02] TMS 0,1,0,0
+;   = Run-Test/Idle, Select-DR, Capture-DR, Shift-DR; then the shift records; then [0][1][0x01]
+;   TMS 1,0 = Update-DR, Run-Test/Idle.
+.equ tck 0
+.equ tms 1
+.equ tdi 2
+.equ tdo 3
+
+        PIN  tck, DRV0
+        PIN  tms, DRV1           ; TMS high holds the TAP in Test-Logic-Reset
+        PIN  tdi, DRV1
+cmd:    PULL                     ; command
+        MOV  X, OSR
+        PULL                     ; n - 1
+        JMP  X--, shift          ; 1 or 2
+; [0x00] TMS sequence
+        MOV  X, OSR
+        PULL                     ; the TMS bits
+tbit:   PIN  tms, OUT            ; TCK low: TMS for the next rising edge
+        PIN  tck, DRV1 [1]       ; rising edge: the TAP takes TMS
+        PIN  tck, DRV0
+        JMP  X--, tbit
+        JMP  cmd
+shift:  PIN  tms, DRV0
+        JMP  X--, sexit          ; command 2
+; [0x01] shift n bits, TMS = 0
+        MOV  X, OSR
+        PULL                     ; TDI bits
+        PIN  tdi, OUT            ; the first TDI bit, before the first rising edge
+s1:     PIN  tck, DRV1           ; rising edge: the TAP takes TDI and TMS
+        IN   tdo                 ; TCK high: TDO, set at the last falling edge
+        PIN  tck, DRV0           ; falling edge: the TAP sets its next TDO bit
+        PIN  tdi, OUT            ; the next TDI bit (after the last bit: unused)
+        JMP  X--, s1
+        PUSH
+        JMP  cmd
+; [0x02] shift n bits, TMS = 1 on the last
+sexit:  MOV  X, OSR
+        PULL
+        PIN  tdi, OUT
+        JMP  X--, s2             ; n > 1: X = n - 2, the loop shifts n - 1 bits
+        JMP  last
+s2:     PIN  tck, DRV1
+        IN   tdo
+        PIN  tck, DRV0
+        PIN  tdi, OUT
+        JMP  X--, s2
+last:   PIN  tms, DRV1           ; TCK low: TMS = 1 for the last bit
+        PIN  tck, DRV1
+        IN   tdo
+        PIN  tck, DRV0
+        PUSH
+        JMP  cmd
