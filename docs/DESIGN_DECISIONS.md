@@ -41,7 +41,7 @@ mark the old one **Changed** instead of deleting it.
 | USB | New per-engine settings, but +0..+F were full | Second register page per engine at 0x30 / 0x40 | D32, D44 |
 | USB (its firmware) | Burst reads could lose a byte; a flush on SETUP threw away an OUT record | `RX_COUNT`/`TX_COUNT` registers, `TX_FLUSH` | D43, BUG-030, BUG-031 |
 | 48 MHz (USB, D18) in the first routed run | 0.586 ns of setup slack: pc → program memory → decode → next pc in one clock, through long buffer chains | An instruction register with a prefetch; four copies of the read address. A taken jump costs one clock more at CLKDIV = 0 | D7, D18, D50 |
-| JTAG | Nothing: a program on the existing instructions | — | D75 |
+| JTAG, SWD | Nothing: both are programs on the existing instructions (SWD fills its 64-word window; the host computes the write parity, as `OUTPAR` covers one OSR load) | — | D75, D76 |
 
 ---
 
@@ -1943,9 +1943,9 @@ Known and accepted; each is a choice to keep the hardware small or the program w
 - **Problem:** the competition brief names JTAG. It is to be a program: no RTL change.
 - **Pins:** TCK = pin base, TMS = + 1, TDI = + 2 (outputs), TDO = + 3 (input). The 1149.1 signal
   order, outputs first like `spi_ctrl` (SCLK, MOSI, MISO, CS). Four pins leave the other engine
-  four. Board: a pull-up on TDO (the target leaves it
+  four, enough for SWD (D76) at the same time. Board: a pull-up on TDO (the target leaves it
   high-impedance outside Shift-xR), and a pull-down on TCK (a restart releases the engine's pins
-  for a few clocks, and a pulled-up TCK would rise); TMS and TDI usually have pull-ups at the target.
+  for a few clocks, BUG-095); TMS and TDI usually have pull-ups at the target.
 - **Host protocol:** records of 3 TX bytes, `[command] [n - 1] [bits]`, n = 1..8, LSB first:
   0 = clock n cycles with TMS = the bits (state navigation, TDI kept); 1 = shift n bits with
   TMS = 0; 2 = shift n bits, TMS = 1 on the last (exit to Exit1-xR). A shift record returns one
@@ -1991,6 +1991,73 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   opcodes, a 32-bit USER register; TDO changes at falling edges, 50 ns late): reset and IDCODE,
   IR = BYPASS with the 1-bit delay, 32-bit USER write and read-back, 1- and 7-bit scans, a chain
   of two TAPs (both IDCODEs in one 64-bit scan, an 8-bit IR scan, a 33-bit DR through one TAP's
-  BYPASS); at CLKDIV = 0, and the IDCODE read at CLKDIV = 0xFFFF. TMS and TDI never change
-  while TCK is high.
+  BYPASS); at CLKDIV = 0 alone and with SWD on the other engine, and the IDCODE read at
+  CLKDIV = 0xFFFF. TMS and TDI never change while TCK is high.
+
+## D76. swd.pbe: an ARM ADIv5 SWD host in 64 words, a program only
+
+- **Problem:** the brief names SWD (ARM Serial Wire Debug, the SW-DP of ADIv5). A program only.
+- **Pins:** SWCLK = pin base (output), SWDIO = + 1 (driven, released with `PIN REL` for the
+  turnarounds and the target's bits). Board: a pull-up on SWDIO (ADIv5 B4.1.1; 10–100 kΩ), so a
+  released line reads 1, and a pull-down on SWCLK (a restart releases the pins, BUG-095).
+- **Host protocol:**
+  - `[0x00] [b]`: 8 cycles with SWDIO = b (LSB first). Line reset = seven 0xFF (56 ones) and
+    0x00 (idle); the JTAG-to-SWD switch = line reset, 0x9E, 0xE7 (0xE79E LSB first), line reset,
+    0x00 (B5.2.1). Also any other host-driven bit sequence, e.g. DPv2's TARGETSEL write (whose
+    ACK the target does not drive).
+  - `[0x01] [req]` read; `[0x02] [req] [d0..d3] [p]` write. `req` is the 8-bit request (Start,
+    APnDP, RnW, A[2], A[3], Parity, Stop, Park; 0xA5 reads DPIDR); `p` bit 0 is the data parity,
+    bits 1–7 are 0 and go out as 7 idle cycles.
+  - RX: `[ack]` (ACK bits 0..2 in bits 5..7: OK 0x20, WAIT 0x40, FAULT 0x80, no response 0xE0),
+    and for an OK read `[d0..d3] [status]`, status bit 0 = parity error.
+  - WAIT and FAULT: turnaround and no data phase (B4.2.3, CTRL/STAT.ORUNDETECT = 0); a write's 5
+    data bytes are taken from the TX FIFO and dropped. The host retries after WAIT, and after
+    FAULT reads CTRL/STAT and writes ABORT.
+- **Parity:** a read's parity is checked by the engine: the receive parity counts every `IN`
+  since `STAT`, across the 4 bytes, and `STAT` after the parity bit gives the error. The send
+  parity (`OUTPAR`) counts `OUT` bits since the last OSR load, so it covers one byte: a 32-bit
+  word is four `PULL`s. The host therefore computes the write parity (and the request's parity,
+  in the request byte it sends). Rejected: *reading SWDIO back while driving it* (the receive
+  parity would then cover the written bits, and `STAT` + `MOV OSR, ISR` + `OUT` would send it):
+  it needs ISR, which is the write's byte counter (below); *the request built by the program*
+  (Start, `OUT` × 4, `OUTPAR`, Stop, Park as separate pin actions): 12 more words than sending
+  the host's byte, and the window has none.
+- **Counters:** X counts bits. Bytes are counted without a second counter:
+  - the request loop stops when OSR = ISR = 0 (Park, bit 7, is always 1, so OSR is 0 exactly
+    after 8 bits), which keeps X free to hold read (0) or write (1) through the request;
+  - a read's 4 data bytes: OSR = 0x0F, shifted by `PIN dio, OUTOD` (its bit is a 1, so SWDIO
+    stays released) after each `PUSH`, until OSR equals ISR (0 after the `PUSH`);
+  - raw and write bytes: ISR shifted by `IN clk` (SWCLK is low: a 0 comes in) after each byte,
+    until ISR equals OSR (0 after 8 bits). A raw record starts with ISR = 0 (1 byte); a write
+    starts with ISR = 0x20 (the OK ACK, copied from OSR) and enters at the shift: 5 bytes.
+  - Rejected: two flags as a 2-bit byte counter (9 words, and host-visible); unrolling the
+    bytes (24 or more words).
+- **ACK:** three `IN`s put ACK[0..2] in ISR bits 5..7; `JNE` against 0x20 picks the path. The ACK
+  is the first RX byte of every transaction, so the host knows how many follow.
+- **Timing (B4.1, B4.2):** the host changes SWDIO one tick after the falling edge; the target
+  samples it at the rising edge, drives its bits after the rising edge, and the host reads them
+  while SWCLK is low. With the 3-clock pin latency (D75) every `IN` of a target bit is placed so
+  that it sees SWDIO after the falling edge, where sigrok's decoder samples too: a target bit is
+  read 62.5 ns after the rising edge that launched it at CLKDIV = 0 (measured: a target driving
+  60 ns late passes, 66 ns fails). The ACK cycles' low phase has an extra tick for this
+  (BUG-096), and the Park and the read turnaround cycles one more each, so every cycle at
+  CLKDIV = 0 is 6 clocks: **SWCLK = 8 MHz at 48 MHz, the maximum** (high 41.7 ns, low 83.3 ns).
+  CLKDIV ≥ 1: 48 MHz / (5 (CLKDIV + 1)) in the loops, 146 Hz at 0xFFFF. SWCLK stops low between
+  records. Turnaround is 1 cycle (DLCR.TURNROUND = 0, the reset value).
+- **Size:** 64 of 64 words; with `jtag.pbe` (42) both fit the 128-word memory and run at once.
+  Not supported for lack of words: overrun detection (ORUNDETECT = 1 needs the data phase after
+  WAIT/FAULT), turnaround > 1 cycle, the program computing parities.
+- **If more were needed:** a "keep the send parity" variant of `PULL` (the parity not reset by
+  an OSR load) would let `OUTPAR` send the parity of a word of any length; it would also serve
+  multi-byte parities elsewhere. Not made: the program meets the protocol without it.
+- **Verified:** `tb_debug` against `swd_dp.sv`, an SW-DP written from ADIv5.2 (SWJ-DP
+  switch, watched in both modes, line reset and the DPIDR-first rule, request parity/Stop/Park checking with lockout,
+  CTRL/STAT, SELECT, RDBUFF, ABORT, sticky errors and FAULT, WDATAERR on a write parity error,
+  posted AP reads, a MEM-AP-like AP with CSW, TAR, DRW and IDR, configurable WAIT, FAULT and
+  read parity errors; SWDIO driven 50 ns after the edge): switch + line reset + DPIDR; DP and AP
+  writes and reads, AP read through RDBUFF; WAIT twice then OK (read), WAIT then OK (write, its
+  data dropped); FAULT, sticky, cleared by ABORT; a target parity error reported; a host parity
+  error rejected (WDATAERR, FAULT, ABORT); a line reset and DPIDR. At CLKDIV = 0 alone and with
+  JTAG on the other engine, and a DPIDR read at CLKDIV = 0xFFFF. The host and the target never
+  drive SWDIO together, and the host never changes it while SWCLK is high.
 

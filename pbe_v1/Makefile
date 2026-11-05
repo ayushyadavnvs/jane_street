@@ -3,8 +3,8 @@
 SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_bsync.sv src/pbe_engine.sv src/tt_um_pbe.sv
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
-# the debug-port target models (D75)
-DEBUG_MODELS := jtag_tap.sv
+# the debug-port target models (D75, D76)
+DEBUG_MODELS := jtag_tap.sv swd_dp.sv
 
 .PHONY: test test-proto test-usb test-can test-debug test-gl test-sram synth synth-sram timing clean
 
@@ -47,8 +47,8 @@ test/usb_image.hex: programs/usb_dev.pbe tools/pbe_asm.py
 test/can_image.hex: programs/can_node.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/can_node.pbe@0 programs/can_node.pbe@64
 
-test/debug_image.hex: programs/jtag.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/jtag.pbe@0
+test/debug_image.hex: programs/jtag.pbe programs/swd.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/jtag.pbe@0 programs/swd.pbe@64
 
 test/conc_image.hex: programs/i2c_ctrl.pbe programs/onewire_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/i2c_ctrl.pbe@0 programs/onewire_ctrl.pbe@64
@@ -111,7 +111,7 @@ test-can: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
 	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(addprefix ../,$(SRC)) && vvp -n can.vvp $(if $(ONLY),+ONLY=$(ONLY))
 
-# only JTAG (tb_debug); ONLY=jtag|slow runs one phase
+# only JTAG and SWD (tb_debug); ONLY=jtag|swd|both|slow runs one phase
 test-debug: test/debug_image.hex
 	$(LINT)
 	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(addprefix ../,$(SRC)) && vvp -n debug.vvp $(if $(ONLY),+ONLY=$(ONLY))

@@ -2331,3 +2331,106 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   send each frame again and again. After: PASS (every frame ACKed and sent once, no error flags,
   TEC/REC 0, standard 0x123 beats extended 0x123).
 
+
+## BUG-093 — swd.pbe's byte counter read SWCLK one clock too early at CLKDIV = 0 (design, fixed before commit)
+
+- **Where:** `pbe_v1/programs/swd.pbe`, the raw/write byte loop.
+- **Found by:** the first run of `tb_debug +ONLY=swd`: `FAIL: engine 1: no RX byte`, and the
+  SW-DP model never saw the switch. A trace of engine 1 showed ISR = 0x80 after `IN clk`: the
+  byte counter took in a 1, so `JNE byte` looped, and the next record's command byte (0x00) was
+  sent as 8 data bits. The design assumed a pin reaches the engine 2 clocks after it changes;
+  it is 3 (two synchronizer stages, then the engine's registered decision). At CLKDIV = 0 the
+  `IN clk` ran 2 clocks after `PIN clk, DRV0` and saw SWCLK still high.
+- **Before:**
+  ```
+  bit:    PIN  dio, OUT
+          PIN  clk, DRV1 [1]
+          PIN  clk, DRV0
+          JMP  X--, bit
+  bcount: IN   clk
+  ```
+- **After:** the loop rotated, so the `OUT` of the next bit comes between `DRV0` and `IN clk`
+  (3 clocks), and SWDIO is also set up longer before the rising edge:
+  ```
+          PIN  dio, OUT            ; the first bit
+  bit:    PIN  clk, DRV1 [1]
+          PIN  clk, DRV0
+          PIN  dio, OUT            ; the next bit (after the last: a 0, unused)
+          JMP  X--, bit
+  bcount: IN   clk
+  ```
+- **Test:** `make test-debug ONLY=swd`. Before: `FAIL: engine 1: no RX byte` on the first
+  transaction. After: the 7 SWD scenarios pass.
+
+## BUG-094 — The SW-DP model counted a line reset as a protocol error (test, fixed before commit)
+
+- **Where:** `pbe_v1/test/swd_dp.sv`, the request check.
+- **Found by:** `tb_debug +ONLY=swd` with every scenario passing: `FAIL: SWD target saw 1 protocol
+  errors`. A line reset that starts while the port is idle is first read as a request of eight
+  ones (Stop = 1: invalid). The port ignores it and the reset then completes, which is what
+  ADIv5 expects, so it is not an error of the host.
+- **Before:** `n_proto_err++; st = LOCKOUT;`
+- **After:** `if (req != 8'hFF) n_proto_err++; st = LOCKOUT;`
+- **Test:** `make test-debug ONLY=swd`. Before: `FAIL: SWD target saw 1 protocol errors`. After:
+  PASS with 0 protocol errors (and every bad request still counted).
+
+## BUG-095 — A restart made a clock edge on a pulled-up TCK or SWCLK (test and board note, fixed)
+
+- **Where:** `pbe_v1/test/tb_debug.sv`, the pin model; the board requirements in `docs/info.md`.
+- **Found by:** the CLKDIV = 0xFFFF phase (`tb_debug +ONLY=slow`): `FAIL: DPIDR read (xxxxxxxx)`
+  and `SWD target saw 1 protocol errors`. The phase restarts the engines with the SW-DP idle
+  (the earlier phases start with a line reset, which hid it). A restart releases the engine's
+  pins (D24) until the program's first `PIN clk, DRV0`; with every pin pulled up, SWCLK rose
+  with SWDIO high, a start bit, and the port locked out.
+- **Before:** `wire [7:0] chip_lvl = ~uio_oe | uio_out;  // released pins float high`
+- **After:** TCK (pin 0) and SWCLK (pin 4) pulled down, as debug connectors usually do:
+  `localparam logic [7:0] PULL_UP = 8'b1110_1110;
+  wire [7:0] chip_lvl = (~uio_oe & PULL_UP) | (uio_oe & uio_out);`
+  The datasheet and D75/D76 ask for the pull-downs.
+- **Test:** `make test-debug ONLY=slow`. Before: the two failures above. After: PASS (IDCODE and
+  DPIDR at CLKDIV = 0xFFFF).
+
+## BUG-096 — swd.pbe read the ACK bits before the falling edge at CLKDIV = 0 (design, fixed before commit)
+
+- **Where:** `pbe_v1/programs/swd.pbe`, the turnaround and ACK cycles.
+- **Found by:** checking every sample point again after BUG-093's 3-clock latency. At CLKDIV = 0
+  each ACK `IN` came 2 clocks after `PIN clk, DRV0 [1]`, so it saw SWDIO as it was 2 clocks
+  (41.7 ns) after the rising edge that launched the bit; the data loop sees it 3 clocks after. A target
+  driving SWDIO more than about 40 ns after the rising edge would give a wrong ACK.
+- **Before:** `PIN clk, DRV0 [1]` before each of the three `IN dio` of the ACK (and the model's
+  TCO 8 ns).
+- **After:** `PIN clk, DRV0 [2]`: the `IN` sees SWDIO after the falling edge, 62.5 ns after the
+  rising edge, like the data loop. The models' TCO in `tb_debug` is now 50 ns. Also `PIN dio,
+  REL [1]` and `STAT [1]`, so the Park and read-turnaround cycles are 6 clocks like the rest
+  (they were 5: SWCLK measured 9.6 MHz there, 8 MHz everywhere now).
+- **Test:** `make test-debug ONLY=swd` with TCO = 50 ns. Before: `FAIL` on the first scenario
+  (the DPIDR read's ACK is wrong) and every one after. After: PASS; a target 60 ns late passes,
+  66 ns fails.
+
+## BUG-097 — tb_debug's write-parity scenario counted WDATAERR since time 0 (test, fixed before commit)
+
+- **Where:** `pbe_v1/test/tb_debug.sv`, SWD scenario 6.
+- **Found by:** the first run of all four phases in one simulation (what `make test` does): phase
+  3 `FAIL: write parity error rejected by the target`, while each phase alone passed. Phase 2's
+  run of the same scenario had already set the model's counter to 1.
+- **Before:** `sw_result("write parity error rejected by the target", ok && u_dp.n_wdataerr == 1);`
+- **After:** `n1 = u_dp.n_wdataerr;` before the write, and `... && u_dp.n_wdataerr == n1 + 1`.
+- **Test:** `make test-debug`. Before: the failure above. After: PASS.
+
+## BUG-098 — The SW-DP model took a repeated JTAG-to-SWD sequence for a host error (test, fixed before commit)
+
+- **Where:** `pbe_v1/test/swd_dp.sv`, the switch watcher.
+- **Found by:** the same run: `FAIL: SWD target saw 1 protocol errors` at the end. Phase 3 starts
+  with the switch while the port is already in SWD mode (from phase 2). The model watched for
+  0xE79E only in JTAG mode; in SWD mode the sequence's bits after the first line reset read as a
+  malformed request. ADIv5 sends the sequence between line resets precisely so that a port in
+  either mode recovers, and an SWJ-DP keeps watching for it in SWD mode.
+- **Before:** the 16 bits after 50 or more ones were collected and compared only `if (st == JTAG)`,
+  and every malformed request but eight ones counted: `if (req != 8'hFF) n_proto_err++;`
+- **After:** the watcher runs in both modes (in SWD mode a match leaves SWD selected and waits for
+  the line reset); a request read from bits that so far match 0xE79E is not counted:
+  `if (req != 8'hFF && !(sw_armed && ((sw_seq ^ 16'hE79E) & ((16'd1 << sw_k) - 16'd1)) == 0)) n_proto_err++;`
+- **Test:** `make test-debug`. Before: the failure above. After: PASS, 0 protocol errors; the
+  requests in scenarios 1–7 are still checked (a malformed request after a line reset that is
+  not the switch sequence still counts).
+

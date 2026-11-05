@@ -1,0 +1,106 @@
+; ARM Serial Wire Debug host (ADIv5 SW-DP), D76.
+; Pins (relative to pin base): SWCLK = 0 (output), SWDIO = 1 (bidirectional: driven, released
+;   with PIN REL for the turnarounds and the target's bits). SWDIO needs a pull-up (ADIv5
+;   recommends 100 kohm at the target; 10..100 kohm), so a released line reads 1.
+; Engine settings: SHIFT = 0x00 (LSB first both ways, as SWD sends); LINE_CFG = 0x00 (even
+;   parity, parity on); TIMEOUT = 0; CRC off; JMP_PIN unused.
+; Timing (ADIv5 B4.1): the host changes SWDIO only while SWCLK is low, one tick after the falling
+;   edge; the target samples it at the rising edge, drives its own bits after the rising edge,
+;   and the host samples them while SWCLK is low, just before the next rising edge (as sigrok's
+;   decoder does at the falling edge). A pin reaches the engine 3 clocks after it changes (two
+;   synchronizer stages and the engine's register): each IN of a target bit is placed so that
+;   it sees SWDIO after the falling edge (D76). One SWCLK cycle is 5 ticks: high 2, low 3
+;   (the 3 ACK cycles: low 4). CLKDIV = 0 adds a taken jump's fetch clock to a loop's low phase:
+;   6 clocks, SWCLK = 8 MHz at 48 MHz, the maximum. CLKDIV >= 1:
+;   SWCLK = 48 MHz / (5 * (CLKDIV + 1)). SWCLK stops low between records, as SWD allows.
+;
+; Host protocol: records in the TX FIFO.
+;   [0x00] [b]          8 SWCLK cycles with SWDIO driven to b, LSB first: line reset = seven
+;                       0xFF (56 ones) then 0x00 (idle); JTAG-to-SWD = line reset, 0x9E, 0xE7,
+;                       line reset, 0x00 (ADIv5 B5.2.1). No RX byte.
+;   [0x01] [req]        a read. req is the 8-bit request, LSB first: bit 0 Start = 1, 1 APnDP,
+;                       2 RnW = 1, 3 A[2], 4 A[3], 5 Parity (even, of bits 1..4), 6 Stop = 0,
+;                       7 Park = 1 (the program stops sending at the last 1 bit, so Park must
+;                       be 1). E.g. 0xA5 = read DPIDR.
+;   [0x02] [req] [d0] [d1] [d2] [d3] [p]
+;                       a write: req with RnW = 0; data LSB byte first; p bit 0 = the even
+;                       parity of the 32 bits, bits 7..1 = 0: they are sent as 7 idle cycles.
+;   RX records: [ack] for every read or write, ACK bits 0, 1, 2 in bits 5, 6, 7: OK 0x20,
+;   WAIT 0x40, FAULT 0x80, no response 0xE0 (the line stayed high: line reset needed).
+;   A read with OK adds [d0] [d1] [d2] [d3] [status]: status bit 0 = 1 if the 33 bits had the
+;   wrong parity (STAT; ignore the other bits). With WAIT or FAULT there is no data phase
+;   (ADIv5 B4.2.3, CTRL/STAT.ORUNDETECT = 0): a write's 5 data bytes are taken from the TX FIFO
+;   and dropped; the host retries (WAIT) or reads CTRL/STAT and writes ABORT (FAULT).
+;   AP reads are posted: the data is the previous AP read's; read RDBUFF (0xBD) for the last.
+; The request and the write parity come from the host: the engine's send parity (OUTPAR) covers
+; the bits since the last OSR load, one byte; a 32-bit word is four loads (D76). The read parity
+; is checked by the engine (STAT).
+.equ clk 0
+.equ dio 1
+
+        PIN  clk, DRV0
+cmd:    PULL                     ; command. ISR = 0 here (all paths end with a PUSH or with
+        MOV  X, OSR              ;   ISR shifted to 0)
+        JMP  X--, xact           ; 1 read, 2 write
+; [0x00] [b], and the write data: 8 bits from the TX FIFO, ISR counts bytes
+byte:   PULL
+        SET  X, 7
+        PIN  dio, OUT            ; SWCLK low: the first bit
+bit:    PIN  clk, DRV1 [1]       ; rising edge: the target takes it
+        PIN  clk, DRV0
+        PIN  dio, OUT            ; the next bit (after the last: a 0, unused)
+        JMP  X--, bit
+bcount: IN   clk                 ; ISR >>= 1: SWCLK is low (3 clocks after DRV0, D76), a 0
+        JNE  byte                ; ISR != OSR (0 after 8 bits): more bytes
+        JMP  cmd
+; read or write: X = 0 read, 1 write
+xact:   PULL                     ; the request
+req:    PIN  dio, OUT
+        PIN  clk, DRV1 [1]
+        PIN  clk, DRV0
+        JNE  req                 ; OSR != ISR (0): Park (bit 7, = 1) not sent yet
+        PIN  dio, REL [1]        ; turnaround ([1]: the Park cycle is 6 clocks too at CLKDIV 0)
+        PIN  clk, DRV1 [1]
+        PIN  clk, DRV0 [2]       ; [2]: the IN sees SWDIO after the falling edge (D76)
+        IN   dio                 ; ACK[0], driven by the target after the rising edge
+        PIN  clk, DRV1 [1]
+        PIN  clk, DRV0 [2]
+        IN   dio                 ; ACK[1]
+        PIN  clk, DRV1 [1]
+        PIN  clk, DRV0 [2]
+        IN   dio                 ; ACK[2]
+        PIN  clk, DRV1 [1]
+        PIN  clk, DRV0
+        SET  OSR, 0x20           ; ISR = ACK << 5; OK is 0x20
+        JMP  X--, write
+        JNE  rtail               ; read, WAIT or FAULT: report it, turnaround
+        PUSH                     ; [ack]
+        STAT                     ; receive parity from here (ISR is overwritten by the data)
+        SET  OSR, 0x0F           ; 4 bytes: OSR is the byte counter
+rbyte:  SET  X, 7
+rbit:   IN   dio                 ; SWCLK low: the target's bit
+        PIN  clk, DRV1 [1]       ; rising edge: the target drives the next bit
+        PIN  clk, DRV0
+        JMP  X--, rbit
+        PUSH                     ; [d]
+        PIN  dio, OUTOD          ; OSR >>= 1; the bit is a 1, so SWDIO stays released
+        JNE  rbyte               ; ISR (0 after PUSH) != OSR: more bytes
+        IN   dio                 ; parity
+        PIN  clk, DRV1 [1]
+        PIN  clk, DRV0
+        STAT [1]                 ; ISR bit 0: parity error over the 33 bits ([1]: the
+rtail:  PUSH                     ;   turnaround cycle is 6 clocks long too at CLKDIV = 0)
+        PIN  clk, DRV1 [1]       ; turnaround: the target releases SWDIO
+        PIN  clk, DRV0
+        JMP  cmd
+write:  PIN  clk, DRV1 [1]       ; turnaround
+        PIN  clk, DRV0
+        JNE  wbad
+        PUSH                     ; [ack] = OK
+        MOV  ISR, OSR            ; ISR = 0x20: shifted once here and once per byte, 5 bytes
+        JMP  bcount              ;   (d0..d3, then the parity and 7 idle cycles)
+wbad:   PUSH                     ; [ack]: no data phase
+        SET  X, 4
+drop:   PULL                     ; the 5 data bytes the host queued
+        JMP  X--, drop
+        JMP  cmd
