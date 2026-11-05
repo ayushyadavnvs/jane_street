@@ -20,14 +20,17 @@
 ;       The status byte is below 0x20.
 ;   [0xD2]                     the host ACKed our IN data
 ; Records can pile up in the RX FIFO before the host reads it: parse them from the end.
+; A token with a line error (e.g. a wrong stuff bit, USB 1.1 §7.1.9, §8.7.1) gets no answer; the
+;   DATA packet after a SETUP or OUT token with one is not ACKed and its status has bit 4 set.
 .equ dm 0
 
 idle:   IN   dm, NOCRC       ; the PID (the coder has found the SYNC)
         JLINE idle           ; a bare EOP (keep-alive) or a stale event: start over
-        SET  OSR, 0xD2
-        JEQ  ack             ; the host's ACK for our DATA
+        CRCRST               ; a checked packet starts: CRC and line error cleared (token,
+                             ; then the DATA packet after it: BUG-101)
         MOV  X, ISR          ; keep the PID
         IN   dm, NOCRC       ; token byte 2: address, endpoint bit 0
+        JLINE hsk            ; the packet ended after its PID: a handshake
 addr:   SET  OSR, 0x00       ; word 6: patched by the host
         JNE  skip
         IN   dm, NOCRC       ; token byte 3: endpoint bits 3..1, CRC5
@@ -42,8 +45,7 @@ e:      MOV  ISR, X
         JEQ  dat
         SET  OSR, 0xE1       ; OUT
         JNE  idle
-dat:    CRCRST               ; a checked packet starts: CRC and line error cleared
-        PUSH                 ; record: the token PID
+dat:    PUSH                 ; record: the token PID
         IN   dm, NOCRC       ; the DATA0/DATA1 PID
         PUSH
         SET  X, 255          ; counts the bytes down
@@ -54,28 +56,32 @@ db:     IN   dm              ; data, then the CRC16: all of it feeds the CRC
 deop:   MOV  ISR, X
         PUSH                 ; 255 - number of bytes
         STAT
-        JCRCBAD ack          ; a bad packet (CRC or line error, e.g. stuffing) gets no ACK
-        SET  OSR, 0xD2       ; ACK (ISR still holds the status)
-        PIN  dm, OUT, NOCRC
-        PIN  dm, END
+        JMP  ack
+hsk:    SET  OSR, 0xD2       ; ISR still holds the PID
+        JNE  idle
 ack:    PUSH                 ; the status, or 0xD2 when the host ACKed us
         FLAG 2, SET
         FLAG 2, IRQ
-        JMP  idle
+        JCRCBAD idle         ; a bad packet (CRC, or a line error in the token or the data, e.g.
+                             ; stuffing) gets no ACK; nor does the host's ACK (its CRC is unfed)
+        SET  OSR, 0xD2       ; ACK
+        JMP  hs
 skip:   JLINE idle           ; not for us: wait for the end of the packet
         JMP  skip
-in:     JMP  FLAG1, stall
+in:     STAT                 ; ISR <= {.., line error (bit 4), RX overflow, 0, CRC ok = 0, 0}
+        SET  OSR, 0x10
+        JEQ  idle            ; a line error in the token (e.g. a wrong stuff bit): no answer
+        JMP  FLAG1, stall
         JMP  FLAG0, send
 nak:    SET  OSR, 0x5A
 hs:     PIN  dm, OUT, NOCRC  ; a handshake packet: SYNC (from the coder), PID, EOP
-        PIN  dm, END
+        PIN  dm, END         ; (and the end of a DATA packet: its CRC high byte, EOP)
         JMP  idle
 stall:  SET  OSR, 0x1E
         JMP  hs
 send:   JMP  TX_EMPTY, nak
         PULL                 ; DATA0/DATA1 PID
-        PIN  dm, OUT, NOCRC
-        CRCRST
+        PIN  dm, OUT, NOCRC  ; (the CRC is still at its initial value from the token)
 sd:     JMP  TX_EMPTY, sc
         PULL
         PIN  dm, OUT
@@ -83,6 +89,4 @@ sd:     JMP  TX_EMPTY, sc
 sc:     OSRCRC LO, INV       ; USB sends the CRC16 inverted, low byte first
         PIN  dm, OUT, NOCRC
         OSRCRC HI, INV
-        PIN  dm, OUT, NOCRC
-        PIN  dm, END
-        JMP  idle
+        JMP  hs              ; the high byte and the EOP

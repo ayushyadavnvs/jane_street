@@ -826,6 +826,61 @@ module tb_usb;
       $display("  a 10 ms bus reset: back at address 0, GET_DESCRIPTOR works again");
     end
 
+`ifdef PBE_SIGROK
+    sigrok_phase = 117;
+`endif
+    // A token with a wrong stuff bit but intact bytes is ignored (BUG-101). USB 1.1 §7.1.9: seven
+    // 1s in a row are a bit stuffing error and the packet is ignored; §8.7.1: a corrupted packet
+    // (bit stuffing is one of the token's checks, besides the PID check and CRC5) is ignored with
+    // any data or field that came with it, so the function sends no handshake and no data.
+    // Address 0x3F puts six 1s into the token's second byte (a stuffed 0 follows them).
+    begin
+      logic [15:0] t;
+      int bad0, setups0;
+      req = '{8'h00, 8'h05, 8'h3F, 8'h00, 8'h00, 8'h00, 8'h00, 8'h00};  // SET_ADDRESS(0x3F)
+      ctl_write(0);
+      repeat (6000) @(posedge clk);
+      dev_addr = 7'h3F;
+      req = '{8'h80, 8'h06, 8'h00, 8'h01, 8'h00, 8'h00, 8'h12, 8'h00};
+      ctl_read;                           // tokens with a correct stuff bit work
+      check(ctl_in.size() == 18, $sformatf("USB: device descriptor at address 0x3F: %0d bytes", ctl_in.size()));
+      t = usb_tok(dev_addr, 0);
+      // IN: no NAK, no data
+      h_pkt = '{8'h69, t[7:0], t[15:8]};
+      h_bad_stuff = 2;                    // six 1s, then a 1 where the stuffed 0 belongs
+      hs_send;
+      hs_recv;
+      check(!r_ok, $sformatf("USB: device answered an IN token with a wrong stuff bit (%0d bytes, PID %02x)",
+                             r_pkt.size(), r_pkt.size() ? r_pkt[0] : 8'h00));
+      gap;
+      // SETUP with a wrong stuff bit, then an intact DATA0: no ACK, the record reported bad
+      bad0 = fw_bad;
+      setups0 = fw_setups;
+      h_pkt = '{8'h2D, t[7:0], t[15:8]};
+      h_bad_stuff = 2;
+      hs_send;
+      u_data = '{8'h80, 8'h06, 8'h00, 8'h01, 8'h00, 8'h00, 8'h12, 8'h00};
+      hs_data(8'hC3, 0);
+      hs_recv;
+      check(!r_ok, "USB: device ACKed a SETUP whose token had a wrong stuff bit");
+      gap;
+      // OUT with a wrong stuff bit, then an intact zero-length DATA1: no ACK either
+      h_pkt = '{8'hE1, t[7:0], t[15:8]};
+      h_bad_stuff = 2;
+      hs_send;
+      u_data.delete();
+      hs_data(8'h4B, 0);
+      hs_recv;
+      check(!r_ok, "USB: device ACKed an OUT whose token had a wrong stuff bit");
+      gap;
+      repeat (15000) @(posedge clk);
+      check(fw_setups == setups0, $sformatf("USB: firmware took %0d SETUP(s) from a token with a wrong stuff bit", fw_setups - setups0));
+      check(fw_bad == bad0 + 2, $sformatf("USB: firmware saw %0d bad records after the bad tokens, expected 2", fw_bad - bad0));
+      ctl_read;                           // and the device still works
+      check(ctl_in.size() == 18, $sformatf("USB: device descriptor after the bad tokens: %0d bytes", ctl_in.size()));
+      $display("  address 0x3F: IN, SETUP and OUT tokens with a wrong stuff bit (bytes intact) ignored");
+    end
+
     fw_run = 0;
     check(contention == 0, $sformatf("USB: host and device drove the bus at the same time for %0d clocks", contention));
     check(r_bad == 0, "USB: stuffing errors in the device's packets");

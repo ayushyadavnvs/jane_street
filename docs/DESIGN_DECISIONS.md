@@ -951,7 +951,7 @@ clean (0 design violations).
   invalid (4 characters before the pause, none after); a 1-character pause at both rates is a
   valid frame; all earlier rounds (parity error, bad CRC, 8N2, RX overflow) still pass.
 
-## D48. JCRCBAD means "packet bad": CRC not ok or a line error
+## D48. JCRCBAD means "packet bad": CRC not ok or a line error — **Changed (USB program: tokens checked too, D79)**
 
 - **Problem (BUG-040):** a USB packet with a wrong stuff bit but intact data and CRC was ACKed.
   `STAT` cleared the line error before `JCRCBAD`, and `JCRCBAD` looked only at the CRC.
@@ -971,7 +971,10 @@ clean (0 design violations).
   - **Alternative:** a separate `JLERR` jump: sub-op 7 is the last one free; "packet bad" is the
     test every checked protocol wants (USB, HDLC, CAN), so one jump covers both.
 - **Programs:** `usb_dev.pbe` does `CRCRST` first in `dat`, before the DATA PID, so an error
-  anywhere in the data packet counts (an error in the token before it does not). The firmware
+  anywhere in the data packet counts (an error in the token before it does not).
+  **Changed (D79, BUG-101):** the `CRCRST` is now right after the PID, before the token's second
+  byte, so a line error in a SETUP or OUT token rejects the DATA packet after it, and IN tokens
+  are checked with `STAT` (a token with a wrong stuff bit gets no answer). The firmware
   treats status bit 4 as bad, like bit 1 clear. Modbus uses `STAT` without the line coder, so
   its line error is always 0; no other program uses `JCRCBAD`.
 - **Cost:** one OR gate and the clear on `CRCRST`.
@@ -2148,3 +2151,64 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   19200 and 115200 baud, 8E1 and 8N2, and round 15 at 0.1 tick with the device 1 % fast; every
   byte, the parity status and the CRC must be right. Rounds 0–8 (19200/115200, 8E1/8N2, parity
   error, bad CRC, the 1.5-character gap rule) and the RX overflow test still pass.
+
+## D79. usb_dev.pbe: a token with a line error gets no answer (still 64 words)
+
+- **Problem (BUG-101):** D48's `JCRCBAD` rejects a DATA packet with a line error, but the
+  program cleared the line error (`CRCRST` in `dat`) after the token, and IN tokens were never
+  checked. A SETUP, OUT or IN token with a wrong stuff bit and intact bytes was answered.
+- **Rule:** USB 1.1 §7.1.9: seven 1s in a row are a bit stuffing error and the packet is
+  ignored. §8.7.1 (packet error categories): except for SOF, "any packet that is received
+  corrupted causes the receiver to ignore it and discard any data or other field information
+  that came with the packet"; its table lists bit stuffing among the checks of the PID, the
+  address field and the data field. So a corrupted token gets no handshake and no data, and
+  the DATA packet of a SETUP or OUT whose token was corrupted is not ACKed.
+- **Chosen (program only, no RTL change):**
+  - `CRCRST` moved from `dat` to word 2, right after the PID is taken. One `CRCRST` now covers
+    the token and, for SETUP and OUT, the DATA packet after it: the token's bytes and the DATA
+    PID are taken with `NOCRC`, so the CRC is still at its initial value when the data starts.
+    A stuff bit cannot fall inside SYNC and a token PID (their longest run of 1s is 3), so every
+    stuff bit of a token comes after the `CRCRST` (the PID is taken after its 8th bit, the
+    `CRCRST` runs 2 clocks later, after `JLINE`; the next bit is 32 clocks later).
+  - SETUP and OUT: the DATA packet's `JCRCBAD` now also sees a line error in the token: no ACK,
+    and the record carries status bit 4, which the firmware already treats as bad.
+  - IN: `STAT; SET OSR, 0x10; JEQ idle` first: with a line error the token gets no NAK, STALL
+    or data. After `CRCRST` and no CRC feed, `STAT` gives 0x10 for a line error (CRC ok, parity
+    and timeout are 0 here); RX overflow (bit 3) is the only other bit that can be set.
+    - **Alternative:** `JNE` against 0x00, which also ignores the token when the RX FIFO has
+      overflowed: the overflow is sticky until the host clears it, and the device would stop
+      answering IN tokens until then. Chosen: compare with 0x10, so a token is judged by itself;
+      the cost is a double fault (a line error while an overflow is pending) still answered.
+    - **Alternative:** `JCRCBAD` after the token: it always jumps, because the CRC unit does not
+      compute CRC5 (the token's CRC5 is checked by the exact compare of byte 3) and the
+      register is at its initial value, not `CRC_GOOD`.
+  - The host's ACK (0xD2) is now recognised by its end: the `IN` for token byte 2 is released by
+    the end of the packet with ISR still holding the PID, and `JLINE hsk` (word 5) goes to the
+    0xD2 compare. The compare used to be at words 2–3, before byte 2; `CRCRST` must come before
+    byte 2 and the firmware patches words 6 and 9 (D49), which stay where they were.
+- **Words (64 → 64):**
+
+  | Change | Words |
+  |---|---|
+  | the 0xD2 compare at words 2–3 (`SET OSR, 0xD2; JEQ ack`) removed | −2 |
+  | `CRCRST` at word 2, `JLINE hsk` at word 5 | +2 |
+  | `CRCRST` in `dat` removed | −1 |
+  | `CRCRST` in `send` removed (the CRC is still at its initial value from word 2) | −1 |
+  | the end of a DATA packet shares the handshakes' `PIN OUT, NOCRC; PIN END; JMP idle` (`sc` ends with `JMP hs`) | −2 |
+  | one tail for both records: `deop` pushes the status, raises FLAG2 and IRQ, then `JCRCBAD idle; SET OSR, 0xD2; JMP hs`; the host's ACK enters it from `hsk` (`SET OSR, 0xD2; JNE idle`), where `JCRCBAD` always jumps (its CRC is unfed). Was 11 words, now 12 | +1 |
+  | the IN check (`STAT; SET OSR, 0x10; JEQ idle`) | +3 |
+  | total | 0 |
+- **Timing:** the ACK of a good DATA packet now goes out after the record's `PUSH`, `FLAG 2,
+  SET` and `FLAG 2, IRQ` and two jumps, a few clocks later than before. Turnaround
+  measured in `tb_usb`: 3.16 to 3.28 bit times (was 3.00 to 3.19); USB allows up to 7.5. The
+  host gets FLAG2 and IRQ for a good packet just before its ACK is on the wire instead of just
+  after; the firmware handles records at its own pace and does not care.
+- **Unchanged for the host:** the records, the status byte, FLAG0–2, and words 6 and 9.
+- **Not needed:** the fallback (a known limitation pending the SRAM program memory, D62) or an
+  RTL change; it fits.
+- **Tested (Test 11, `tb_usb.sv`):** after the bus reset, SET_ADDRESS(0x3F), whose tokens carry
+  a stuffed 0 after the address's six 1s. A GET_DESCRIPTOR works there (correct stuff bits); an
+  IN token with the stuffed bit sent as a 1 gets no answer; a SETUP and an OUT token sent that
+  way, each followed by an intact DATA packet, get no ACK and their records are counted bad; the
+  firmware takes no SETUP; GET_DESCRIPTOR still works after them. Every earlier step
+  (enumeration, SET_ADDRESS, STALL, NAK, the lost-ACK resend, bus reset, turnaround) passes.

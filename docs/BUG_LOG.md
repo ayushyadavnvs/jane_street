@@ -2480,3 +2480,97 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
     `FAIL: Modbus round 9 response byte 0: c0`, `FAIL: Modbus round 9: engine reported 4 parity
     errors`, `FAIL: Modbus round 9: CRC ok = 0`, and the same for rounds 10–15.
   - After: all 16 rounds and the RX overflow test pass.
+
+## BUG-101 — USB: a token with a wrong stuff bit but intact bytes was answered
+
+- **Where:** `pbe_v1/programs/usb_dev.pbe`.
+- **Found by:** review, recorded in D48: after BUG-040 `JCRCBAD` rejects a DATA packet with a
+  line error, but the program's `CRCRST` (which clears the line error) ran in `dat`, after the
+  token, and IN tokens were never checked. USB 1.1 §7.1.9 and §8.7.1: a packet with a bit
+  stuffing error is ignored, a token included. Decision: D79.
+- **Before (64 words):**
+  ```
+  idle:   IN   dm, NOCRC
+          JLINE idle
+          SET  OSR, 0xD2
+          JEQ  ack             ; the host's ACK for our DATA
+          MOV  X, ISR
+          IN   dm, NOCRC
+  ...
+  dat:    CRCRST               ; a checked packet starts: CRC and line error cleared
+          PUSH
+  ...
+  deop:   MOV  ISR, X
+          PUSH
+          STAT
+          JCRCBAD ack
+          SET  OSR, 0xD2       ; ACK
+          PIN  dm, OUT, NOCRC
+          PIN  dm, END
+  ack:    PUSH
+          FLAG 2, SET
+          FLAG 2, IRQ
+          JMP  idle
+  ...
+  in:     JMP  FLAG1, stall
+  ...
+  send:   JMP  TX_EMPTY, nak
+          PULL
+          PIN  dm, OUT, NOCRC
+          CRCRST
+  ...
+  sc:     OSRCRC LO, INV
+          PIN  dm, OUT, NOCRC
+          OSRCRC HI, INV
+          PIN  dm, OUT, NOCRC
+          PIN  dm, END
+          JMP  idle
+  ```
+- **After (64 words; words 6 and 9, which the firmware patches, unchanged):**
+  ```
+  idle:   IN   dm, NOCRC
+          JLINE idle
+          CRCRST               ; token and DATA packet checked from here
+          MOV  X, ISR
+          IN   dm, NOCRC       ; token byte 2 (a handshake packet ends here instead)
+          JLINE hsk
+  ...
+  dat:    PUSH
+  ...
+  deop:   MOV  ISR, X
+          PUSH
+          STAT
+          JMP  ack
+  hsk:    SET  OSR, 0xD2
+          JNE  idle
+  ack:    PUSH
+          FLAG 2, SET
+          FLAG 2, IRQ
+          JCRCBAD idle         ; bad packet, or the host's ACK (CRC unfed): no ACK
+          SET  OSR, 0xD2
+          JMP  hs
+  ...
+  in:     STAT
+          SET  OSR, 0x10
+          JEQ  idle            ; a line error in the token: no answer
+          JMP  FLAG1, stall
+  ...
+  send:   JMP  TX_EMPTY, nak
+          PULL
+          PIN  dm, OUT, NOCRC
+  ...
+  sc:     OSRCRC LO, INV
+          PIN  dm, OUT, NOCRC
+          OSRCRC HI, INV
+          JMP  hs              ; the high byte and the EOP
+  ```
+- **Test (Test 11, `tb_usb.sv`):** at address 0x3F (six 1s in the token's second byte, so a
+  stuffed 0 follows them), `h_bad_stuff = 2` sends that stuffed bit as a 1 in an IN, a SETUP and
+  an OUT token; the SETUP and the OUT are followed by intact DATA packets.
+  - Before: `FAIL: USB: device answered an IN token with a wrong stuff bit (1 bytes, PID 5a)`,
+    `FAIL: USB: device ACKed a SETUP whose token had a wrong stuff bit`, `FAIL: USB: device
+    ACKed an OUT whose token had a wrong stuff bit`, `FAIL: USB: firmware took 1 SETUP(s) from a
+    token with a wrong stuff bit`, `FAIL: USB: firmware saw 0 bad records after the bad tokens,
+    expected 2` (and the accepted junk SETUP broke the next GET_DESCRIPTOR: 6 bytes).
+  - After: passes; every earlier step of Test 11 still passes, turnaround 3.16 to 3.28 bit times
+    (was 3.00 to 3.19, allowed 2 to 7.5).

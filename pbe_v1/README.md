@@ -212,8 +212,9 @@ pull-up), D+ = pin base + 1.
 
 **Records in the RX FIFO**, each ending with FLAG2 and IRQ:
 - `[0x2D or 0xE1] [DATA PID] [n bytes: data and CRC] [255 − n] [status]`: a SETUP or OUT data
-  packet. It was ACKed only if status bit 1 (CRC ok) is set and bit 4 (line error) is clear;
-  otherwise the host sends it again.
+  packet. It was ACKed only if status bit 1 (CRC ok) is set and bit 4 (line error, in the
+  token or the data packet) is clear; otherwise the host sends it again.
+- A token with a line error (e.g. a wrong stuff bit) gets no answer at all (D79).
 - `[0xD2]`: the host ACKed our IN packet.
 
 **Firmware rules:**
