@@ -8,7 +8,7 @@ up to 6×4 tiles, due 18 January 2027).
 | `src/` | The RTL (SystemVerilog) and the Tiny Tapeout flow configuration `config.json`; `pbe_v1/src` links here |
 | `info.yaml`, `docs/info.md`, `test/` | Tiny Tapeout project description, datasheet page, and the cocotb test that also runs on the gate-level netlist |
 | `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test` and a Verilator lint) |
-| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812, a USB low-speed device and a CAN 2.0A node (bit-synchronous coder, arbitration, error confinement), all tested |
+| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware; programs for UART, SPI controller and peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812, a USB low-speed device, a CAN 2.0A node (bit-synchronous coder, arbitration, error confinement), a JTAG controller and an ARM SWD host, all tested |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `verify/` | Independent verification (D63, D64): the golden model, differential, sigrok and bus-model checks (`verify/golden-model/`, with the reports and evidence), formal properties, reference vectors, coverage, stress and mutation testing; run from `pbe_v1/` with `make` |
 | `macros/`, `sram/` | The proposed SRAM program memory (D62): IHP's macro views, and the flow change set (`docs/SRAM_INVESTIGATION.md`) |

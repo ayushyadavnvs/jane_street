@@ -35,7 +35,11 @@ Programs written and tested so far (in `pbe_v1/programs`):
 - WS2812 LEDs;
 - a USB 1.1 low-speed device (control endpoint);
 - a CAN 2.0A node (standard IDs, 125k-1M bit/s): arbitration, ACK, CRC-15, error flags,
-  error-passive and bus-off handled by the chip.
+  error-passive and bus-off handled by the chip;
+- a JTAG controller (IEEE 1149.1: TMS sequences and TDI/TDO scans of any length, TCK up to
+  8 MHz) and an ARM SWD host (ADIv5 SW-DP: line reset, JTAG-to-SWD switch, DP/AP reads and
+  writes with ACK, WAIT/FAULT handling and parity checking, SWCLK up to 8 MHz). They are
+  42 + 64 words, so both run at once, one per engine.
 
 The full documentation, register map and design decisions are in the repository: `pbe_v1/README.md`,
 `docs/DESIGN_DECISIONS.md` and `docs/BUG_LOG.md`.
@@ -76,5 +80,10 @@ None needed for the loopback test. Depending on the protocol loaded:
 - a CAN transceiver (for example a 3.3 V one such as the TCAN334 or SN65HVD230) for CAN: TXD
   on the engine's pin base, RXD on pin base + 1, and the bus terminated with 120 Ω at each end;
 - WS2812 LEDs;
+- for JTAG: TCK, TMS, TDI on the engine's pin base + 0, 1, 2 and TDO on + 3, a pull-up on TDO
+  and a pull-down on TCK (10–100 kΩ); for SWD: SWCLK on pin base, SWDIO on pin base + 1, a
+  pull-up on SWDIO (ADIv5: 10–100 kΩ) and a pull-down on SWCLK. The pull-downs keep the clock
+  low while an engine restarts (its pins are released for a few clocks). The target's I/O
+  voltage must match the chip's pads (3.3 V), or use a level shifter;
 - for USB low speed: a 1.5 kΩ pull-up on D− (`uio[0]`) and a USB connector. The electrical
   levels are still to be checked against the I/O pads.

@@ -15,10 +15,11 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 128-word hex image; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`) |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
 | `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
+| `test/tb_debug.sv` | JTAG and SWD against `jtag_tap.sv` (IEEE 1149.1 TAP) and `swd_dp.sv` (ADIv5 SW-DP), alone and at once, fastest and slowest clock |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
@@ -32,6 +33,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 make test                                  # Icarus Verilog, all testbenches
 make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
 make test-usb                              # only tb_usb
+make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-sram                             # end-to-end testbenches on the SRAM program memory (D62, also in make test)
 make synth                                 # area, IHP library in ../ihp_lib
 make synth-sram                            # the same with USE_SRAM (macros as black boxes)
@@ -239,6 +241,30 @@ remote frames, arbitration, missing ACK, CRC/stuff/form/bit errors, error-passiv
 recovery, both engines as nodes, extended frames and standard/extended arbitration), by sigrok's `can` decoder (`make sigrok-can`) and by a random
 differential of the coder (`make diff-can`).
 
+## JTAG host protocol (`programs/jtag.pbe`)
+
+IEEE 1149.1 controller in 42 words. TCK = pin base, TMS = + 1, TDI = + 2, TDO = + 3; LSB first
+(`SHIFT` = 0). Records `[cmd] [n − 1] [bits]`, n = 1..8: `0` clocks TMS = bits (TDI kept), `1`
+shifts n TDI bits with TMS = 0, `2` the same with TMS = 1 on the last bit. Each shift record
+returns a byte with the n TDO bits in its top bits (RX >> (8 − n)); longer scans are several
+records. TDI/TMS change one tick after TCK falls; TDO is read while TCK is high. TCK = 8 MHz at
+CLKDIV = 0, else 48 MHz / (5 (CLKDIV + 1)). Board: pull-up on TDO, pull-down on TCK (D75).
+
+## SWD host protocol (`programs/swd.pbe`)
+
+ARM ADIv5 SW-DP host in 64 words. SWCLK = pin base, SWDIO = + 1 (pull-up on SWDIO, pull-down
+on SWCLK); LSB first, `LINE_CFG` = 0 (even parity). Records: `[0x00] [b]` 8 host-driven bits
+(line reset = 7 × 0xFF + 0x00; JTAG-to-SWD = line reset, 0x9E, 0xE7, line reset, 0x00);
+`[0x01] [req]` read; `[0x02] [req] [d0..d3] [p]` write (`req` = the 8-bit request with its
+parity, `p` bit 0 = the data parity). RX: `[ack]` (0x20 OK, 0x40 WAIT, 0x80 FAULT, 0xE0 no
+response), and for an OK read `[d0..d3] [status]` (bit 0 = parity error, checked by the
+engine). WAIT/FAULT: no data phase, a write's data bytes are dropped. SWCLK = 8 MHz at
+CLKDIV = 0, else 48 MHz / (5 (CLKDIV + 1)) (D76).
+
+Both are tested by `tb_debug` against target models written from the standards, at CLKDIV 0
+and 0xFFFF and both at once, and by sigrok's `jtag` and `swd` decoders (`make sigrok-debug`,
+D77).
+
 ## 1-Wire host protocol (`programs/onewire_ctrl.pbe`)
 
 Tick = 1 µs (`CLKDIV` = clock in MHz − 1), LSB first, DQ = pin base with a pull-up.
@@ -383,6 +409,7 @@ These targets run behavioral simulation only and invoke no physical-design flow.
 
 ```sh
 make sigrok                       # stock waveform decoders; needs sigrok-cli
+make sigrok-debug                 # stock jtag and swd decoders on tb_debug (D77)
 make sigrok-full                  # strict full-USB request checks (known decoder failures)
 make test-buses CASES=3 BUS_SEED=20261029 # requires ../verify/golden-model/bus_models/requirements.txt
 ```
