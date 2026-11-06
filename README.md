@@ -53,14 +53,15 @@ The design is checked by several independent layers; details in
 | Formal (SymbiYosys) | Full proofs for the FIFO and the host SPI port; bounded checks for the line coder, the engine and CAN mode; every expected result matches (113 tasks) |
 | Mutation testing | 24 deliberately injected RTL bugs, all caught by the test suite |
 | Reference vectors | 22 CRC configurations from the reveng catalogue; USB and Modbus packets from independent libraries |
-| Functional coverage and stress | 92/92 functional coverage bins (round 2); clock error, glitches, a slow host and both engines at once (22/22) |
+| Functional coverage and stress | 130/130 functional coverage bins under Verilator 5.051 (line 98.5 %, branch 94.5 %); clock error, glitches, a slow host and both engines at once (22/22) |
+| Two simulators | `make test-verilator`: unit benches under Icarus and Verilator must give identical logs, in CI (D80) |
 | Lint and CI | Verilator `-Wall` lint, the unit benches under Verilator and Icarus with identical logs (a race check, D80), and `make test` on every push |
 
 Every design decision is recorded with its alternatives in
-[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (79 so far), and every bug with the code
-before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (101 so far).
-Open: the coverage run with the new CAN bins is pending, because one CAN unit test gives a
-one-clock different result under Verilator than under Icarus, which is being investigated.
+[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (81 so far), and every bug with the code
+before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (106 so far).
+A one-clock difference between Icarus and Verilator in one CAN unit test turned out to be a
+testbench race (BUG-102); fixing it also exposed a real reset bug in the line coders (BUG-104).
 
 `pbe_v1/README.md` has the register map, instruction set, host protocols and results.
 Design reasoning is in `docs/DESIGN_DECISIONS.md` and every bug with its fix in `docs/BUG_LOG.md`.
