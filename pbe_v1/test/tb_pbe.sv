@@ -520,7 +520,7 @@ module tb_pbe;
 `endif
 
     repeat (5) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
 
 `ifdef PBE_PROTOCOL_REFERENCE

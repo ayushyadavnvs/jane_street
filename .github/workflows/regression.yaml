@@ -20,6 +20,8 @@ jobs:
           verilator --lint-only -Wall -Wno-DECLFILENAME --top-module tt_um_ayushyadavnvs_pbe -DUSE_SRAM \
             pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv pbe_engine.sv tt_um_pbe.sv pbe_pmem_sram.sv \
             ../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v
+      - name: Testbenches under Verilator and Icarus, identical logs (race check, BUG-102)
+        run: cd pbe_v1 && make test-verilator
       - name: Setup Python
         uses: actions/setup-python@v6
         with:

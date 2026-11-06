@@ -580,7 +580,7 @@ module tb_usb;
     cfg_desc = '{8'h09, 8'h02, 8'h12, 8'h00, 8'h01, 8'h01, 8'h00, 8'h80, 8'h32,
                  8'h09, 8'h04, 8'h00, 8'h00, 8'h00, 8'hFF, 8'h00, 8'h00, 8'h00};
     repeat (5) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
 
     // CRC helpers against the known values (docs/USB_NOTES.md)

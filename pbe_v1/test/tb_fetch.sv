@@ -121,7 +121,7 @@ module tb_fetch;
     logic [7:0] f;
     $display("Test 12: instruction fetch: timing at CLKDIV 0, 1, 3 and host writes to the program memory");
     repeat (5) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
     load_program("fetch_image.hex");
 

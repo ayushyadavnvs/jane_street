@@ -416,7 +416,7 @@ module tb_debug;
   initial begin
     if (!$value$plusargs("ONLY=%s", only)) only = "";
     repeat (5) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
     load_program("debug_image.hex");   // jtag at word 0, swd at word 64
     jt_on = 1;

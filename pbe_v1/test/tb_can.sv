@@ -182,7 +182,7 @@ module tb_can;
     repeat (20) @(posedge clk);
     rst_n = 0;
     repeat (5) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
     load_program("can_image.hex");
     ra.reset_node();
@@ -237,6 +237,7 @@ module tb_can;
   // edges is a whole number of bit times.
   bit   timing_on = 0;
   int   t_last_edge = -1, clk_n = 0, bad_timing = 0, timing_edges = 0;
+  int   e0_dom_start = -1, e0_runs[$];
   logic e0_prev = 1;
   always @(posedge clk) begin
     clk_n++;
@@ -246,12 +247,10 @@ module tb_can;
       t_last_edge = clk_n;
     end
     e0_prev = e0_txd;
-  end
-
-  // ---------------- error-flag observation on engine 0's TXD ----------------
-  // A dominant run of exactly 6 bits on engine 0's TXD after an error is an active flag.
-  int e0_dom_start = -1, e0_runs[$];
-  always @(posedge clk) begin
+    // ---- error-flag observation on engine 0's TXD ----
+    // A dominant run of exactly 6 bits on engine 0's TXD after an error is an active flag.
+    // In the same process as clk_n++, so it reads clk_n after the increment in every
+    // simulator; a second always block would race it (BUG-102).
     if (!e0_txd && e0_dom_start < 0) e0_dom_start = clk_n;
     if (e0_txd && e0_dom_start >= 0) begin
       e0_runs.push_back((clk_n - e0_dom_start + bit_clk / 2) / bit_clk);
@@ -408,7 +407,7 @@ module tb_can;
   task automatic first_e0_dom(input int t0, output int t);
     t = -1;
     for (int i = 0; i < 400 * bit_clk && t < 0; i++) begin
-      @(posedge clk);
+      @(negedge clk);  // after the edge's clk_n++ (BUG-102)
       if (clk_n > t0 && !e0_txd) t = clk_n;
     end
   endtask
@@ -548,7 +547,7 @@ module tb_can;
     // bus-off: no drive until recovery (128 x 11 recessive bits), then the frame goes out
     t_back = -1;
     while (t_back < 0 && clk_n - t_off < 2000 * bit_clk) begin
-      @(posedge clk);
+      @(negedge clk);  // after the edge's clk_n++ (BUG-102)
       if (!e0_txd) t_back = clk_n;
     end
     check(t_back > 0 && t_back - t_off >= 128 * 11 * bit_clk - 2 * bit_clk,
@@ -681,7 +680,7 @@ module tb_can;
   initial begin
     string only;
     repeat (5) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
     if (!$value$plusargs("ONLY=%s", only)) only = "";
     if (only == "" || only == "rates") scenario_rates();

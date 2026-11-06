@@ -2212,3 +2212,65 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   way, each followed by an intact DATA packet, get no ACK and their records are counted bad; the
   firmware takes no SETUP; GET_DESCRIPTOR still works after them. Every earlier step
   (enumeration, SET_ADDRESS, STALL, NAK, the lost-ACK resend, bus reset, turnaround) passes.
+
+## D80. Testbench timing discipline, and the benches under two simulators
+
+- **Problem (BUG-102):** `tb_line` E4 measured 53 clocks under Icarus and 55 under Verilator
+  5.051 (a failure). The RTL behaved identically in both. The testbench wrote and read signals at
+  a rising edge from different processes, so the simulator's process order decided what it
+  measured. Icarus alone could never show it: one simulator always resolves a race the same way.
+- **Rule for every testbench:**
+  1. Stimulus threads change DUT inputs, and read DUT state or testbench counters, only after
+     a falling edge (`@(negedge clk)`) or after a delay inside the cycle (`#1`). This was already
+     the rule for the send tasks (BUG-027). It now also covers reset release, the shared host SPI
+     (`tb_host.svh`), polling loops and timestamps.
+  2. Monitors run at the rising edge. A cycle counter read by other rising-edge processes is
+     updated with a nonblocking assignment (`tb_line`), or every reader is in the counting
+     process itself (`tb_can`). A blocking `cyc++` stays correct for readers woken by a DUT
+     output change, which comes in the NBA region after it (`tb_fetch`).
+  3. A real-valued drive schedule starts at a falling edge and is checked to never land on a
+     rising edge (`tb_line`'s `usb_drive`).
+  4. Chip pins that are asynchronous by the spec (behind the two-flop synchronizers) may still
+     change at rising edges in the protocol models; a check on them must allow for a clock either
+     way, as a real chip's must.
+- **Check:** `make test-verilator` (in CI, after the Verilator lint): for each bench in
+  `VL_BENCHES`, build it with `verilator --binary --timing --assert` and with Icarus. Both must
+  pass, and their logs must be identical, apart from the `$finish` line. Benches print what they
+  measure (E3–E5 their clocks), so a one-clock difference is a failure even inside a check's
+  window. The checks whose measurements are now race-free were made exact (E4: PB + LD + 1).
+  - **Benches:** `tb_line`, `tb_engine_restart`, `tb_engine_known_reset`, `tb_fifo_robustness`,
+    `tb_fetch`: the ones Ubuntu 24.04's Verilator 5.020 (CI's) runs correctly. Left out:
+    `tb_engine_ops`, `tb_proto` and `tb_usb` (5.020 tool bugs, BUG-103), and `tb_pbe`, `tb_can`
+    and `tb_debug`, which take tens of minutes each to build and run under Verilator. All of
+    them also run under Verilator in `make coverage` (5.051, except `tb_debug`).
+  - **Alternatives:** (a) Icarus only, with the process order perturbed (source order, `#0`):
+    tried; Icarus's choice did not move, so it is no check. (b) The whole set under Verilator in
+    `make test`: everyone would need Verilator 5.05x, and the CPU time would grow severalfold.
+    (c) Only the coverage campaign (5.051): it caught this, but only by luck (55 fell outside
+    the window) and only when someone runs the long campaign. Chosen: a short cross-check of the
+    unit-level benches on every push, plus the rule above for the rest.
+- **Tools here:** Icarus 12.0 and Verilator 5.020 from Ubuntu 24.04's archive; Yosys 0.33. The
+  OSS CAD Suite 2026-07-27 (Verilator 5.051) was downloaded with the owner's approval, but this
+  session's permission policy did not allow running its binaries. So the 55 under 5.051 is the
+  reported value, explained by BUG-102's analysis but not reproduced here.
+
+## D81. The sample count register's first clock: a valid flag
+
+- **Problem (BUG-104):** `pbe_bsync`'s `spv` and `pbe_line`'s `sp_q` (BUG-088's registered
+  sample counts) reset to 0, so on the first clock after reset they matched the bit counter
+  (also 0), and the coder sampled at once instead of at the sample point.
+- **Chosen:** a one-bit flag per register, reset 0 and then 1, that gates `sample` (`spv_ok`,
+  `sp_ok`). The first sample after reset is then at the sample point, as after a `clear`.
+- **Alternatives:**
+  - *Reset the register to all ones* (a count the bit counter cannot hold on the first clock):
+    the same behaviour, one token of RTL. But the IHP library has no flop with an asynchronous
+    set, so Yosys wraps each of the 64 flops in inverters. Measured 392,054.7 µm² against the
+    flag's 392,179.5, a difference below ABC's remapping noise. By construction the flag is
+    smaller (one merged flop and an AND per coder). The flag also does not depend on an argument
+    about which counts the counter can hold.
+  - *Reset `sampled` to 1* (`pbe_bsync`): the first bit after reset would not be sampled at all,
+    and integration would take a bit longer after reset than after `clear`. `pbe_line` has no
+    `sampled`.
+  - *Combinational sample count* (before BUG-088): puts the adders back on the compare path.
+- **Not changed:** the documented one-clock lag after a CLKDIV or LINE2 write (D65, D66); the
+  default sample point (`sp_base`, combinational) is untouched, so LINE2 = 0 behaves as before.

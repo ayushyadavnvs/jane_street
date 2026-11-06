@@ -35,6 +35,7 @@ make test-proto                            # only tb_proto (WS2812, SPI peripher
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-sram                             # end-to-end testbenches on the SRAM program memory (D62, also in make test)
+make test-verilator                        # tb_line and 4 more under Verilator and Icarus: both pass, identical logs (D80)
 make synth                                 # area, IHP library in ../ihp_lib
 make synth-sram                            # the same with USE_SRAM (macros as black boxes)
 make timing                                # critical path, slow corner

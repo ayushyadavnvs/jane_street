@@ -111,11 +111,19 @@ module pbe_bsync (
     endcase
   end
   // the sample count, registered: the adders stay off the counter's compare path; a change
-  // of CLKDIV or LINE2 takes effect one clock later
+  // of CLKDIV or LINE2 takes effect one clock later. spv_ok: spv holds a computed value (from
+  // the first clock after reset); before it, spv's reset 0 matched cnt's and the node sampled
+  // at the first clock instead of at the sample point (BUG-104).
   logic [15:0] spv;
+  logic        spv_ok;
   always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) spv <= '0;
-    else spv <= {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
+    if (!rst_n) begin
+      spv    <= '0;
+      spv_ok <= 1'b0;
+    end else begin
+      spv    <= {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
+      spv_ok <= 1'b1;
+    end
 
   logic [2:0]  cs;
   logic        drv;                  // driving dominant in this bit
@@ -158,7 +166,7 @@ module pbe_bsync (
   wire resync = fall && !drv && in_bus && !synced;
   wire hard   = fall && cs == C_IDLE;
   wire tend   = cnt == period_m1;
-  wire sample = cnt == spv && !sampled;
+  wire sample = cnt == spv && !sampled && spv_ok;
   wire b      = a_in;
 
   // the unit bits

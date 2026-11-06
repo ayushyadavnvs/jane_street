@@ -93,7 +93,7 @@ module tb_engine_ops;
     tx_update;
     exp = '{8'h5A, 8'h81, 8'h03, 8'hDD, 8'h94, 8'h22, 8'h02, 8'hA5};
     repeat (3) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (600) @(posedge clk);
     if (got.size() != exp.size()) begin
       errors++;

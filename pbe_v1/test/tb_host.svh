@@ -10,13 +10,15 @@
   endtask
 
   // ---------------- host SPI (mode 0) ----------------
+  // The host's pins change after a falling edge of the chip clock, never at a rising edge, where
+  // the chip's synchronizers sample them and the simulator's process order would decide (BUG-102).
   task automatic spi_byte(input logic [7:0] tx, output logic [7:0] rx);
     for (int i = 7; i >= 0; i--) begin
       ui_in[2] = tx[i];
-      repeat (HOST_HALF) @(posedge clk);
+      repeat (HOST_HALF) @(negedge clk);
       ui_in[0] = 1;  // rising: both sides sample
       rx[i] = uo_out[0];
-      repeat (HOST_HALF) @(posedge clk);
+      repeat (HOST_HALF) @(negedge clk);
       ui_in[0] = 0;
     end
   endtask
@@ -29,11 +31,11 @@
     int ticket;
     if (!level) begin
       ticket = host_next++;
-      while (host_serving != ticket) @(posedge clk);
+      while (host_serving != ticket) @(negedge clk);
     end
-    repeat (HOST_HALF) @(posedge clk);
+    repeat (HOST_HALF) @(negedge clk);
     ui_in[1] = level;
-    repeat (HOST_HALF) @(posedge clk);
+    repeat (HOST_HALF) @(negedge clk);
     if (level) host_serving++;
   endtask
 

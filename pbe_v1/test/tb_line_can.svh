@@ -67,9 +67,9 @@ task automatic run_line2_tests();
   t_rel = clk_n;
   send_u(8'h00, 0);
   send_u(8'h00, 1);
-  while (!drive_u) @(posedge clk);
+  while (!drive_u) @(negedge clk);
   t_drv = clk_n;
-  while (drive_u) @(posedge clk);
+  while (drive_u) @(negedge clk);
   // 11 idle samples span 10 to 11 bit times (the first may come at once), then the 2-bit gap
   check(t_drv - t_rel >= 12 * P && t_drv - t_rel <= 13 * P + 2,
         $sformatf("LINE2[6]: frame started %0d clocks after the line went idle, expected 11 idle samples + 2 bits (%0d..%0d)",
@@ -79,13 +79,13 @@ task automatic run_line2_tests();
   a_in = 0;
   repeat (P) @(negedge clk);
   a_in = 1;            // a 1-bit frame, ended by 8 idle bits
-  while (t_fe_u < clk_n - 2) @(posedge clk);
+  while (t_fe_u < clk_n - 2) @(negedge clk);
   t_rel = t_fe_u;
   send_u(8'h00, 0);
   send_u(8'h00, 1);
-  while (!drive_u) @(posedge clk);
+  while (!drive_u) @(negedge clk);
   t_drv = clk_n;
-  while (drive_u) @(posedge clk);
+  while (drive_u) @(negedge clk);
   check(t_drv - t_rel >= 5 * P - 2 && t_drv - t_rel <= 6 * P + 2,
         $sformatf("LINE2[6]: after a frame end the frame started %0d clocks later, expected 3 + 2 bits (about %0d)",
                   t_drv - t_rel, 5 * P));
@@ -199,10 +199,38 @@ task automatic bc_reset();
   n_bfe = 0; n_berr = 0; n_barb = 0; n_bbe = 0; n_bsent = 0;
 endtask
 
+// E0: after a reset the first sample of either coder is at its sample point, not at the
+// first clock (BUG-104): the registered sample count is not yet valid on that clock.
+task automatic reset_sample_check();
+  int n_u, n_c, at_u, at_c, sp_u, sp_c;
+  use_loop = 0; a_in = 1; ext = 1;
+  cfg_u = 8'h01; cfg2_u = 8'h03;   // pbe_line: NRZ, sample point 3 (from the register)
+  bc_clear = 0;                     // pbe_bsync: LINE2 0x62, sample point 2 (from the register)
+  sp_u = (P - 1) / 2 + 1 + P / 4 + P / 8;
+  sp_c = (PB - 1) / 2 + 1 + PB / 4;
+  @(negedge clk) rst_n = 0;
+  repeat (3) @(negedge clk);
+  rst_n = 1;
+  n_u = 0; n_c = 0; at_u = -1; at_c = -1;
+  // `sample` is combinational from registers: its value between two edges is the one the
+  // next edge acts on
+  for (int i = 0; i < PB; i++) begin
+    if (i < P && u.sample) begin n_u++; if (at_u < 0) at_u = int'(u.rcnt); end
+    if (c.sample) begin n_c++; if (at_c < 0) at_c = int'(c.cnt); end
+    @(negedge clk);
+  end
+  check(n_u == 1 && at_u == sp_u, $sformatf("pbe_line after reset: %0d samples in the first bit, the first at count %0d (expected 1, at %0d)", n_u, at_u, sp_u));
+  check(n_c == 1 && at_c == sp_c, $sformatf("pbe_bsync after reset: %0d samples in the first bit, the first at count %0d (expected 1, at %0d)", n_c, at_c, sp_c));
+  cfg2_u = 8'h00;
+  bc_clear = 1;
+  $display("E0: after a reset the first sample is at the sample point (count %0d of %0d, %0d of %0d)", at_u, P, at_c, PB);
+endtask
+
 task automatic run_bsync_tests();
   int t0, ok, base, n, k, tb_start, d, sp, b1, b2;
   logic dom;
   rst_n = 1;
+  reset_sample_check();
 
   // ---- E1: integration and wait, readback of its own frame, the tail with an ACK ----
   bc_reset();
@@ -215,17 +243,17 @@ task automatic run_bsync_tests();
       foreach (mine[i]) bc_send(mine[i] ? 8'h80 : 8'h00);
     end
     begin   // stuffing off as soon as the last unit is in: the tail follows
-      while (bgot.size() < mine.size()) @(posedge clk);
+      while (bgot.size() < mine.size()) @(negedge clk);
       bc_linectl(5'b10001);
     end
     begin   // a receiver's ACK in the ACK slot
-      while (!(c.cs == 3'd3 && c.tpos == 4'd1)) @(posedge clk);
+      while (!(c.cs == 3'd3 && c.tpos == 4'd1)) @(negedge clk);
       ext = 0;
-      while (c.tpos == 4'd1) @(posedge clk);
+      while (c.tpos == 4'd1) @(negedge clk);
       ext = 1;
     end
   join
-  while (n_bfe == 0) @(posedge clk);
+  while (n_bfe == 0) @(negedge clk);
   check(drv_on.size() > 0 && drv_on[0] - t0 >= 11 * PB - PB / 2 && drv_on[0] - t0 <= 12 * PB + 2,
         $sformatf("bsync: own frame started %0d clocks after clear, expected 11 bit times of integration",
                   drv_on.size() ? drv_on[0] - t0 : -1));
@@ -273,11 +301,11 @@ task automatic run_bsync_tests();
       foreach (mine[i]) bc_send(mine[i] ? 8'h80 : 8'h00);
     end
     begin
-      while (bgot.size() < cbits.size()) @(posedge clk);
+      while (bgot.size() < cbits.size()) @(negedge clk);
       bc_linectl(5'b10001);
     end
   join
-  while (n_bfe == 0) @(posedge clk);
+  while (n_bfe == 0) @(negedge clk);
   // the first difference: ID bit 2 (0x127 has 1, 0x123 has 0), line bit index of that bit
   check(n_barb == 1, $sformatf("bsync: %0d arbitration-lost pulses, expected 1", n_barb));
   check(bgot.size() == cbits.size(), $sformatf("bsync: loser received %0d bits, winner sent %0d", bgot.size(), cbits.size()));
@@ -307,7 +335,7 @@ task automatic run_bsync_tests();
                                                    drv_off.size() ? drv_off[0] - drv_on[0] : -1, 6 * PB));
   end
   check(n_berr == 1 && bc_rec == 1, $sformatf("bsync: stuff error: errors %0d, REC %0d (expected 1, 1)", n_berr, bc_rec));
-  $display("E3: stuff error: 6 dominant error-flag bits from the next bit, REC 1");
+  $display("E3: stuff error: 6 dominant error-flag bits from the next bit (%0d clocks after it began), REC 1", d);
 
   // ---- E4: bit error as a transmitter, after the arbitration window ----
   repeat (24 * PB) @(negedge clk);
@@ -316,29 +344,30 @@ task automatic run_bsync_tests();
     begin
       bc_send(8'h00);              // SOF
       bc_send(8'h80); bc_send(8'h00); bc_send(8'h80);
-      while (bgot.size() < 2) @(posedge clk);
+      while (bgot.size() < 2) @(negedge clk);
       bc_linectl(5'b00000);        // width 1, arbitration window off
       bc_send(8'h80); bc_send(8'h80); bc_send(8'h00);
     end
     begin   // force dominant in the 5th bit it sends (a recessive one): a bit error
-      while (bgot.size() < 4) @(posedge clk);
-      while (c.sampled) @(posedge clk);   // the 5th bit has started
+      while (bgot.size() < 4) @(negedge clk);
+      while (c.sampled) @(negedge clk);   // the 5th bit has started
       tb_start = clk_n;
       ext = 0;
       repeat (PB) @(negedge clk);
       ext = 1;
     end
   join
-  while (n_bfe == 0) @(posedge clk);
+  while (n_bfe == 0) @(negedge clk);
   repeat (20 * PB) @(negedge clk);
   check(n_bbe == 1 && bc_tec == 8, $sformatf("bsync: bit error: %0d bit-error pulses, TEC %0d (expected 1, 8)", n_bbe, bc_tec));
   k = -1;
   foreach (drv_on[i]) if (k < 0 && drv_on[i] > tb_start) k = drv_on[i];  // the first drive after the bad bit
   d = k - tb_start;
   // the forced dominant edge is a foreign edge: c resynchronizes on it (loop delay + 1), so the
-  // bad bit lasts PB clocks from that edge
-  check(d >= PB && d <= PB + LD + 2, $sformatf("bsync: flag after a bit error began %0d clocks after the bad bit, expected 1 bit (%0d..%0d)", d, PB, PB + LD + 2));
-  $display("E4: bit error as transmitter: flag from the next bit, TEC 8");
+  // bad bit lasts PB clocks from that edge. tb_start and drv_on are race-free (BUG-102), so the
+  // count is exact in every simulator.
+  check(d == PB + LD + 1, $sformatf("bsync: flag after a bit error began %0d clocks after the bad bit, expected 1 bit + loop delay + 1 (%0d)", d, PB + LD + 1));
+  $display("E4: bit error as transmitter: flag from the next bit (%0d clocks after the bad bit), TEC 8", d);
 
   // ---- E5: LINECTL "error now" while receiving: the flag starts at the next bit ----
   repeat (16 * PB) @(negedge clk);
@@ -361,7 +390,7 @@ task automatic run_bsync_tests();
     check(d > 0 && d <= PB, $sformatf("bsync: error now: flag began %0d clocks later, expected within the bit", d));
   end
   check(n_berr == 1 && bc_rec == 2, $sformatf("bsync: error now: errors %0d, REC %0d (expected 1, 2)", n_berr, bc_rec));
-  $display("E5: LINECTL error now: flag from the next bit start, REC 2");
+  $display("E5: LINECTL error now: flag from the next bit start (%0d clocks later), REC 2", d);
 
   // ---- E6: sample points 0-3 (falling-edge-only resync: the rising edge inside the bit
   // does not move the sample). As in D1, X <= sample + 1 reads 1. ----

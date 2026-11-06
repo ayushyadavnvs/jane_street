@@ -94,9 +94,13 @@ module tb_line;
   // Line states sampled every clock while driven: 0 = SE0, 1 = J (a high), 2 = K (a low).
   int st_q[$];
   bit watch = 0;
+  // clk_n: the number of rising edges before the current one. It is updated with a
+  // nonblocking assignment, so every process that reads it at a rising edge sees the same
+  // value whatever order the simulator runs them in (BUG-102); testbench threads act and read
+  // only after a falling edge, when every rising-edge update is done.
   int t_first = -1, t_put = -1, clk_n = 0;
   always @(posedge clk) begin
-    clk_n++;
+    clk_n <= clk_n + 1;
     if (watch && drive_u) begin
       if (t_first < 0) t_first = clk_n;
       st_q.push_back(!ao_u && !bo_u ? 0 : ao_u && !bo_u ? 1 : !ao_u && bo_u ? 2 : 3);
@@ -111,6 +115,7 @@ module tb_line;
     bit b;
     logic [7:0] x, all[$];
     ref_st.delete();
+    all.delete();  // (BUG-103) release 5.020 of Verilator keeps an automatic task's local queue between calls
     all.push_back(8'h80);
     foreach (enc_in[i]) all.push_back(enc_in[i]);
     lvl = 1;  // J
@@ -134,8 +139,11 @@ module tb_line;
   endtask
 
   // drive the line from ref_st with bits stretched by (1 + ppm / 1e6)
+  // Starts at a falling edge: with bits of 20 * P * (1 +- 0.015) ns every level change then
+  // falls between clock edges, never on a rising edge where the coder samples (BUG-102).
   task automatic usb_drive(input real ppm);
     real t_bit = 20.0 * P * (1.0 + ppm / 1.0e6);
+    @(negedge clk);
     foreach (ref_st[i]) begin
       a_in = ref_st[i] == 1;
       b_in = ref_st[i] == 2;
@@ -147,9 +155,9 @@ module tb_line;
 
   initial begin
     logic [7:0] pkt[$], seq[$];
-    repeat (3) @(posedge clk);
+    repeat (3) @(negedge clk);
     rst_n = 1;
-    repeat (3) @(posedge clk);
+    repeat (3) @(negedge clk);
 
     // ===== A: USB transmit =====
     cfg_u = 8'b0011_0110;  // bytes, pair, stuff after 6 ones, NRZI
@@ -161,8 +169,8 @@ module tb_line;
     t_put = clk_n + 1;
     foreach (pkt[i]) send_u(pkt[i], 0);
     send_u(8'h00, 1);
-    while (drive_u) @(posedge clk);
-    repeat (5) @(posedge clk);
+    while (drive_u) @(negedge clk);
+    repeat (5) @(negedge clk);
     watch = 0;
     check(t_first - t_put >= 2 * P && t_first - t_put <= 2 * P + 4,
           $sformatf("USB TX: gap before the packet is %0d clocks, expected 2 bits (%0d)", t_first - t_put, 2 * P));
@@ -189,14 +197,14 @@ module tb_line;
       enc_in = pkt;
       usb_encode(r == 2);
       usb_drive(ppm);
-      repeat (4 * P) @(posedge clk);
+      repeat (4 * P) @(negedge clk);
       if (r < 2) begin
-        check(got.size() == pkt.size(), $sformatf("USB RX %+0.1f %%: %0d bytes, sent %0d", ppm / 1e4, got.size(), pkt.size()));
+        check(got.size() == pkt.size(), $sformatf("USB RX %0.1f %%: %0d bytes, sent %0d", ppm / 1e4, got.size(), pkt.size()));
         foreach (pkt[i])
-          if (i < got.size()) check(got[i] === pkt[i], $sformatf("USB RX %+0.1f %%: byte %0d %02x, sent %02x", ppm / 1e4, i, got[i], pkt[i]));
+          if (i < got.size()) check(got[i] === pkt[i], $sformatf("USB RX %0.1f %%: byte %0d %02x, sent %02x", ppm / 1e4, i, got[i], pkt[i]));
         check(n_fe_u == 1, $sformatf("USB RX: %0d frame ends", n_fe_u));
         check(n_err_u == 0, $sformatf("USB RX: %0d errors on a good packet", n_err_u));
-        $display("B: USB receive at %+0.1f %% clock error: %0d bytes, one frame end", ppm / 1e4, got.size());
+        $display("B: USB receive at %0.1f %% clock error: %0d bytes, one frame end", ppm / 1e4, got.size());
       end else begin
         check(n_err_u > 0, "USB RX: seven 1s in a row not reported");
         $display("B: seven 1s in a row (no stuff bit) reported as a stuff error");
@@ -226,16 +234,16 @@ module tb_line;
           maxrun = 0;
           lvl_prev = -1;
           @(posedge drive_v);
-          repeat (P / 2) @(posedge clk);
+          repeat (P / 2) @(negedge clk);
           while (drive_v) begin
             run = (ao_v == lvl_prev) ? run + 1 : 1;
             lvl_prev = ao_v;
             if (run > maxrun) maxrun = run;
-            repeat (P) @(posedge clk);
+            repeat (P) @(negedge clk);
           end
         end
       join
-      repeat (12 * P) @(posedge clk);
+      repeat (12 * P) @(negedge clk);
       check(maxrun == 5, $sformatf("CAN-style TX: longest run on the line %0d bits, expected 5", maxrun));
       check(got.size() >= seq.size(), $sformatf("CAN-style RX: %0d bits, sent %0d", got.size(), seq.size()));
       foreach (seq[i])
@@ -249,14 +257,14 @@ module tb_line;
     cfg_v = 8'b0010_1010;
     sync_u = 8'h7E;
     sync_v = 8'h7E;
-    repeat (20 * P) @(posedge clk);
+    repeat (20 * P) @(negedge clk);
     got.delete();
     n_err_u = 0;
     pkt = '{8'hFF, 8'h1F, 8'hF8, 8'h00, 8'hAA, 8'hFF};
     foreach (pkt[i]) send_v(pkt[i], 0);
     send_v(0, 1);
-    while (drive_v) @(posedge clk);
-    repeat (12 * P) @(posedge clk);
+    while (drive_v) @(negedge clk);
+    repeat (12 * P) @(negedge clk);
     check(got.size() == pkt.size(), $sformatf("HDLC-style RX: %0d bytes, sent %0d", got.size(), pkt.size()));
     foreach (pkt[i])
       if (i < got.size()) check(got[i] === pkt[i], $sformatf("HDLC-style byte %0d: %02x, sent %02x", i, got[i], pkt[i]));

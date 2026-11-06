@@ -101,6 +101,34 @@ test-sram: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
 	cd test && iverilog -g2012 $(SRAM_FLAGS) -o proto_sram.vvp tb_proto.sv $(SRAM_ALL) && vvp -n proto_sram.vvp
 	cd test && iverilog -g2012 $(SRAM_FLAGS) -o sim_sram.vvp tb_pbe.sv $(SRAM_ALL) && vvp -n sim_sram.vvp
 
+# Testbenches under Verilator as well as Icarus (BUG-102). Two simulators may run the processes
+# woken by one clock edge in different orders, so a testbench race shows up as a difference: each
+# bench must pass under both, and their logs must be identical (only the $finish line, which
+# differs in format, is left out). VL_BENCHES are the benches the Verilator in CI (Ubuntu's 5.020)
+# runs correctly; tb_engine_ops (BUG-103) and tb_proto (`disable` of a named fork) need 5.05x.
+VERILATOR  ?= verilator
+VL_BENCHES ?= tb_line tb_engine_restart tb_engine_known_reset tb_fifo_robustness tb_fetch
+VL_BUILD   := build/verilator
+.PHONY: test-verilator
+test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
+	mkdir -p $(VL_BUILD)
+	set -e; for tb in $(VL_BENCHES); do \
+	  echo "== $$tb"; \
+	  (cd test && $(VERILATOR) --binary --timing --assert -Wno-fatal -j 2 --top-module $$tb \
+	    --Mdir ../$(VL_BUILD)/obj_$$tb -o sim $$tb.sv $(addprefix ../,$(SRC))) > $(VL_BUILD)/$$tb-build.log 2>&1 \
+	    || { tail -20 $(VL_BUILD)/$$tb-build.log; exit 1; }; \
+	  (cd test && ../$(VL_BUILD)/obj_$$tb/sim) > $(VL_BUILD)/$$tb-verilator.log 2>&1 \
+	    || { tail -20 $(VL_BUILD)/$$tb-verilator.log; exit 1; }; \
+	  (cd test && iverilog -g2012 -o ../$(VL_BUILD)/$$tb.vvp $$tb.sv $(addprefix ../,$(SRC)) 2>/dev/null \
+	    && vvp -n ../$(VL_BUILD)/$$tb.vvp) > $(VL_BUILD)/$$tb-icarus.log 2>&1 \
+	    || { tail -20 $(VL_BUILD)/$$tb-icarus.log; exit 1; }; \
+	  grep -v '\$$finish' $(VL_BUILD)/$$tb-icarus.log > $(VL_BUILD)/$$tb-icarus.cmp; \
+	  grep -v -e '\$$finish' -e '^- ' $(VL_BUILD)/$$tb-verilator.log > $(VL_BUILD)/$$tb-verilator.cmp; \
+	  diff $(VL_BUILD)/$$tb-icarus.cmp $(VL_BUILD)/$$tb-verilator.cmp \
+	    || { echo "$$tb: Icarus and Verilator logs differ (a race?)"; exit 1; }; \
+	  tail -1 $(VL_BUILD)/$$tb-icarus.cmp; \
+	done
+
 # only USB (tb_usb), a quicker loop while working on it
 test-usb: $(IMAGES:%=test/%_image.hex)
 	$(LINT)

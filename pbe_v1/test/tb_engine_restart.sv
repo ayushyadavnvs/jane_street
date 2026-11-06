@@ -45,7 +45,7 @@ module tb_engine_restart;
 
   initial begin
     repeat (3) @(posedge clk);
-    rst_n = 1;
+    @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     try(16'hA000, "PULL");
     try(16'hB000, "PUSH");
     try(16'hC000, "FLAG 0, SET");

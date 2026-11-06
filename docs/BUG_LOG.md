@@ -69,6 +69,9 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-090 | Testbench | `tb_can` sent ID 0x7F6, which CAN 2.0A forbids (7 MSBs recessive); sigrok's decoder rejected it and lost sync | `make sigrok-can` | Fixed |
 | BUG-091 | Verification (before commit) | `test_bsync_cocotb` checked the error flag's start against the transmitter's bit grid without the clock-error drift | First 40-trial `make diff-can` | Fixed |
 | BUG-092 | Design (D72, D69) | `can_node` flagged an error on every valid extended (CAN 2.0B) frame and every standard frame with r0 recessive | Parent-session review | Fixed (frame follower, D74) |
+| BUG-102 | Testbench | `tb_line` E4 measured the bit-error flag 53 clocks after the bad bit under Icarus, 54 under Verilator 5.020 and 55 (a failure) under 5.051: same-edge races in the testbench, not the RTL | `make coverage` under Verilator 5.051 | Fixed, `make test-verilator` in CI |
+| BUG-103 | Tooling | Verilator 5.020 (Ubuntu 24.04, the CI's) keeps an automatic task's local queue between calls, and loses a queue pop after a delay in an `always` block | Running the benches under Verilator 5.020 (BUG-102) | Worked around (`tb_line`), `tb_engine_ops` and `tb_proto` left to 5.05x |
+| BUG-104 | RTL (`pbe_bsync`, `pbe_line`) | The registered sample count reset to 0: on the first clock after reset the coder sampled at once, not at the sample point | Race-free reset release in `tb_engine_ops` (BUG-102 audit) | Fixed (`tb_line` E0) |
 
 ---
 
@@ -2574,3 +2577,201 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
     expected 2` (and the accepted junk SETUP broke the next GET_DESCRIPTOR: 6 bytes).
   - After: passes; every earlier step of Test 11 still passes, turnaround 3.16 to 3.28 bit times
     (was 3.00 to 3.19, allowed 2 to 7.5).
+
+## BUG-102 — tb_line E4: the measured flag start depended on the simulator's process order (test)
+
+- **Where:** `pbe_v1/test/tb_line.sv`, `tb_line_can.svh` (E4, and the same pattern throughout);
+  audit of the other benches below.
+- **Found by:** `make coverage` under Verilator 5.051 stopped at `tb_line`:
+  `FAIL: bsync: flag after a bit error began 55 clocks after the bad bit, expected 1 bit (48..54)`.
+  Icarus 12 measured 53 and passed. Every other bench passed under 5.051.
+- **Cause (testbench, not RTL):** three things written and read at the same rising edge, by
+  different processes, with no ordering between them:
+  1. `clk_n++` in one `always @(posedge clk)`; E4's thread read `tb_start = clk_n` right after
+     `@(posedge clk)`, so it got the count before or after the increment;
+  2. the monitor block's `drv_on.push_back(clk_n)`, a second `always @(posedge clk)`, likewise;
+  3. E4 forced the bus with `ext = 0` right after `@(posedge clk)`, while
+     `always @(posedge clk) dline <= {dline[6:0], bus}` sampled `bus` at the same edge.
+
+  Debug prints at the failing moment (the edge index k from `$time`):
+
+  | | Icarus 12 | Verilator 5.020 |
+  |---|---|---|
+  | `tb_start = clk_n` after `@(posedge)` | k (after `++`) | k − 1 (before) |
+  | `ext = 0` vs `dline` at that edge | sampled at k + 1 | sampled at k |
+  | `drv_on` (other block) | edge − 1 (before `++`) | edge (after) |
+  | measured `d` | 53 | 54 |
+
+  In both runs the coder sets `drive` exactly 52 edges after the edge that first samples the
+  forced level, so the RTL behaves identically; only the timestamps moved. 5.051's 55 is what
+  resolving races 1 and 3 one way and race 2 the other gives. That is an inference: this
+  environment could not run 5.051 (see D80).
+  Also found: `usb_drive` (test B) started at a rising edge, so with bits of 20·P·(1 ± 0.015) ns
+  every 25th bit boundary fell exactly on a rising edge, a race with the coder's input
+  register; and the reset was released at a rising edge (a race with the async-reset flops).
+- **Before:**
+  ```systemverilog
+  always @(posedge clk) begin
+    clk_n++;
+  ...
+  repeat (3) @(posedge clk);
+  rst_n = 1;
+  ...
+      while (bgot.size() < 4) @(posedge clk);
+      while (c.sampled) @(posedge clk);   // the 5th bit has started
+      tb_start = clk_n;
+      ext = 0;
+  ...
+  check(d >= PB && d <= PB + LD + 2, ...);
+  ```
+- **After:** one rule. `clk_n` is updated with a nonblocking assignment, so every process that
+  reads it at a rising edge sees the same value (the number of earlier edges). Testbench threads
+  act and read only after a falling edge, when every rising-edge update is done. Monitors stay
+  on the rising edge. `usb_drive` starts at a falling edge, so no level change can land on a
+  rising edge (10.4·n and 9.6·n mod 20 never equal 10). The E4 check is now the exact contract,
+  because the measurement no longer depends on the simulator:
+  ```systemverilog
+  always @(posedge clk) begin
+    clk_n <= clk_n + 1;
+  ...
+  repeat (3) @(negedge clk);
+  rst_n = 1;
+  ...
+      while (bgot.size() < 4) @(negedge clk);
+      while (c.sampled) @(negedge clk);   // the 5th bit has started
+      tb_start = clk_n;
+      ext = 0;
+  ...
+  check(d == PB + LD + 1, ...);   // one bit from the resync, which comes LD + 1 after the edge
+  ```
+  E3, E4 and E5 now print the measured clocks (4, 53, 37), so `make test-verilator` compares
+  them between the simulators. `%+0.1f` became `%0.1f` (Verilator rejects the `+` flag), so the
+  log needs no scratch adaptation. That makes the replacement in `verify/coverage/run.py`
+  (BUG-069) a no-op.
+- **Test:** `make test-verilator` (new, D80; in CI after the lint) runs `tb_line` and four
+  other benches under Verilator and Icarus and requires both to pass with identical logs.
+  - Before (the old timing with only the exact E4 check, the BUG-103 workaround and the format
+    change applied): Icarus passes with 53; Verilator 5.020 fails with
+    `FAIL: bsync: flag after a bit error began 54 clocks after the bad bit, expected 1 bit +
+    loop delay + 1 (53)`; 5.051 measured 55.
+  - After: both pass with identical logs; E3 4 clocks, E4 53 (= PB + LD + 1), E5 37.
+- **Audit of the other benches** (same patterns: a stimulus or a timestamp taken right after
+  `@(posedge clk)`, or a counter read by another rising-edge process):
+  - reset released at a rising edge: `tb_fetch`, `tb_usb`, `tb_pbe`, `tb_proto`, `tb_can` (twice),
+    `tb_debug`, `tb_engine_restart`, `tb_engine_ops`. All now release after a falling edge. In
+    `tb_engine_ops` this exposed BUG-104.
+  - `tb_host.svh` (the host SPI shared by all chip-level benches): SCK, CS_n and MOSI changed at
+    rising edges. They now change after falling edges.
+  - `tb_can`: `clk_n++` in one block, read by the error-flag observer in a second rising-edge
+    block and by two waits after `@(posedge clk)`. The observer moved into the counting block;
+    the waits use `@(negedge clk)`.
+  - Left as they are, with the reason: the protocol pin drivers in `tb_proto`, `tb_pbe` and
+    `tb_can` (`ext_val`, `ext_drive`, `force_dom`) still change chip pins at rising edges. Those
+    pins are asynchronous inputs behind the chip's two-flop synchronizers. A one-clock
+    difference there is the real chip's uncertainty, and those checks allow for it (their windows
+    are in bit times). Reading a DUT output right after a rising edge (`b[i] = bus[0]`,
+    `rx[i] = bus[2]`) is not a race: outputs change in the NBA region, after every reader.
+    `tb_fetch` timestamps `uio_out` changes with `always @(uio_out[0])`, which runs after the
+    blocking `cyc++` of the same edge, and drives `pin1` after `#1`, so it is already race-free.
+- **Gate-level flow:** not affected by the race and not run here (the gds and gl_regression
+  workflows run by hand only). `tb_line` is a unit test of `pbe_line`/`pbe_bsync`, with
+  hierarchical references to their internals, and is not part of `make test-gl` (`tb_fetch`,
+  `tb_proto`, `tb_usb`, `tb_pbe` on the netlist). Those four take the falling-edge reset release
+  and host SPI from this change. On a zero-delay netlist that removes the same race and changes
+  no check. BUG-104's RTL change is in the netlist; see there.
+
+## BUG-103 — Verilator 5.020 drops queue updates in two testbench idioms (tool)
+
+- **Where:** Ubuntu 24.04's `verilator` 5.020 (the one CI installs), not 5.05x.
+- **Found by:** running every bench under 5.020 for BUG-102.
+  1. `tb_line` test B: `usb_encode`'s local queue `logic [7:0] all[$]` (an automatic task) kept
+     its contents between calls, so the second packet was the first one twice and more:
+     `FAIL: USB RX -1.5 %: 19 bytes, sent 9` (the encoded stream grew 87 → 171 → 243 states).
+  2. `tb_engine_ops`: after `#1` inside `always @(posedge clk)`, `tx_q.pop_front()` did not shrink
+     the queue (still 8 entries at every pop): `FAIL: 3 bytes pushed, expected 8`.
+  3. `tb_proto` does not build: `disable isn't underneath a begin with name: 'watch_sda'`
+     (already noted in D73 for 5.38).
+  4. `tb_usb` (an unfixed copy, run once): `FAIL: USB: configuration descriptor (9): 16 bytes`,
+     `FAIL: USB firmware: 2 bytes do not split into records` and 5 more. That looks like the same
+     queue accumulation; not investigated further.
+- **Before / after (1, worked around):**
+  ```systemverilog
+  ref_st.delete();
+  all.push_back(8'h80);
+  ```
+  ```systemverilog
+  ref_st.delete();
+  all.delete();  // (BUG-103) release 5.020 of Verilator keeps an automatic task's local queue between calls
+  all.push_back(8'h80);
+  ```
+  (A comment that starts with the word "verilator" is read as a pragma, hence the wording.)
+- **2 to 4:** not worked around. These benches pass under 5.051 (the recorded campaign) and
+  Icarus, so `make test-verilator` leaves them out of `VL_BENCHES` (D80).
+- **Test:** `make test-verilator` with 5.020: `tb_line` fails at test B before and passes after.
+
+## BUG-104 — After a reset the coders sampled at the first clock, not at the sample point (RTL)
+
+- **Where:** `src/pbe_bsync.sv` (`spv`) and `src/pbe_line.sv` (`sp_q`, sample points 1–3). Both
+  registers came in with BUG-088, which took the sample-point adders off the compare path.
+- **Found by:** BUG-102's audit. Once `tb_engine_ops` released the reset between edges, its
+  CAN-mode engine stopped after 4 of 16 bytes and TEC stayed 0. Its `pbe_bsync` stayed in
+  integration for good with `icnt = x`.
+- **Cause:** the registered sample count resets to 0 and holds the computed value only from the
+  first clock after reset. On that first clock `cnt == 0 == spv` and `sampled == 0`, so
+  `sample` fired: the coder read the bus at clock 0 of its first bit. Because `sampled` was then
+  set, it did not sample again at the real sample point of that bit. In integration (or the idle
+  count of `pbe_line`'s LINE2[6] wait) that bit was judged on one clock's level, against the
+  header's contract ("the sample point is LINE2[2:0]"). On silicon this is a small timing error:
+  integration up to most of a bit short. In four-state simulation the level one clock after
+  reset can still be X from before reset: the X entered `icnt`, `icnt + 1` stays X, and the node
+  never left integration. The old `tb_engine_ops` passed only because its reset release raced
+  the flops, and the early sample happened to read a 1. `clear` (an engine restart) does not
+  touch the register, so it was a reset-only fault.
+- **Before:**
+  ```systemverilog
+  // pbe_bsync
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) spv <= '0;
+    else spv <= {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
+  wire sample = cnt == spv && !sampled;
+  // pbe_line
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) sp_q <= '0;
+    else sp_q <= sp_base + sp_add;
+  wire        sample = rcnt == ((sp_sel == 3'd0 || sp_sel[2]) ? sp_base : sp_q);
+  ```
+- **After:** a flag says the register holds a computed value (choice: D81):
+  ```systemverilog
+  // pbe_bsync
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) begin
+      spv    <= '0;
+      spv_ok <= 1'b0;
+    end else begin
+      spv    <= {1'b0, period_m1[15:1]} + 16'd1 + sp_add;
+      spv_ok <= 1'b1;
+    end
+  wire sample = cnt == spv && !sampled && spv_ok;
+  // pbe_line
+  ...same register, sp_ok...
+  wire        sp_dflt = sp_sel == 3'd0 || sp_sel[2];
+  wire        sample = rcnt == (sp_dflt ? sp_base : sp_q) && (sp_dflt || sp_ok);
+  ```
+- **Test (`tb_line` E0, new, written first):** with a reset just before it, `pbe_line` at sample
+  point 3 and `pbe_bsync` at sample point 2 must each sample exactly once in the first bit, at
+  their sample point.
+  - Before, under both simulators: `FAIL: pbe_line after reset: 2 samples in the first bit, the
+    first at count 0 (expected 1, at 28)` and `FAIL: pbe_bsync after reset: 1 samples in the
+    first bit, the first at count 0 (expected 1, at 36)`.
+  - After: `E0: after a reset the first sample is at the sample point (count 28 of 32, 36 of 48)`;
+    `tb_engine_ops` passes with the race-free reset release.
+- **Cost (`make synth`, Yosys 0.33, IHP typical):** 390,813.5 → 392,179.5 µm² (+0.35 %); flops
+  3,906 → 3,907. Yosys merges the four identical `*_ok` flops into one. The rest is ABC
+  remapping elsewhere (the cell mix changes all over the chip), not new logic.
+  `make timing` (logic only, slow corner): 3.64 → 3.61 ns, the same start point (`clkdiv`).
+- **Default configuration:** with LINE2 = 0, `pbe_line` uses `sp_base` (`sp_dflt`), so the
+  change cannot reach it. This keeps the formal `default` equivalence's argument. CAN mode is
+  only selected by LINE2[5].
+- **Gate-level:** the netlist changes (one flop and the gating), so the next gds run carries it.
+  The GL benches (`tb_fetch`, `tb_proto`, `tb_usb`, `tb_pbe`) run with LINE2 sample point 0
+  and no CAN mode, where `sample` is unchanged. The gds and gl_regression workflows were not run.

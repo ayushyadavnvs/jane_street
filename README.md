@@ -7,7 +7,7 @@ up to 6×4 tiles, due 18 January 2027).
 |---|---|
 | `src/` | The RTL (SystemVerilog) and the Tiny Tapeout flow configuration `config.json`; `pbe_v1/src` links here |
 | `info.yaml`, `docs/info.md`, `test/` | Tiny Tapeout project description, datasheet page, and the cocotb test that also runs on the gate-level netlist |
-| `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test` and a Verilator lint) |
+| `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test`, a Verilator lint and `make test-verilator`) |
 | `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware, the protocol programs (see Protocols below), the testbenches and the assembler |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `verify/` | Independent verification (D63, D64): the golden model, differential, sigrok and bus-model checks (`verify/golden-model/`, with the reports and evidence), formal properties, reference vectors, coverage, stress and mutation testing; run from `pbe_v1/` with `make` |
@@ -54,7 +54,7 @@ The design is checked by several independent layers; details in
 | Mutation testing | 24 deliberately injected RTL bugs, all caught by the test suite |
 | Reference vectors | 22 CRC configurations from the reveng catalogue; USB and Modbus packets from independent libraries |
 | Functional coverage and stress | 92/92 functional coverage bins (round 2); clock error, glitches, a slow host and both engines at once (22/22) |
-| Lint and CI | Verilator `-Wall` lint and `make test` on every push |
+| Lint and CI | Verilator `-Wall` lint, the unit benches under Verilator and Icarus with identical logs (a race check, D80), and `make test` on every push |
 
 Every design decision is recorded with its alternatives in
 [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (79 so far), and every bug with the code
