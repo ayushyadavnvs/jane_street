@@ -16,7 +16,9 @@ PBE=ROOT/'pbe_v1'                      # the design (src, test benches, build)
 GM=ROOT/'verify/golden-model'
 SPEC=ROOT/'verify/spec_boundaries'
 BUILD=PBE/'build/coverage'
-BENCHES=['tb_coverage_gaps','tb_engine_known_reset','tb_fifo_robustness','tb_engine_restart','tb_engine_ops','tb_fetch','tb_line','tb_usb','tb_proto','tb_pbe','tb_can','tb_spec_boundaries']
+BENCHES=['tb_coverage_gaps','tb_engine_known_reset','tb_fifo_robustness','tb_engine_restart','tb_engine_ops','tb_fetch','tb_line','tb_usb','tb_proto','tb_pbe','tb_can','tb_debug','tb_spec_boundaries']
+# the bench-side models some benches need besides the RTL (tb_debug since D75-D77, BUG-106)
+MODELS={'tb_can':['can_ref_node.sv'],'tb_debug':['jtag_tap.sv','swd_dp.sv']}
 def call(cmd,cwd,log,expected=0,marker=None,coverage_file=None):
  started=time.monotonic()
  if coverage_file is not None: clear_coverage(coverage_file)
@@ -29,7 +31,7 @@ def call(cmd,cwd,log,expected=0,marker=None,coverage_file=None):
   try: coverage_bytes=require_coverage(coverage_file)
   except RuntimeError as exc: passed=False;coverage_error=str(exc)
  return dict(command=list(map(str,cmd)),returncode=p.returncode,seconds=round(time.monotonic()-started,3),passed=passed,log=str(log),coverage_bytes=coverage_bytes,coverage_error=coverage_error)
-IMAGE_TARGETS=['test/'+name+'_image.hex' for name in ('conc','ow','modbus','nop','uart','spi','mixed','ws2812','spi_periph','i2c_target','usb','ops','fetch','can','can_ops')]
+IMAGE_TARGETS=['test/'+name+'_image.hex' for name in ('conc','ow','modbus','nop','uart','spi','mixed','ws2812','spi_periph','i2c_target','usb','ops','fetch','can','can_ops','debug')]
 def refresh_images(root=PBE,targets=IMAGE_TARGETS):
  command=['make','-s',*targets]
  result=subprocess.run(command,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
@@ -58,11 +60,11 @@ def main():
  receipts=[dict(test='coverage harness negative regressions',run=harness,passed=True)]
  def one(tb):
   obj=BUILD/('obj_'+tb);exe=obj/'sim'
-  signature=hashlib.sha256(b''.join(p.read_bytes() for p in [test/(tb+'.sv'),*sorted(src.glob('*.sv')),*sorted(test.glob('*.svh'))])).hexdigest()
+  signature=hashlib.sha256(b''.join(p.read_bytes() for p in [test/(tb+'.sv'),*[test/m for m in MODELS.get(tb,[])],*sorted(src.glob('*.sv')),*sorted(test.glob('*.svh'))])).hexdigest()
   signature_file=obj/'source_signature.txt'
   can_reuse=args.reuse_builds and exe.exists() and signature_file.exists() and signature_file.read_text()==signature
   if not can_reuse:
-   cmd=['verilator','--binary','--timing','--coverage','--assert','-Wno-fatal','--compiler-include','verilated_cov.h','-j','2','--top-module',tb,'--Mdir',obj,'-o','sim',test/(tb+'.sv'),*([test/'can_ref_node.sv'] if tb=='tb_can' else []),*sorted(src.glob('*.sv'))]
+   cmd=['verilator','--binary','--timing','--coverage','--assert','-Wno-fatal','--compiler-include','verilated_cov.h','-j','2','--top-module',tb,'--Mdir',obj,'-o','sim',test/(tb+'.sv'),*[test/m for m in MODELS.get(tb,[])],*sorted(src.glob('*.sv'))]
    build=call(cmd,test,BUILD/(tb+'-build.log'))
    if not build['passed']:return dict(test=tb,build=build,passed=False)
    signature_file.write_text(signature)

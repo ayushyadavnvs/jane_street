@@ -72,6 +72,8 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-102 | Testbench | `tb_line` E4 measured the bit-error flag 53 clocks after the bad bit under Icarus, 54 under Verilator 5.020 and 55 (a failure) under 5.051: same-edge races in the testbench, not the RTL | `make coverage` under Verilator 5.051 | Fixed, `make test-verilator` in CI |
 | BUG-103 | Tooling | Verilator 5.020 (Ubuntu 24.04, the CI's) keeps an automatic task's local queue between calls, and loses a queue pop after a delay in an `always` block | Running the benches under Verilator 5.020 (BUG-102) | Worked around (`tb_line`), `tb_engine_ops` and `tb_proto` left to 5.05x |
 | BUG-104 | RTL (`pbe_bsync`, `pbe_line`) | The registered sample count reset to 0: on the first clock after reset the coder sampled at once, not at the sample point | Race-free reset release in `tb_engine_ops` (BUG-102 audit) | Fixed (`tb_line` E0) |
+| BUG-105 | Testbench | `tb_line` E2 said it tested the late join, but queued its unit before the hard synchronization; the late join was never exercised | `make coverage`: bin `bsync_late_join` 0 | Fixed (new E2b) |
+| BUG-106 | Tooling | `make coverage` left out `tb_debug` (and its program image), so the JTAG and SWD programs were not in the campaign | Comparing the coverage files with `make test` | Fixed |
 
 ---
 
@@ -2604,8 +2606,11 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 
   In both runs the coder sets `drive` exactly 52 edges after the edge that first samples the
   forced level, so the RTL behaves identically; only the timestamps moved. 5.051's 55 is what
-  resolving races 1 and 3 one way and race 2 the other gives. That is an inference: this
-  environment could not run 5.051 (see D80).
+  resolving races 1 and 3 one way and race 2 the other gives. Reproduced with 5.051 (OSS CAD
+  Suite 2026-07-27): `run.py --only tb_line` on d0c298f fails exactly as reported (55, at
+  880440000 ps). The same old bench built without the coverage instrumentation passes under
+  5.051. `prepare.py`'s cover blocks and `final` dumps change Verilator's process order, which is
+  further evidence that the result depended on process order alone.
   Also found: `usb_drive` (test B) started at a rising edge, so with bits of 20·P·(1 ± 0.015) ns
   every 25th bit boundary fell exactly on a rising edge, a race with the coder's input
   register; and the reset was released at a rising edge (a race with the async-reset flops).
@@ -2653,8 +2658,9 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   - Before (the old timing with only the exact E4 check, the BUG-103 workaround and the format
     change applied): Icarus passes with 53; Verilator 5.020 fails with
     `FAIL: bsync: flag after a bit error began 54 clocks after the bad bit, expected 1 bit +
-    loop delay + 1 (53)`; 5.051 measured 55.
-  - After: both pass with identical logs; E3 4 clocks, E4 53 (= PB + LD + 1), E5 37.
+    loop delay + 1 (53)`; 5.051 under `make coverage` measured 55 and failed even the old window.
+  - After: both pass with identical logs; E3 4 clocks, E4 53 (= PB + LD + 1), E5 37. Under
+    5.051, plain and instrumented (`make coverage`), `tb_line` passes with the same values.
 - **Audit of the other benches** (same patterns: a stimulus or a timestamp taken right after
   `@(posedge clk)`, or a counter read by another rising-edge process):
   - reset released at a rising edge: `tb_fetch`, `tb_usb`, `tb_pbe`, `tb_proto`, `tb_can` (twice),
@@ -2775,3 +2781,64 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Gate-level:** the netlist changes (one flop and the gating), so the next gds run carries it.
   The GL benches (`tb_fetch`, `tb_proto`, `tb_usb`, `tb_pbe`) run with LINE2 sample point 0
   and no CAN mode, where `sample` is unchanged. The gds and gl_regression workflows were not run.
+
+## BUG-105 — tb_line E2 never reached the late-join window (test)
+
+- **Where:** `pbe_v1/test/tb_line_can.svh`, E2.
+- **Found by:** the coverage rerun (D73's new bins): 129/130, with `bsync_late_join` at 0. The
+  late join is the path where a unit is queued after a foreign SOF's hard synchronization, but
+  before that bit's sample point. Its condition is `cs == C_FRAME && sof && joinw && !sampled &&
+  q_valid`.
+- **Cause:** E2's comment said "c joins after the SOF began (the late-join window)". But its
+  `bc_send` after two falling edges lands one clock *before* the hard synchronization: the
+  winner's falling edge needs the 4-clock loop delay plus the input register to reach the coder.
+  A debug print shows the unit queued at clock 29507 and `hard` at 29508 with `q_valid = 1`. That
+  is the ordinary foreign start with a unit already queued (also worth testing, and it stays).
+- **Before:**
+  ```systemverilog
+    begin   // c joins after the SOF began (the late-join window), then queues its bits
+      repeat (2) @(negedge clk);
+      foreach (mine[i]) bc_send(mine[i] ? 8'h80 : 8'h00);
+  ```
+- **After:** E2's comment says what it does, and a new E2b repeats E2's arbitration with the unit
+  queued PB / 4 clocks after the hard synchronization:
+  ```systemverilog
+      while (c.cs != 3'd2) @(negedge clk);   // C_FRAME: the hard synchronization happened
+      repeat (PB / 4) @(negedge clk);         // well before the sample point
+      tb_start = clk_n;
+      foreach (mine[i]) bc_send(mine[i] ? 8'h80 : 8'h00);
+  ...
+  check(n_ljoin == 1, ...);                              // the late-join path ran once
+  check(drv_on[0] > tb_start && drv_on[0] - tb_start <= 3, ...);  // drove the SOF at once
+  check(n_barb == 1, ...);   // its own frame: arbitration lost to 0x123 is reported
+  ```
+  plus the same received bits, no errors and REC = TEC = 0.
+- **Test:** the RTL was right, so no fix fails first. Instead E2b was checked against a scratch
+  copy with `late_join` forced to 0: `FAIL: bsync: 0 late joins, expected 1`, `FAIL: bsync: late
+  join drove the SOF 996 clocks after the unit was queued, expected at once`, `FAIL: bsync: late
+  join: 0 arbitration-lost pulses, expected 1`. On the real RTL: `E2b: late join 12 clocks into the
+  winner's SOF: drove at once, lost to ID 0x123, received 19 bits, ACKed`, identical under Icarus
+  and Verilator, and the bin is hit (130/130).
+
+## BUG-106 — make coverage left out tb_debug (tool)
+
+- **Where:** `verify/coverage/run.py`.
+- **Cause:** the campaign's bench list and program-image list were written before `tb_debug`
+  (D75–D77), and nobody added it. COVERAGE.md says every `make test` SV bench runs, but the JTAG
+  and SWD programs and their testbench were not in it. Only `tb_can` had its extra model wired in.
+- **Before:**
+  ```python
+  BENCHES=[...,'tb_pbe','tb_can','tb_spec_boundaries']
+  IMAGE_TARGETS=[... for name in (...,'fetch','can','can_ops')]
+  ... *([test/'can_ref_node.sv'] if tb=='tb_can' else []) ...
+  ```
+- **After:** `tb_debug` and the `debug` image are in the lists. The bench-side models are a table
+  (`MODELS`) used for both the build and the reuse signature, which did not include
+  `can_ref_node.sv` before:
+  ```python
+  BENCHES=[...,'tb_pbe','tb_can','tb_debug','tb_spec_boundaries']
+  MODELS={'tb_can':['can_ref_node.sv'],'tb_debug':['jtag_tap.sv','swd_dp.sv']}
+  ... *[test/m for m in MODELS.get(tb,[])] ...
+  ```
+- **Test:** the rerun's `runs.json` lists `tb_debug PASS` with a fresh coverage file; the
+  `make test-coverage-tools` guards pass.

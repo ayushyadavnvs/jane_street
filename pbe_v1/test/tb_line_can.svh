@@ -107,7 +107,8 @@ wire        bc_drv, bc_ready, bc_rv, bc_fe, bc_err, bc_cstep, bc_cbit, bc_arb, b
 wire        bc_pas, bc_boff;
 wire [7:0]  bc_rd, bc_rec;
 wire [8:0]  bc_tec;
-wire        bus = ext && !bc_drv;
+logic       force_rec = 0;            // E9: a transceiver fault reads recessive while c drives
+wire        bus = (ext && !bc_drv) || force_rec;
 always @(posedge clk) dline <= {dline[6:0], bus};
 wire        bc_in = dline[LD-1];
 
@@ -122,7 +123,7 @@ pbe_bsync c (
 );
 
 logic [7:0] bgot[$];
-int n_bfe = 0, n_berr = 0, n_barb = 0, n_bbe = 0, n_bsent = 0, t_bfe = -1, t_barb = -1, t_tail = -1;
+int n_bfe = 0, n_berr = 0, n_barb = 0, n_bbe = 0, n_bsent = 0, n_ljoin = 0, n_hard = 0, t_bfe = -1, t_barb = -1, t_tail = -1;
 int drv_on[$], drv_off[$];   // clock numbers where c starts / stops driving
 logic drv_q = 0;
 always @(posedge clk) begin
@@ -136,6 +137,8 @@ always @(posedge clk) begin
   if (bc_arb) begin n_barb++; t_barb = clk_n; end
   if (c.cs == 3'd3 && c.tpos == 4'd0) t_tail = clk_n;
   if (bc_berr) n_bbe++;
+  if (c.late_join) n_ljoin++;
+  if (c.hard) n_hard++;
   if (bc_sent) n_bsent++;
   drv_q <= bc_drv;
   if (bc_drv && !drv_q) drv_on.push_back(clk_n);
@@ -296,7 +299,8 @@ task automatic run_bsync_tests();
   can_encode(1);
   fork
     ext_drive();
-    begin   // c joins after the SOF began (the late-join window), then queues its bits
+    begin   // c queues its SOF unit as the winner's SOF reaches it, before the hard
+            // synchronization (so it joins at the start; E2b tests the late join), then the rest
       repeat (2) @(negedge clk);
       foreach (mine[i]) bc_send(mine[i] ? 8'h80 : 8'h00);
     end
@@ -317,6 +321,33 @@ task automatic run_bsync_tests();
   check(ok, "bsync: drove after losing arbitration, before the ACK slot");
   check(drv_on.size() >= 1 && n_berr == 0 && bc_rec == 0, $sformatf("bsync: errors %0d, REC %0d after a lost arbitration", n_berr, bc_rec));
   $display("E2: arbitration lost to ID 0x123: stopped driving, received the winner's %0d bits, ACKed", bgot.size());
+
+  // ---- E2b: the late join: c queues its frame after the hard synchronization on the winner's
+  // SOF but before the SOF's sample point; it joins in that bit, then loses as in E2 ----
+  repeat (16 * PB) @(negedge clk);
+  bgot.delete(); drv_on.delete(); drv_off.delete(); n_barb = 0; n_bfe = 0; n_berr = 0; n_ljoin = 0;
+  fork
+    ext_drive();
+    begin
+      while (c.cs != 3'd2) @(negedge clk);   // C_FRAME: the hard synchronization happened
+      repeat (PB / 4) @(negedge clk);         // well before the sample point
+      tb_start = clk_n;
+      foreach (mine[i]) bc_send(mine[i] ? 8'h80 : 8'h00);
+    end
+    begin
+      while (bgot.size() < cbits.size()) @(negedge clk);
+      bc_linectl(5'b10001);
+    end
+  join
+  while (n_bfe == 0) @(negedge clk);
+  check(n_ljoin == 1, $sformatf("bsync: %0d late joins, expected 1 (unit queued %0d clocks into the SOF)", n_ljoin, PB / 4));
+  check(drv_on.size() >= 1 && drv_on[0] > tb_start && drv_on[0] - tb_start <= 3,
+        $sformatf("bsync: late join drove the SOF %0d clocks after the unit was queued, expected at once", drv_on.size() ? drv_on[0] - tb_start : -1));
+  check(n_barb == 1, $sformatf("bsync: late join: %0d arbitration-lost pulses, expected 1", n_barb));
+  check(bgot.size() == cbits.size(), $sformatf("bsync: late join: received %0d bits, winner sent %0d", bgot.size(), cbits.size()));
+  foreach (cbits[i]) if (i < bgot.size()) check(bgot[i] == 8'(cbits[i]), $sformatf("bsync: late join: bit %0d is %0d, winner sent %0d", i, bgot[i], cbits[i]));
+  check(n_berr == 0 && bc_rec == 0 && bc_tec == 0, $sformatf("bsync: late join: errors %0d, REC %0d, TEC %0d", n_berr, bc_rec, bc_tec));
+  $display("E2b: late join %0d clocks into the winner's SOF: drove at once, lost to ID 0x123, received %0d bits, ACKed", PB / 4, bgot.size());
 
   // ---- E3: stuff error; the error flag starts in the next bit ----
   repeat (16 * PB) @(negedge clk);
@@ -412,6 +443,77 @@ task automatic run_bsync_tests();
   end
   bc_cfg2 = 8'h62;
   $display("E6: bsync sample points 0-3 at %0d clocks per bit", PB);
+
+  // ---- E7: a dominant glitch shorter than the sample point on an idle bus is not a start of
+  // frame: c hard-synchronizes, samples recessive, and goes back to idle without an error ----
+  bc_reset();
+  repeat (12 * PB) @(negedge clk);
+  n_hard = 0;
+  ext = 0;
+  repeat (PB / 4) @(negedge clk);
+  ext = 1;
+  repeat (3 * PB) @(negedge clk);
+  check(n_hard == 1 && c.cs == 3'd1 && n_berr == 0 && n_bfe == 0 && bgot.size() == 0 && drv_on.size() == 0,
+        $sformatf("bsync glitch: %0d hard syncs, state %0d, %0d errors, %0d frame ends, %0d bits, %0d drives (expected 1, idle, 0, 0, 0, 0)",
+                  n_hard, c.cs, n_berr, n_bfe, bgot.size(), drv_on.size()));
+  $display("E7: a %0d-clock dominant glitch on the idle bus: back to idle, no error", PB / 4);
+
+  // ---- E8: dominant bits after an active error flag (ISO 11898-1 rules for a receiver): the
+  // first adds 8, then every 8 more (14 dominant bits counting the flag) add 8; at REC >= 128
+  // the node is error-passive, and a frame received correctly then sets REC to 119 ----
+  begin
+    int r0, nd;
+    nd = 120;                         // dominant bits after the flag
+    r0 = bc_rec;
+    cline.delete();
+    repeat (6 + 6 + nd) cline.push_back(0);   // stuff error at bit 5, c's flag in 6..11, then nd
+    repeat (20) cline.push_back(1);
+    n_berr = 0;
+    ext_drive();
+    check(n_berr == 1 && bc_rec == r0 + 1 + 8 + 8 * (nd / 8) && bc_pas,
+          $sformatf("bsync dominant after flag: errors %0d, REC %0d (expected 1, %0d), passive %0d", n_berr, bc_rec, r0 + 1 + 8 + 8 * (nd / 8), bc_pas));
+    $display("E8: stuff error, then %0d dominant bits after the flag: REC %0d -> %0d, error-passive", nd, r0, bc_rec);
+    // a correct frame (E2's winner): received, ACKed, success: REC above 127 becomes 119
+    bgot.delete(); n_bfe = 0; n_berr = 0; drv_on.delete(); drv_off.delete();
+    cbits.delete();
+    cbits.push_back(0);
+    for (int i = 10; i >= 0; i--) cbits.push_back(logic'(11'h123 >> i));
+    repeat (7) cbits.push_back(0);
+    can_encode(1);
+    fork
+      ext_drive();
+      begin
+        while (bgot.size() < cbits.size()) @(negedge clk);
+        bc_linectl(5'b10001);
+      end
+    join
+    check(n_berr == 0 && n_bfe == 1 && bc_rec == 8'd119 && !bc_pas && drv_on.size() == 1,
+          $sformatf("bsync passive receiver success: errors %0d, frame ends %0d, REC %0d (expected 119), passive %0d, drives %0d (the ACK)",
+                    n_berr, n_bfe, bc_rec, bc_pas, drv_on.size()));
+    $display("E8: a frame received while error-passive: ACKed, REC %0d, error-active again", bc_rec);
+  end
+
+  // ---- E9: a bit error in its own active error flag (the bus reads recessive in a flag bit)
+  // adds 8 for a receiver, besides the 1 for the error that started the flag ----
+  begin
+    int r0;
+    r0 = bc_rec;
+    cline.delete();
+    repeat (6) cline.push_back(0);
+    repeat (24) cline.push_back(1);
+    n_berr = 0;
+    fork
+      ext_drive();
+      begin   // flag bits 6..11 on the bus grid: read recessive through bit 8, sample point included
+        repeat (8 * PB + 8) @(negedge clk);
+        force_rec = 1;
+        repeat (PB - 10) @(negedge clk);
+        force_rec = 0;
+      end
+    join
+    check(n_berr == 1 && bc_rec == r0 + 1 + 8, $sformatf("bsync bit error in own active flag: errors %0d, REC %0d (expected 1, %0d)", n_berr, bc_rec, r0 + 1 + 8));
+    $display("E9: a recessive bit read in its own active flag: REC %0d -> %0d (+1 +8)", r0, bc_rec);
+  end
   bc_reset();
   bc_clear = 1;
 endtask

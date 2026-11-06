@@ -1,0 +1,7 @@
+# make coverage, 2026-11-06, branch fix/race-coverage. Only Verilator is used by the campaign.
+verilator: Verilator 5.051 devel rev v5.050-99-gf8fb1d664 (mod)  (OSS CAD Suite 2026-07-27, oss-cad-suite-linux-x64-20260727.tgz)
+verilator_coverage: same suite
+g++: g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+python: Python 3.13.18
+cocotb: 2.0.1
+make test (separate): Icarus Verilog version 12.0 (stable) ()

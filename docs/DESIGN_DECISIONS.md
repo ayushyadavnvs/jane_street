@@ -1898,6 +1898,11 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   Verilator (5.05x; the recorded 92/92 used 5.051). This environment has Ubuntu's 5.020 (no
   `--compiler-include`) and PyPI's 5.38 (no coroutine flags; it also rejects `tb_proto`'s
   `disable`), and building the suite was not permitted.
+  - **Rerun (2026-11-06, D80, BUG-102–106):** with the suite's Verilator 5.051, `make coverage`
+    first stopped at `tb_line` (a testbench race, BUG-102). After the fix it hit 129/130 bins;
+    `bsync_late_join` was closed by `tb_line` E2b (BUG-105), giving **130/130**. Line 265/269,
+    branch 482/510, expression 852/908, toggle 4,450/5,394. `tb_debug` joined the campaign
+    (BUG-106). Results are in `verify/golden-model/COVERAGE.md`.
 
 ## D74. CAN 2.0B passive: a hardware frame follower for extended frames and r0 recessive
 
@@ -2241,18 +2246,20 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   - **Benches:** `tb_line`, `tb_engine_restart`, `tb_engine_known_reset`, `tb_fifo_robustness`,
     `tb_fetch`: the ones Ubuntu 24.04's Verilator 5.020 (CI's) runs correctly. Left out:
     `tb_engine_ops`, `tb_proto` and `tb_usb` (5.020 tool bugs, BUG-103), and `tb_pbe`, `tb_can`
-    and `tb_debug`, which take tens of minutes each to build and run under Verilator. All of
-    them also run under Verilator in `make coverage` (5.051, except `tb_debug`).
+    and `tb_debug`, the long chip-level benches (under 5.020 here, `tb_usb` alone took over ten
+    minutes). All of them run under Verilator 5.051 in `make coverage` (`tb_debug` since
+    BUG-106).
   - **Alternatives:** (a) Icarus only, with the process order perturbed (source order, `#0`):
     tried; Icarus's choice did not move, so it is no check. (b) The whole set under Verilator in
     `make test`: everyone would need Verilator 5.05x, and the CPU time would grow severalfold.
     (c) Only the coverage campaign (5.051): it caught this, but only by luck (55 fell outside
     the window) and only when someone runs the long campaign. Chosen: a short cross-check of the
     unit-level benches on every push, plus the rule above for the rest.
-- **Tools here:** Icarus 12.0 and Verilator 5.020 from Ubuntu 24.04's archive; Yosys 0.33. The
-  OSS CAD Suite 2026-07-27 (Verilator 5.051) was downloaded with the owner's approval, but this
-  session's permission policy did not allow running its binaries. So the 55 under 5.051 is the
-  reported value, explained by BUG-102's analysis but not reproduced here.
+- **Tools here:** Icarus 12.0 and Verilator 5.020 from Ubuntu 24.04's archive; Yosys 0.33;
+  Verilator 5.051 from the OSS CAD Suite 2026-07-27 (on PATH only for `make coverage` and the
+  5.051 checks). Under 5.051 the old `tb_line` failed only in the instrumented coverage build
+  (55), not in a plain build. Instrumentation alone changed the outcome, which is why the check
+  compares two simulators instead of trusting one.
 
 ## D81. The sample count register's first clock: a valid flag
 

@@ -545,3 +545,29 @@ Yosys 0.67+94, SBY v0.67-4-gfea6e46, Yices 2.7.0, Verilator 5.051 devel from OSS
 | `mutate.py --only M21` | `make test` caught by `tb_fifo_robustness`, `make diff` survived | identical to the recorded rerun (after BUG-076) |
 
 The full 24-mutant campaign (`make mutate`) was not re-run.
+
+## Coverage rerun after CAN, JTAG/SWD and the race fix (2026-11-06)
+
+Branch `fix/race-coverage`. Verilator 5.051 devel (OSS CAD Suite 2026-07-27, as recorded), G++
+13.3.0, Python 3.13.18, cocotb 2.0.1. The round-2 and 2026-10-30 rows above stay as they were.
+Details are in [COVERAGE.md](COVERAGE.md) ("Rerun ... 2026-11-06"); the evidence is in
+`evidence/rerun_2026-11-06/coverage/`.
+
+| Target | Result | Against the earlier records |
+|---|---|---|
+| `make coverage` on main (d0c298f) | stopped: `tb_line` E4 `55 clocks ... expected 1 bit (48..54)` | a testbench race (BUG-102); reproduced with `run.py --only tb_line` |
+| `make coverage` (fixed tree) | exit 0; 13 benches PASS (now with `tb_debug`, BUG-106), differential and line sweep PASS | — |
+| functional bins | **130/130**: the 92 round-2 bins and 38 new CAN bins (D73) | first fixed run 129/130 (`bsync_late_join`, BUG-105), closed by `tb_line` E2b |
+| line | 265/269 (98.5 %) | 190/191; +78 points from CAN, LINE2, FIFO mark/rewind, new registers |
+| branch | 482/510 (94.5 %) | 278/292 |
+| expression | 852/908 (93.8 %) | 443/461 (round 2), 458/477 (10-30) |
+| toggle | 4,450/5,394 (82.5 %) | 3,186/4,062 (round 2), 3,230/4,106 (10-30, + the SRAM `pc_d` port) |
+| `make test` | exit 0 (Icarus 12.0) | — |
+| `make test-verilator` (new, D80) | 5 benches PASS, logs identical to Icarus (Verilator 5.020, the CI's) | — |
+
+Missed lines: the unused-address default (round 2's line, moved), and the three host clears of
+STATUS bits 5–7, which `can_node`'s `CRCRST` makes unnecessary in every bench program. The five
+`pbe_bsync` lines missed before E7–E9 are covered: the SOF glitch, the bit error in its own
+active flag, REC > 127 → 119 on a success, and the 14/8-dominant-bit rule. No RTL bug turned up
+there. The run found one RTL bug, BUG-104: the first sample after reset. It surfaced through the
+reset-release audit, not through a coverage gap.

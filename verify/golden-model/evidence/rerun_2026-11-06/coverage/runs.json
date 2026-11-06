@@ -1,0 +1,789 @@
+[
+  {
+    "test": "coverage harness negative regressions",
+    "run": {
+      "command": [
+        "/home/user/jane_street/.venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "/home/user/jane_street/verify/coverage",
+        "-p",
+        "test_harness.py",
+        "-v"
+      ],
+      "returncode": 0,
+      "seconds": 0.254,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/harness-tests.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "passed": true
+  },
+  {
+    "test": "tb_coverage_gaps",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_coverage_gaps",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_coverage_gaps.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.122,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_coverage_gaps-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_coverage_gaps.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.28,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_coverage_gaps-run.log",
+      "coverage_bytes": 820933,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "d36f34893b84c6176b5b056552ce03bfb498ad68b188dd9a68370680c199cc84"
+  },
+  {
+    "test": "tb_engine_known_reset",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_engine_known_reset",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_engine_known_reset",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_engine_known_reset.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.205,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_engine_known_reset-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_engine_known_reset/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_engine_known_reset.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.296,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_engine_known_reset-run.log",
+      "coverage_bytes": 886893,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "e551ebe9b94d42ac7807a59e6d411614ff4bfed78a507d9c2133ed067ac2e4c1"
+  },
+  {
+    "test": "tb_fifo_robustness",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_fifo_robustness",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_fifo_robustness",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_fifo_robustness.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.156,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_fifo_robustness-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_fifo_robustness/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_fifo_robustness.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.014,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_fifo_robustness-run.log",
+      "coverage_bytes": 80442,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "06572df3ffe99e928be29eda96db3fc02d7168cc8480f28c764ba9101fb1f1e8"
+  },
+  {
+    "test": "tb_engine_restart",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_engine_restart",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_engine_restart",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_engine_restart.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.141,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_engine_restart-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_engine_restart/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_engine_restart.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.284,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_engine_restart-run.log",
+      "coverage_bytes": 831445,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "2565868e9b3e6649d6125fb8a221fd810762e0caae20158e7f0cdad02f0ade37"
+  },
+  {
+    "test": "tb_engine_ops",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_engine_ops",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_engine_ops",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_engine_ops.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.178,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_engine_ops-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_engine_ops/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_engine_ops.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.831,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_engine_ops-run.log",
+      "coverage_bytes": 892267,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "c815bb13c32689bd3d443cd0b2a2f5e02ee8d14ff9a7369d97b925feaa91be7b"
+  },
+  {
+    "test": "tb_fetch",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_fetch",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_fetch",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_fetch.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.188,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_fetch-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_fetch/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_fetch.dat"
+      ],
+      "returncode": 0,
+      "seconds": 2.257,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_fetch-run.log",
+      "coverage_bytes": 1309352,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "153bf6428b69ca420370df73b60c2d205c49060c49be87a83d5511ff391ff201"
+  },
+  {
+    "test": "tb_line",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_line",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_line",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 27.97,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_line-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_line/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_line.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.34,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_line-run.log",
+      "coverage_bytes": 472241,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "a0f3e902ba53000a487668c4ff20a2e0bde3d1bc5b77542ed88a5a9734a56eba"
+  },
+  {
+    "test": "tb_usb",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_usb",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_usb",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_usb.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.109,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_usb-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_usb/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_usb.dat"
+      ],
+      "returncode": 0,
+      "seconds": 16.993,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_usb-run.log",
+      "coverage_bytes": 1374575,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "812db02b73b0183a77a82a0f8c93e639dc45e4c4786d8688a5c76fb5ed1fcf45"
+  },
+  {
+    "test": "tb_proto",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_proto",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_proto",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_proto.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.253,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_proto-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_proto/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_proto.dat"
+      ],
+      "returncode": 0,
+      "seconds": 4.538,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_proto-run.log",
+      "coverage_bytes": 1358657,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "c96e3c9355a7b0a7019c8933208fa303b6bc5aff1b246426b241499456e6eeff"
+  },
+  {
+    "test": "tb_pbe",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_pbe",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_pbe",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_pbe.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.229,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_pbe-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_pbe/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_pbe.dat"
+      ],
+      "returncode": 0,
+      "seconds": 138.288,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_pbe-run.log",
+      "coverage_bytes": 1604757,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "d3a943d5aa5641f1e555e315fd926d6426ed283c62bf02375679ece624220324"
+  },
+  {
+    "test": "tb_can",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_can",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_can",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_can.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/can_ref_node.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.258,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_can-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_can/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_can.dat"
+      ],
+      "returncode": 0,
+      "seconds": 22.264,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_can-run.log",
+      "coverage_bytes": 1548606,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "850b30409e958dc262008c93f98ef2b4f103ca03a79099b21a29424682cd9cb1"
+  },
+  {
+    "test": "tb_debug",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_debug",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_debug",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_debug.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/jtag_tap.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/swd_dp.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.188,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_debug-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_debug/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_debug.dat"
+      ],
+      "returncode": 0,
+      "seconds": 130.84,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_debug-run.log",
+      "coverage_bytes": 1576346,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "ce2019d729c1291c11ab1b6335ca3e200d6a4b95cff7e9c7403c8d3731267194"
+  },
+  {
+    "test": "tb_spec_boundaries",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_spec_boundaries",
+        "--Mdir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries",
+        "-o",
+        "sim",
+        "/home/user/jane_street/pbe_v1/build/coverage/test/tb_spec_boundaries.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/home/user/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv"
+      ],
+      "returncode": 0,
+      "seconds": 0.178,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+        "+verilator+coverage+file+/home/user/jane_street/pbe_v1/build/coverage/tb_spec_boundaries.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.276,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-run.log",
+      "coverage_bytes": 831813,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "cc87df14117c37a7998ed8084b8c985c72ea9544d0f4930e59021356a8084ac9",
+    "expected_failures": [
+      {
+        "command": [
+          "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_WINDOW_FENCE"
+        ],
+        "returncode": 1,
+        "seconds": 0.066,
+        "passed": true,
+        "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-EXPECT_WINDOW_FENCE.log",
+        "coverage_bytes": null,
+        "coverage_error": null
+      },
+      {
+        "command": [
+          "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_INSTRUCTION_WINDOW_FENCE"
+        ],
+        "returncode": 1,
+        "seconds": 0.071,
+        "passed": true,
+        "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-EXPECT_INSTRUCTION_WINDOW_FENCE.log",
+        "coverage_bytes": null,
+        "coverage_error": null
+      },
+      {
+        "command": [
+          "/home/user/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_WRITE_CANCELLATION"
+        ],
+        "returncode": 1,
+        "seconds": 0.066,
+        "passed": true,
+        "log": "/home/user/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-EXPECT_WRITE_CANCELLATION.log",
+        "coverage_bytes": null,
+        "coverage_error": null
+      }
+    ]
+  },
+  {
+    "test": "make diff equivalent --sim verilator",
+    "run": {
+      "command": [
+        "/home/user/jane_street/.venv/bin/python",
+        "/home/user/jane_street/verify/golden-model/differential/run.py",
+        "--sim",
+        "verilator",
+        "--coverage",
+        "--source-dir",
+        "/home/user/jane_street/pbe_v1/build/coverage/src",
+        "--build-dir",
+        "/home/user/jane_street/pbe_v1/build/coverage/obj_diff",
+        "--coverage-output",
+        "/home/user/jane_street/pbe_v1/build/coverage/diff.dat",
+        "--n",
+        "2",
+        "--cycles",
+        "600",
+        "--seed",
+        "0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 7.606,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/diff.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "passed": true
+  },
+  {
+    "test": "line differential 160 configurations",
+    "run": {
+      "command": [
+        "/home/user/jane_street/.venv/bin/python",
+        "/home/user/jane_street/verify/coverage/run_line.py"
+      ],
+      "returncode": 0,
+      "seconds": 5.382,
+      "passed": true,
+      "log": "/home/user/jane_street/pbe_v1/build/coverage/line_sweep.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "passed": true
+  }
+]
