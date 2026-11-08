@@ -41,8 +41,7 @@ both engines can be CAN nodes.
 
 ## Verification in brief
 
-The design is checked by several independent layers; details in
-[`docs/AI_ASSISTED_DESIGN.md`](docs/AI_ASSISTED_DESIGN.md) and [`verify/README.md`](verify/README.md).
+The design is checked by several independent layers; details in [`verify/README.md`](verify/README.md).
 
 | Layer | What it shows |
 |---|---|
@@ -72,9 +71,6 @@ In `test/`: `make` runs the Tiny Tapeout cocotb test (needs `cocotb`).
 
 ## Write-ups
 
-- [`docs/AI_ASSISTED_DESIGN.md`](docs/AI_ASSISTED_DESIGN.md): how the design was built and
-  verified with AI agents: the workflow, the rules that keep it honest, the bug log in numbers,
-  the verification layers, and where the AI went wrong.
 - [`docs/PIO_PRU_COMPARISON.md`](docs/PIO_PRU_COMPARISON.md): what the PBE does differently from
   the RP2040 PIO and TI's PRU-ICSS, what they do better, and what our architecture makes
   possible.
