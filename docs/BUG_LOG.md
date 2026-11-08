@@ -78,6 +78,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-108 | Testbench | `tb_fetch` (g): the second run started with pin 0 high, so the program's first `DRV0` added an edge and every gap after it was compared with the wrong pass position | First run of (g) | Fixed |
 | BUG-109 | Testbench | `tb_fetch` (g) expected one longer gap per word written, but a word is two `PM_DATA` byte writes, each with its own two refetches | First run of (g) | Fixed |
 | BUG-110 | Flow (D62, `sram/flow.patch`) | The SRAM flow patch powered the macros only by aligning the PDN stripes with their columns; it lacked the step that extends the stripes onto the macros' Metal4 supply columns, so the macros could have been left unpowered | Owner's review against Tiny Tapeout's SRAM example | Retired (`sram/` deleted; D82, `docs/SRAM_8x4_FLOW_STEPS.md`) |
+| BUG-111 | RTL (`PBE_PMEM_FF` fallback) | The 64-word fallback took write addresses mod 64, so loading a whole 256-word image overwrote each engine's program with the image's upper (zero) words | `make test-ff` (`tb_usb`) | Fixed (writes to words 64-255 dropped) |
 
 ---
 
@@ -2955,3 +2956,27 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Test:** none can run here (no LibreLane in this repository's tests). The check is in the
   flow: the `*-project-extendpowerstripes` log must list stripes on both macros, LVS must match,
   and the IR-drop report must say all VPWR/VGND shapes are connected (the guide, "What to check").
+
+## BUG-111 — The flip-flop fallback wrapped write addresses mod 64: a full image erased the program (RTL, fixed)
+
+- **Where:** `src/tt_um_pbe.sv`, the `PBE_PMEM_FF` branch (D82), before its first push.
+- **Cause:** the fallback has 64 words per engine and used the pointer's word bits [5:0] for
+  writes as well as reads. The testbenches' `load_program` writes all 256 words of each
+  engine's image (no word left unknown in the SRAM), so words 64-255, zeros, landed on 0-63
+  after the program and erased it. Found the first time `make test` ran `make test-ff`.
+- **Before:**
+  ```systemverilog
+  always_ff @(posedge clk) begin
+    if (pm_wr_e[0]) begin
+      if (pm_ptr[0]) pmem0[pm_word][7:0] <= wr_data;
+  ```
+- **After:** writes to words 64-255 are dropped; reads still wrap mod 64.
+  ```systemverilog
+  wire pm_low = pm_ptr[8:7] == 2'b00;  // a word below 64
+  always_ff @(posedge clk) begin
+    if (pm_wr_e[0] && pm_low) begin
+      if (pm_ptr[0]) pmem0[pm_word][7:0] <= wr_data;
+  ```
+- **Test:** `make test-ff`, `tb_usb` on the fallback: before, `FAIL: USB: bus not idle in J with the
+  device released`, `FAIL: USB: SETUP not ACKed`, ... and `make test` exits 2; after, `PASS` (and
+  `tb_proto` `PASS`).

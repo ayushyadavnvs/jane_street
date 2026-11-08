@@ -2376,9 +2376,10 @@ Known and accepted; each is a choice to keep the hardware small or the program w
     D50's read-address copies honest (they are only generated in this build, `PC_COPIES`).
   - *Why 64 words:* 2 × 64 × 16 is the same 2,048 flip-flops as the old shared 128 words, so it
     fits the area the flow has already routed; 2 × 256 would double the old memory, which was
-    already half the chip. Every program fits (the largest are 64 words). Word addresses
-    (pointer, `pc`, `START_PC`) are taken mod 64, so an image must keep each engine's programs
-    below word 64: `make test-ff` runs `tb_usb` and `tb_proto`, whose images do.
+    already half the chip. Every program fits (the largest are 64 words). Writes to words 64-255
+    are dropped (BUG-111), and `pc`/`START_PC` address the 64 words mod 64, so an image must keep
+    each engine's programs below word 64: `make test-ff` runs `tb_usb` and `tb_proto`, whose
+    images do.
   - *Alternative:* retire it — one memory implementation less to test, but no way back if the
     macro's power or LVS fails late. Rejected for now; retire it once the SRAM build has passed
     `gds`, `precheck` and `gl_test`.

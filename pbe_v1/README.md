@@ -75,7 +75,8 @@ write only. A write refetches only the engine whose memory it writes, costing it
 An engine runs the program that starts at its `START_PC` (8 bits, in its own memory), and all
 its jumps are relative to that address (6-bit targets, mod 256), so each program has a 64-word
 window and can be loaded anywhere. The assembler's images hold both memories (`@engine:word`).
-With `PBE_PMEM_FF` (the flip-flop fallback) each engine has 64 words, addressed mod 64.
+With `PBE_PMEM_FF` (the flip-flop fallback) each engine has 64 words: writes to words 64-255 are
+dropped, and `pc`/`START_PC` address the 64 words mod 64.
 
 ## Instruction set
 

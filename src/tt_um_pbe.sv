@@ -37,8 +37,8 @@
 //                    into word 0 of the same engine (the engine bit never changes). A burst
 //                    (one SPI write with many data bytes) streams a whole image. Write only.
 //                    Only the selected engine refetches (two bubbles, BUG-074); the other runs on.
-//   With PBE_PMEM_FF (the flip-flop fallback, D82) each engine has 64 words: the same registers,
-//   and word addresses (pointer, pc, START_PC) are taken mod 64.
+//   With PBE_PMEM_FF (the flip-flop fallback, D82) each engine has 64 words: the same registers;
+//   writes to words 64-255 are dropped, and pc and START_PC address the words mod 64.
 //   0x10+0x10*e   engine e (e = 0, 1):
 //      +0 CLKDIV_L, +1 CLKDIV_H   tick every (CLKDIV + 1) clocks
 //      +2 PIN_BASE[2:0]  +3 JMP_PIN[2:0]  +4 SHIFT [0] OUT msb first, [1] IN msb first
@@ -356,17 +356,19 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   wire _unused_pc = &{pc, pc_copy, 1'b0};
 `else
   // The flip-flop fallback (D82): 64 x 16 per engine, the same flip-flop count as the shared
-  // 128-word memory before D82. Word addresses are taken mod 64.
+  // 128-word memory before D82. Writes to words 64-255 are dropped (BUG-111: a whole 256-word
+  // image would otherwise overwrite words 0-63 with its upper words); reads wrap mod 64.
   localparam bit PC_COPIES = 1'b1;
   assign eng_pm_wr = pm_wr_e;
   logic [15:0] pmem0[64], pmem1[64];
   wire  [5:0]  pm_word = pm_ptr[6:1];
+  wire         pm_low  = pm_ptr[8:7] == 2'b00;  // a word below 64
   always_ff @(posedge clk) begin
-    if (pm_wr_e[0]) begin
+    if (pm_wr_e[0] && pm_low) begin
       if (pm_ptr[0]) pmem0[pm_word][7:0] <= wr_data;
       else pmem0[pm_word][15:8] <= wr_data;
     end
-    if (pm_wr_e[1]) begin
+    if (pm_wr_e[1] && pm_low) begin
       if (pm_ptr[0]) pmem1[pm_word][7:0] <= wr_data;
       else pmem1[pm_word][15:8] <= wr_data;
     end
@@ -378,7 +380,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
     assign instr[k*4+:4]      = pmem0[ra0[k*8+:6]][k*4+:4];
     assign instr[16+k*4+:4]   = pmem1[ra1[k*8+:6]][k*4+:4];
   end
-  wire _unused_pc_d = &{pc_d, pm_ptr[8:7], ra0[31:30], ra0[23:22], ra0[15:14], ra0[7:6],
+  wire _unused_pc_d = &{pc_d, ra0[31:30], ra0[23:22], ra0[15:14], ra0[7:6],
                         ra1[31:30], ra1[23:22], ra1[15:14], ra1[7:6], 1'b0};
 `endif
 
