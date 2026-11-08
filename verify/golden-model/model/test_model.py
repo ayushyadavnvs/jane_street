@@ -134,6 +134,33 @@ class EngineSpecificationTests(unittest.TestCase):
         self.assertEqual(addresses[127:130], [127, 128, 129])  # D82: 8-bit pc
         self.assertEqual(addresses[255:258], [255, 0, 1])
 
+    def test_page_prefix_and_own_page(self):
+        # D83: a jump uses its own page; PAGE p sets the next instruction's page, once
+        model = EngineModel(run=True, start_pc=0)
+        program = self.program()
+        program[0] = instruction(7, 7 << 6 | 32 | 2)      # PAGE 2
+        program[1] = instruction(3, 5)                    # JMP 5 -> word 128 + 5
+        program[133] = instruction(3, 9)                  # JMP 9 in page 2 -> word 137
+        program[137] = instruction(0, 1 << 3)             # DRV1
+        self.start(model, program)
+        pcs = []
+        for _ in range(8):
+            e = model.step(program)
+            if e['execute']:
+                pcs.append(e['instruction_pc'])
+        self.assertEqual(pcs[:4], [0, 1, 133, 137])
+        self.assertEqual(model.pins_out, 1)
+        self.assertFalse(model.pg_set)
+
+    def test_restart_clears_page(self):
+        model = EngineModel(run=True, start_pc=0)
+        program = self.program(instruction(7, 7 << 6 | 32 | 3))  # PAGE 3
+        self.start(model, program)
+        model.step(program)
+        self.assertTrue(model.pg_set)
+        model.step(program, restart=True)
+        self.assertFalse(model.pg_set)
+
     def test_jump_target_wraps_mod_256(self):
         # D82: START_PC 250, JMP 10 goes to word (250 + 10) mod 256 = 4
         model = EngineModel(run=True, start_pc=250)

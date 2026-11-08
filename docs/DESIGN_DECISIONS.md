@@ -42,6 +42,7 @@ mark the old one **Changed** instead of deleting it.
 | USB (its firmware) | Burst reads could lose a byte; a flush on SETUP threw away an OUT record | `RX_COUNT`/`TX_COUNT` registers, `TX_FLUSH` | D43, BUG-030, BUG-031 |
 | 48 MHz (USB, D18) in the first routed run | 0.586 ns of setup slack: pc → program memory → decode → next pc in one clock, through long buffer chains | An instruction register with a prefetch; four copies of the read address. A taken jump costs one clock more at CLKDIV = 0 | D7, D18, D50 |
 | JTAG, SWD | Nothing: both are programs on the existing instructions (SWD fills its 64-word window; the host computes the write parity, as `OUTPAR` covers one OSR load) | — | D75, D76 |
+| Programs over 64 words (after D82) | 6-bit jump targets reached only a 64-word window | Jumps relative to their own page; a one-shot `PAGE p` prefix for the others; the assembler inserts it | D67, D83 |
 | USB, SWD, CAN, Modbus (programs of 61-64 words) and the planned protocols | The 128 shared flip-flop words were full and half the chip | An IHP SRAM per engine, 256 separate words each (8-bit PC and `START_PC`, `PM_ADDR_H`); 8x4 tile | D4, D13, D50, D62, D82 |
 
 ---
@@ -1752,7 +1753,10 @@ prototype text is kept below as it was.
   class (`instr_q[10]` → a multiplexer, +0.30 ns from the new decode terms); with the frame
   follower 3.64 ns (from `clkdiv[1]`, the bit timer's end-of-bit compare).
 
-## D67. LINECTL: EXT sub-op 7 split by param[5]
+## D67. LINECTL: EXT sub-op 7 split by param[5] — **Changed (PAGE implemented, D83)**
+
+**Changed (D83):** param[5] = 1 is now `PAGE p` (p = param[1:0]); it no longer executes as nothing.
+
 
 - **Chosen:** `EXT` sub-op 7 with param[5] = 0 is `LINECTL`, the bit-synchronous coder's
   controls; param[5] = 1 stays reserved for D62's proposed `PAGE` and executes as nothing.
@@ -2349,6 +2353,7 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   wraps 255 → 0. `START_PC` (+5) reads back all 8 bits. No `PAGE` instruction now: programs over
   64 words will need it, and EXT sub-op 7 with param[5] = 1 stays reserved for it (D67), with up
   to 5 page bits — a page of 2 already covers 128 words, 4 the whole memory.
+  **Changed (D83):** `PAGE` is implemented; jumps are relative to their own 64-word page.
 - **The refetch rule** (D50, BUG-074): a write to engine e's memory refetches engine e at the
   write and one clock later (`pm_wr_q`, now per engine); both refetch once after reset.
   At `CLKDIV` 0 a byte written to an engine's own memory costs that engine exactly 2 clocks; a
@@ -2420,3 +2425,71 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   the macros' Metal4 supply columns, the `Project.ExtendPowerStripes` step of the Tiny Tapeout
   example, so the macros could have been left unpowered. The files are in git history
   (`git show ea6672f:sram/README.md`).
+
+## D83. PAGE: programs over 64 words, with a one-shot page prefix on page-relative jumps
+
+- **Asked by the owner** after D82: one program should be able to use its engine's whole
+  256-word memory. Until now every jump target was 6 bits relative to `START_PC`, so a program
+  was confined to a 64-word window (sequential code could run past it but never jump back).
+- **Chosen semantics:**
+  1. A program has four **pages** of 64 words: page n is program words 64n..64n+63 (relative to
+     `START_PC`, mod 256).
+  2. **A jump's 6-bit target is in the page of the jump itself** (`JMP`, `JCRCBAD`, `JEQ`,
+     `JNE`, `JLINE`). The page is the top two bits of the jump's program address,
+     `(pc - 1 - start_pc)[7:6]` (`pc - 1` is the executing word, D50).
+  3. **`PAGE p` is a one-shot prefix:** it sets the page of the next instruction that executes,
+     which then jumps to `start_pc + {p, target}`; after that instruction (whether it jumped or
+     not) the prefix is gone. Restart, a timeout jump and a line-event jump clear it. A stop
+     (`run` = 0) keeps it (the engine is frozen), and so does a host write's refetch (the
+     instruction after it is fetched again and still gets the page).
+  4. **The timeout / line-event vector stays in page 0**: `start_pc + TIMEOUT_PC` as before. A
+     timeout can fire anywhere, so "the current page" would make the vector depend on where the
+     program was blocked; one fixed place is what a vector is for. A routine longer than
+     the remaining words of page 0 can jump on from there.
+- **Encoding:** `EXT` sub-op 7, param[5] = 1 (reserved for it since D62/D67; param[5] = 0 stays
+  `LINECTL`). p = param[1:0]; param[4:2] are reserved and must be 0 (the assembler writes 0, the
+  hardware ignores them), so a larger memory could take up to 5 page bits without a new opcode.
+  Word: `0xFE00 | p << 4 | DLY`.
+- **Timing:** `PAGE` is an ordinary instruction: (DLY + 1) × (CLKDIV + 1) clocks. A taken jump
+  costs its one refetch clock at `CLKDIV` 0 into any page, as before (D50): the target address
+  is computed in the same clock, from flip-flops (`pg_set`, `pg_num`) and `pc`. A cross-page
+  jump therefore costs one instruction more than a jump inside a page. `tb_page` (d): TOG,
+  PAGE, JMP into another page and back, 4 clocks per toggle at `CLKDIV` 0, exactly.
+- **Why this and not the alternatives:**
+  1. *A persistent page register that extends every jump target* (like PIC's PCLATH): fewer
+     PAGEs when a program jumps around one far page, but every jump then depends on which path
+     reached it, so the assembler would need data-flow analysis (or a PAGE before every jump,
+     which changes the timing of every loop), and a loop that falls through into the next page
+     breaks silently. With page-relative jumps, loops inside a page need nothing, and only
+     the jumps that cross pages cost a word, which the assembler knows from the labels alone.
+  2. *A one-shot prefix with absolute pages (no prefix = page 0)*: the same hardware, but every
+     loop outside page 0 would need a PAGE before its jump, changing its timing.
+  3. *Wider jump targets:* no ARG bit is free (`JMP` and the EXT jumps use [8:6] + [5:0]).
+  4. *A long jump instruction* taking two words: a new fetch path through the D50 prefetch; much
+     more logic for the same effect as PAGE + jump.
+  - All programs of up to 64 words are in page 0 and behave exactly as before; every existing
+    image is byte-identical.
+- **Assembler (`pbe_asm.py`):** labels anywhere in 0..255. For a jump whose label is in another
+  page it inserts `PAGE p` just before the jump, moves the jump's labels onto it (so a jump to
+  that jump also runs the PAGE) and prints `PAGE p inserted at word w (one more instruction
+  time)`. Insertion repeats until no label moves to another page. `--no-auto-page` makes such a
+  jump an error instead; an explicit `PAGE p` before a jump is checked against its target.
+  New: `PAGE p`, and `.org n` (continue at word n, filling with `NOP`).
+- **Flip-flop fallback (`PBE_PMEM_FF`, 64 words):** no change to the RTL. All four pages are the
+  same 64 words (the memory is read mod 64, and writes above word 63 are dropped, BUG-111), so a
+  program must fit in 64 words there, and PAGE is pointless but harmless.
+- **Measured:** `make synth` 198,770 → 199,896 µm² (+1,126 µm²: 3 flip-flops per engine and the
+  page adder); `make timing` 3.59 → 3.76 ns of logic at the slow corner (budget 20.83 ns).
+- **Tests:** `tb_page` (also under Verilator in `make test-verilator`, and in `make test-gl`),
+  written first and failing on the RTL without PAGE:
+  (a) `page_test.pbe`, 202 words over all four pages: jumps 0 → 2 → 1 → 3 → 0 (by `JNE`) → 3,
+  forwards and backwards, a loop inside page 3 without PAGE, and a timeout from page 3 to the
+  vector in page 0 whose first instruction is a jump (a PAGE executed before the blocked
+  instruction must be cleared by the timeout); (b) a PAGE survives a stop (`run` = 0) in its
+  delay; (c) a restart clears it; (d) page 0 ↔ page 3 at `CLKDIV` 0 under 48 host byte
+  writes: no PAGE lost to a refetch, and the timing above. Faults checked: restart, timeout or
+  a host write not handled, the vector taking the current page, the prefix ignored — each fails
+  `tb_page`, and the last fails `make diff`. The model has the PAGE state; the differential's
+  random programs put a PAGE before 40 % of their jumps; formal (`engine.sby` invariants)
+  asserts that a PAGE lasts exactly one executed instruction and that restart, timeout and
+  line-event jumps clear it, and covers a jump into another page; three new coverage bins.

@@ -1,0 +1,25 @@
+; PAGE (D83), for tb_page (engine 1, START_PC 0): a PAGE survives a stop (run = 0) but not a
+; restart. PAGE 2 has a long delay, so the host can stop or restart the engine after it.
+        JMP  FLAG0, rgo      ; taken when the host has set FLAG 0 (the restart check)
+        PAGE 2 [15]
+        JMP  p2              ; with the PAGE: word 148 (0xB2); without it: word 20 (0xE0)
+.org 10
+rgo:    SET  OSR, 0xA1       ; after a restart with FLAG 0 set
+        MOV  ISR, OSR
+        PUSH
+rend:   JMP  rend
+.org 20
+lost:   SET  OSR, 0xE0       ; where JMP p2 lands if the PAGE was lost
+        MOV  ISR, OSR
+        PUSH
+lend:   JMP  lend
+.org 138
+guard:  SET  OSR, 0xEE       ; where JMP FLAG0, rgo lands if a PAGE 2 survived the restart
+        MOV  ISR, OSR
+        PUSH
+gend:   JMP  gend
+.org 148
+p2:     SET  OSR, 0xB2
+        MOV  ISR, OSR
+        PUSH
+p2end:  JMP  p2end

@@ -79,6 +79,8 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-109 | Testbench | `tb_fetch` (g) expected one longer gap per word written, but a word is two `PM_DATA` byte writes, each with its own two refetches | First run of (g) | Fixed |
 | BUG-110 | Flow (D62, `sram/flow.patch`) | The SRAM flow patch powered the macros only by aligning the PDN stripes with their columns; it lacked the step that extends the stripes onto the macros' Metal4 supply columns, so the macros could have been left unpowered | Owner's review against Tiny Tapeout's SRAM example | Retired (`sram/` deleted; D82, `docs/SRAM_8x4_FLOW_STEPS.md`) |
 | BUG-111 | RTL (`PBE_PMEM_FF` fallback) | The 64-word fallback took write addresses mod 64, so loading a whole 256-word image overwrote each engine's program with the image's upper (zero) words | `make test-ff` (`tb_usb`) | Fixed (writes to words 64-255 dropped) |
+| BUG-112 | Testbench | `tb_page` (d) declared `int bad = 0;` inside a procedural block: a static variable initialised once (BUG-023's pattern), which `make test`'s lint rejects | Icarus warning on the first run of `tb_page` | Fixed |
+| BUG-113 | Testbench | `tb_page` (a) did not check that a timeout clears a pending `PAGE`: a timeout that kept it passed | Running `tb_page` against that fault (D83) | Fixed (a `PAGE` before the timed-out `WAIT`, a jump first in the vector) |
 
 ---
 
@@ -2980,3 +2982,47 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Test:** `make test-ff`, `tb_usb` on the fallback: before, `FAIL: USB: bus not idle in J with the
   device released`, `FAIL: USB: SETUP not ACKed`, ... and `make test` exits 2; after, `PASS` (and
   `tb_proto` `PASS`).
+
+## BUG-112 — tb_page initialised a variable in its declaration inside a block (test)
+
+- **Where:** `pbe_v1/test/tb_page.sv`, check (d) (D83), before its first commit.
+- **Cause:** a declaration with an initialiser inside a procedural block makes a static variable,
+  initialised once at time 0, not each time the block runs (BUG-023). Here it ran once, so the
+  result was right, but `make test`'s lint step fails on Icarus's warning by design.
+- **Before:**
+  ```systemverilog
+  begin
+    int bad = 0;
+  ```
+- **After:**
+  ```systemverilog
+  begin
+    int bad;
+    bad = 0;
+  ```
+- **Test:** `make test` (its `LINT` step): before, `tb_page.sv:107: warning: Static variable
+  initialization requires explicit lifetime in this context.` and the step fails; after, no warning.
+
+## BUG-113 — tb_page did not check that a timeout clears a PAGE (test)
+
+- **Where:** `pbe_v1/test/page_test.pbe`, `tb_page` (a) (D83), before their first commit.
+- **Cause:** the RTL clears the PAGE prefix on a timeout jump (`restart || tmo_hit || lv_hit`).
+  (a) timed out on a `WAIT` with no PAGE before it, and the vector's first instruction was not
+  a jump, so a fault that kept the prefix across the timeout (`restart || lv_hit`) still passed.
+- **Before** (`page_test.pbe`):
+  ```
+  vec:    SET  OSR, 0x15
+  ...
+  tw:     WAIT FLAG 1, HIGH
+  ```
+- **After:** a `PAGE 2` executes before the `WAIT` that times out, and the vector starts with a
+  jump inside page 0, which a kept PAGE 2 would send to page 2:
+  ```
+  vec:    JMP  vec2
+  vec2:   SET  OSR, 0x15
+  ...
+  tw:     PAGE 2
+          WAIT FLAG 1, HIGH
+  ```
+- **Test:** `tb_page` against the fault: before the change, `PASS`; after it, `FAIL: (a) ... byte
+  5 is 13, expected 15`. On the RTL as it is, `PASS` both times.

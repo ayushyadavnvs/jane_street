@@ -26,6 +26,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
 | `test/tb_line.sv` | Unit test: the line coder in USB, CAN and HDLC styles against reference models |
+| `test/tb_page.sv` | `PAGE` (D83): a 202-word program over four pages, the timeout vector, stop and restart, host writes, cross-page timing |
 | `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up; separate memories, pointer carries, `START_PC` 252 wrapping, the refetch cost, the reset refetch (D82) |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
@@ -37,7 +38,7 @@ make test-proto                            # only tb_proto (WS2812, SPI peripher
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
-make test-verilator                        # tb_line and 4 more under Verilator and Icarus: both pass, identical logs (D80)
+make test-verilator                        # tb_line and 5 more under Verilator and Icarus: both pass, identical logs (D80)
 make synth                                 # area of the standard cells, IHP library in ../ihp_lib; the SRAM macros
                                            #   are black boxes (src/sram_bb.v); prints their instance names
 make synth FF=1                            # the same for the flip-flop fallback
@@ -75,6 +76,14 @@ write only. A write refetches only the engine whose memory it writes, costing it
 An engine runs the program that starts at its `START_PC` (8 bits, in its own memory), and all
 its jumps are relative to that address (6-bit targets, mod 256), so each program has a 64-word
 window and can be loaded anywhere. The assembler's images hold both memories (`@engine:word`).
+
+**Programs over 64 words (D83).** A program may use its engine's whole memory: four pages of 64
+words, page n being its words 64n..64n+63. A jump goes to its 6-bit target in its own page, or
+in page p if `PAGE p` executed just before it (a one-shot prefix: it applies to the next
+instruction only; restart, a timeout and a line-event jump clear it). The assembler inserts the
+`PAGE` itself when a jump's label is in another page, and says so; each one is one more
+instruction time. The timeout vector (`TIMEOUT_PC`) is in page 0. `.org n` places code at a
+word. In the flip-flop fallback all pages are the same 64 words.
 With `PBE_PMEM_FF` (the flip-flop fallback) each engine has 64 words: writes to words 64-255 are
 dropped, and `pc`/`START_PC` address the 64 words mod 64.
 
@@ -95,7 +104,7 @@ runs from an instruction register and must fetch the jump's target first (D50).
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL [NOWAIT]` / `PUSH` / `MARK` / `REWIND` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full); `NOWAIT`: an empty TX FIFO gives 0xFF; `MARK`/`REWIND` hold the TX FIFO read position and read again from it, for retransmission (D70) |
 | 110 | `FLAG n, SET/CLR/IRQ`, `MOV dst, src` | Shared flags between engines, or interrupt the host. Action 3 is `MOV` between X, OSR and ISR (source `0` = zero); with no destination it does nothing: the assembler's `NOP` (`0xD800`) |
-| 111 | `CRCRST`, `OSRCRC LO/HI [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); param[5] = 1 is kept for a `PAGE` instruction (D62) |
+| 111 | `CRCRST`, `OSRCRC LO/HI [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); `PAGE p` (param[5] = 1, p = param[1:0], D83): the next instruction's jump target is in page p |
 
 **Timeout:** if `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks (engine register
 +C/+D, 0 = never), the engine abandons it and jumps to `TIMEOUT_PC` (`LINE_CFG[5:0]`, +E).

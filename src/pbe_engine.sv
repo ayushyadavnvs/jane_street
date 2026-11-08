@@ -63,8 +63,9 @@
 //                                             coder runs the CAN frame tail), [1] stuffing on,
 //                                             [2] error now (an error flag from the next bit)
 //                                 without bit-synchronous mode LINECTL does nothing
-//                     param[5]=1: reserved for a program-memory PAGE instruction (D62
-//                                 proposal), executes as nothing
+//                     param[5]=1: PAGE p (D83), p = param[1:0] ([4:2] reserved, 0): the next
+//                                 instruction's jump target is in page p of the program
+//                                 (a one-shot prefix; see "Program addresses" below)
 //
 // Parity: OUT/OUTOD bits since the last OSR load make the send parity; OUTPAR drives it
 // (inverted for odd parity). IN bits since the last STAT make the receive parity; with the
@@ -97,13 +98,19 @@
 // following instructions are timed from the moment the condition was met.
 //
 // Pin numbers are relative to pin_base (mod 8); the JMP pin is jmp_pin + pin_base.
-// Program addresses are relative to start_pc: a program starts at its own word 0, and every
-// jump (JMP, JCRCBAD, JEQ, JNE, JLINE, the timeout) goes to (start_pc + target) mod 256.
-// A target is 6 bits; this is a branch-offset window, not a memory-protection boundary.
-// Sequential execution increments the full 8-bit PC and can leave that window or wrap 255->0.
-// Each engine has its own 256-word program memory (D82), so pc and start_pc address only it.
-// A program longer than 64 words needs a way to move its window: the reserved EXT 7
-// param[5]=1 encoding (D67) is kept for a PAGE instruction that would do that (D82).
+// Program addresses are relative to start_pc: a program starts at its own word 0. Each engine
+// has its own 256-word program memory (D82), so pc and start_pc address only it, and a program
+// may use all of it: four 64-word pages, page n being program words 64n..64n+63 (D83).
+// A jump (JMP, JCRCBAD, JEQ, JNE, JLINE) has a 6-bit target in a page: by default the page of
+// the jump itself, so a program of up to 64 words works as before, or the page p of a PAGE p
+// executed just before it. Its address is (start_pc + {page, target}) mod 256.
+// PAGE p is a one-shot prefix: it applies to the next instruction that executes (whether it
+// jumps or not) and is then gone; a restart, a timeout or line-event jump also clear it. A stop
+// (run = 0) and a host write (refetch) keep it. PAGE is an ordinary instruction for timing
+// ((DLY + 1) ticks); a taken jump costs one refetch clock at CLKDIV 0, into any page.
+// The timeout and line-event vector is always in page 0: (start_pc + timeout_pc) mod 256.
+// Sequential execution increments the full 8-bit PC: it crosses pages and wraps 255->0.
+// With the flip-flop fallback (64 words, PBE_PMEM_FF) all four pages are the same 64 words.
 //
 // Cycle contract, clarified by the round-2 model audit (existing behavior, no RTL change):
 // - All decisions use pre-edge inputs/state. Reset zeros engine state and CRC; restart
@@ -456,7 +463,27 @@ module pbe_engine #(
       default: jump = 1'b0;
     endcase
   end
-  wire [7:0] jump_pc = start_pc + {2'b0, arg[5:0]};
+  // PAGE (D83): a one-shot page for the next instruction's jump; otherwise the jump's own page,
+  // the top two bits of its program address (pc - 1 - start_pc; exec implies iv, so instr_q is
+  // the word at pc - 1)
+  wire       page_op = op == OP_EXT && ext_op == E_LINECTL && arg[5];
+  logic       pg_set;   // a PAGE has executed and its page applies to the next instruction
+  logic [1:0] pg_num;
+  wire  [7:0] cur_off = pc - 8'd1 - start_pc;
+  wire  [1:0] j_page  = pg_set ? pg_num : cur_off[7:6];
+  wire  [7:0] jump_pc = start_pc + {j_page, arg[5:0]};
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pg_set <= 1'b0;
+      pg_num <= 2'd0;
+    end else if (restart || tmo_hit || lv_hit) begin
+      pg_set <= 1'b0;
+    end else if (exec) begin
+      pg_set <= page_op;
+      pg_num <= arg[1:0];
+    end
+  end
   // OSRCRC param[2]: the CRC left-justified to 16 bits (CRC-15: bits 14..7 in the high byte)
   wire [15:0] crc_osr = arg[2] ? (crc_value << (4'd15 - crc_cfg[3:0])) : crc_value;
 

@@ -53,6 +53,7 @@ class EngineModel:
         self.line_ev = self.line_err = False
         self.cf_cnt = self.cf_sh = 0
         self.crc = 0
+        self.pg_set, self.pg_num = False, 0   # PAGE (D83): a one-shot page for the next instruction
         self.line = LineModel()
         self.cycles = 0
 
@@ -233,12 +234,18 @@ class EngineModel:
         next_pc = self.pc
         if not old_iv:
             next_pc = (self.pc + 1) & 255
+        # D83: a jump's page is a preceding PAGE's, else its own (program address bits 7:6)
+        page = self.pg_num if self.pg_set else ((self.pc - 1 - c['start_pc']) & 255) >> 6
         if execute:
-            next_pc = (c['start_pc'] + (arg & 63) if jump else self.pc + 1) & 255
+            next_pc = (c['start_pc'] + (page << 6) + (arg & 63) if jump else self.pc + 1) & 255
         if p['timeout_hit']:
             next_pc = (c['start_pc'] + (c['line_cfg'] & 63)) & 255
         if p['pm_wr'] and not (execute and jump) and not p['timeout_hit']:
             next_pc = (self.pc - 1) & 255 if old_iv and not execute else self.pc
+        if p['restart'] or p['timeout_hit']:
+            self.pg_set = False
+        elif execute:
+            self.pg_set, self.pg_num = op == 7 and sub == 7 and bool(arg & 32), arg & 3
         if p['restart']:
             next_pc = c['start_pc'] & 255
             self.iv = False

@@ -1,0 +1,9 @@
+; PAGE (D83), for tb_page (engine 0, START_PC 0, CLKDIV 0): pins 0 and 1 toggle in turn,
+; from page 0 and page 3. The host writes engine 0's memory meanwhile: a refetch must keep a
+; PAGE that has executed for its jump. If it were lost, JMP b would land on word 0 (a) and
+; pin 0 would toggle twice in a row.
+a:      PIN  0, TOG
+        JMP  b               ; PAGE 3 inserted
+.org 192
+b:      PIN  1, TOG
+        JMP  a               ; PAGE 0 inserted

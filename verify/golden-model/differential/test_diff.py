@@ -36,6 +36,10 @@ def random_program(rng):
         elif op == 5: arg=rng.randrange(2) << 8
         else: arg=rng.randrange(4) << 7 | rng.randrange(64)
         result.append(word(op,arg,dly))
+        # D83: often a PAGE p just before a jump, so jumps reach the other pages of the memory
+        if len(result) < 62 and (op == 3 or op == 7 and arg >> 6 in (3,4,5,6)) and rng.random() < .4:
+            result.insert(-1,word(7,7 << 6 | 32 | rng.randrange(4),rng.choice([0,0,1])))
+    result=result[:63]
     result.append(word(3,0))
     return result
 

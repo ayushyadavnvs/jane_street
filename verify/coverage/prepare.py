@@ -23,6 +23,9 @@ def prepare(out=None):
  eng+=add('pbe_engine','line_event_vector','lv_hit')
  # D82: 8-bit pc and START_PC in each engine's own 256-word memory
  eng+=add('pbe_engine','start_pc_upper_half','exec && start_pc[7]')+add('pbe_engine','exec_word_255','exec && iv && pc == 8\'d0')
+ # D83: PAGE, a jump into another page, a PAGE cleared by restart or a timeout
+ eng+=add('pbe_engine','page_executed','exec && page_op')+add('pbe_engine','jump_other_page','exec && jump && pg_set && pg_num != cur_off[7:6]')
+ eng+=add('pbe_engine','page_cleared','pg_set && (restart || tmo_hit || lv_hit)')
  eng+=add('pbe_engine','jump_wraps_256','exec && jump && ({1\'b0, start_pc} + {3\'b0, arg[5:0]}) > 9\'d255')
  for bit in range(8):
   eng+=add('pbe_engine',f'status_{bit}_set',f'status[{bit}] && !pbe_cov_previous_status[{bit}]')

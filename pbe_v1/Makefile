@@ -62,11 +62,11 @@ test/debug_image.hex: programs/jtag.pbe programs/swd.pbe tools/pbe_asm.py
 test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
-IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug
+IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_fetch tb_usb tb_proto tb_pbe tb_can tb_debug; do \
+LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
@@ -76,6 +76,13 @@ test/ops_image.hex: test/ops_test.pbe tools/pbe_asm.py
 
 test/can_ops_image.hex: test/can_ops.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/can_ops.pbe@0:0
+
+# PAGE (D83): a 201-word program on engine 0, the stop/restart checks on engine 1; the loop
+test/page_image.hex: test/page_test.pbe test/page_restart.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ test/page_test.pbe@0:0 test/page_restart.pbe@1:0
+
+test/page_loop_image.hex: test/page_loop.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ test/page_loop.pbe@0:0
 
 test/fetch_image.hex: test/fetch_timing.pbe test/fetch_stream.pbe test/fetch_host.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0:0 test/fetch_stream.pbe@0:128 test/fetch_host.pbe@1:200
@@ -87,6 +94,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(ENG) && vvp -n restart.vvp
 	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(ENG) && vvp -n ops.vvp
 	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(TOP) && vvp -n fetch.vvp
+	cd test && iverilog -g2012 -o page.vvp tb_page.sv $(TOP) && vvp -n page.vvp
 	cd test && iverilog -g2012 -o line.vvp tb_line.sv $(ENG) && vvp -n line.vvp
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(TOP) && vvp -n proto.vvp
@@ -116,7 +124,7 @@ test-ff: test/usb_image.hex test/ws2812_image.hex test/spi_periph_image.hex test
 # differs in format, is left out). VL_BENCHES are the benches the Verilator in CI (Ubuntu's 5.020)
 # runs correctly; tb_engine_ops (BUG-103) and tb_proto (`disable` of a named fork) need 5.05x.
 VERILATOR  ?= verilator
-VL_BENCHES ?= tb_line tb_engine_restart tb_engine_known_reset tb_fifo_robustness tb_fetch
+VL_BENCHES ?= tb_line tb_engine_restart tb_engine_known_reset tb_fifo_robustness tb_fetch tb_page
 VL_BUILD   := build/verilator
 .PHONY: test-verilator
 test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
@@ -172,6 +180,7 @@ GL_FLAGS  = -DGL_TEST -DFUNCTIONAL -DSIM
 test-gl: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
 	test -f "$(GL_NETLIST)" && test -d "$(PDK_VLOG)"
 	cd test && iverilog -g2012 $(GL_FLAGS) -o fetch_gl.vvp tb_fetch.sv $(GL_SRC) && vvp -n fetch_gl.vvp
+	cd test && iverilog -g2012 $(GL_FLAGS) -o page_gl.vvp tb_page.sv $(GL_SRC) && vvp -n page_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o proto_gl.vvp tb_proto.sv $(GL_SRC) && vvp -n proto_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o usb_gl.vvp tb_usb.sv $(GL_SRC) && vvp -n usb_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o sim_gl.vvp tb_pbe.sv $(GL_SRC) && vvp -n sim_gl.vvp

@@ -1,0 +1,39 @@
+; PAGE (D83), for tb_page: one program of 202 words over all four 64-word pages of engine 0's
+; memory (START_PC 0). It pushes 10 12 11 13 14 15: page 0 -> 2 -> 1 -> 3 (a loop inside page
+; 3 with no PAGE) -> 0 by JNE -> 3 -> a timeout to the vector at word 40 (page 0).
+; The assembler inserts PAGE before each jump to another page.
+        SET  OSR, 0x10
+        MOV  ISR, OSR
+        PUSH
+        JMP  p2              ; page 0 -> page 2
+back:   SET  OSR, 0x14       ; from page 3 (JNE)
+        MOV  ISR, OSR
+        PUSH
+        JMP  tw              ; page 0 -> page 3
+.org 40
+vec:    JMP  vec2            ; the timeout vector: TIMEOUT_PC = 40, always in page 0; this jump
+                             ; must stay in page 0: the timeout cleared tw's PAGE 2
+vec2:   SET  OSR, 0x15
+        MOV  ISR, OSR
+        PUSH
+end:    JMP  end
+.org 64
+p1:     SET  OSR, 0x11
+        MOV  ISR, OSR
+        PUSH
+        JMP  p3              ; page 1 -> page 3
+.org 128
+p2:     SET  OSR, 0x12
+        MOV  ISR, OSR
+        PUSH
+        JMP  p1              ; page 2 -> page 1, backwards
+.org 192
+p3:     SET  X, 2
+l3:     JMP  X--, l3         ; a jump inside page 3: no PAGE needed
+        SET  OSR, 0x13
+        MOV  ISR, OSR
+        PUSH                 ; clears ISR
+        JNE  back            ; ISR != OSR: page 3 -> page 0
+tw:     PAGE 2               ; for the instruction after it, which never executes:
+        WAIT FLAG 1, HIGH    ; never true: times out to vec in page 0
+        JMP  tw

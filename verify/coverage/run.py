@@ -16,7 +16,7 @@ PBE=ROOT/'pbe_v1'                      # the design (src, test benches, build)
 GM=ROOT/'verify/golden-model'
 SPEC=ROOT/'verify/spec_boundaries'
 BUILD=PBE/'build/coverage'
-BENCHES=['tb_coverage_gaps','tb_engine_known_reset','tb_fifo_robustness','tb_engine_restart','tb_engine_ops','tb_fetch','tb_line','tb_usb','tb_proto','tb_pbe','tb_can','tb_debug','tb_spec_boundaries']
+BENCHES=['tb_coverage_gaps','tb_engine_known_reset','tb_fifo_robustness','tb_engine_restart','tb_engine_ops','tb_fetch','tb_page','tb_line','tb_usb','tb_proto','tb_pbe','tb_can','tb_debug','tb_spec_boundaries']
 # the bench-side models some benches need besides the RTL (tb_debug since D75-D77, BUG-106)
 MODELS={'tb_can':['can_ref_node.sv'],'tb_debug':['jtag_tap.sv','swd_dp.sv']}
 # IHP's model of the program memory's SRAM macro (D82); FUNCTIONAL selects its behavioural core
@@ -34,7 +34,7 @@ def call(cmd,cwd,log,expected=0,marker=None,coverage_file=None):
   try: coverage_bytes=require_coverage(coverage_file)
   except RuntimeError as exc: passed=False;coverage_error=str(exc)
  return dict(command=list(map(str,cmd)),returncode=p.returncode,seconds=round(time.monotonic()-started,3),passed=passed,log=str(log),coverage_bytes=coverage_bytes,coverage_error=coverage_error)
-IMAGE_TARGETS=['test/'+name+'_image.hex' for name in ('conc','ow','modbus','nop','uart','spi','mixed','ws2812','spi_periph','i2c_target','usb','ops','fetch','can','can_ops','debug')]
+IMAGE_TARGETS=['test/'+name+'_image.hex' for name in ('conc','ow','modbus','nop','uart','spi','mixed','ws2812','spi_periph','i2c_target','usb','ops','fetch','can','can_ops','debug','page','page_loop')]
 def refresh_images(root=PBE,targets=IMAGE_TARGETS):
  command=['make','-s',*targets]
  result=subprocess.run(command,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)

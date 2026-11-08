@@ -34,6 +34,14 @@ def main():
           assert (x == 0 && osr == 0 && isr == 0);
         end
       end
+      // D83: a PAGE applies to the next executed instruction only; restart, timeout and
+      // line-event jumps clear it
+      if (`F_KIND == 0) begin
+        if ($past(rst_n && (restart || tmo_hit || lv_hit))) assert (!pg_set);
+        else if ($past(rst_n && exec && !page_op)) assert (!pg_set);
+        else if ($past(rst_n && exec && page_op)) assert (pg_set && pg_num == $past(arg[1:0]));
+        cover (exec && jump && pg_set && pg_num != cur_off[7:6]);  // a jump into another page
+      end
       if (`F_KIND == 1 && iv) assert (instr_q == f_mem_current);
       // Original requested assertions are kept, not assumed away.
       if (`F_KIND == 2) assert (((pc - start_pc) & 8'hff) < 64);
