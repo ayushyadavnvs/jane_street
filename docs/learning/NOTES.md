@@ -15,9 +15,18 @@ Branch `learn/notes` only.
 6. Later: timing closure with his own reports.
 
 ## Status
-- 2026-11-08: session 1 started. Gauging prior knowledge; starting step 1.
+- 2026-11-08: session 1. Gauged knowledge. Next: install KLayout, download the fork's gds
+  artifacts, send run URL and file list.
 
 ## What Ayush knows
 - Verilog and basic digital design. No ASIC physical design yet.
+- Knows the flow order in theory (synth -> floorplan -> place -> CTS -> route -> STA -> DRC -> LVS)
+  and basic STA (setup/hold, slack, post-route RC). Knows SRAM saves area, has one port, needs power.
+- Gaps filled in session 1 (check later): PDN is its own step after floorplan; STA runs at
+  several stages and corners, signoff uses extracted parasitics (SPEF); hold buffers come
+  after CTS; SRAM read is synchronous (one-cycle latency); a macro is a placement/routing
+  blockage described by LEF (abstract) + .lib (timing) + GDS (layout).
+- Has never used KLayout or downloaded Actions artifacts. Cloned jane_street and his
+  SRAM-example fork in ~.
 
 ## Open questions / to revisit
