@@ -143,7 +143,7 @@ class EngineModel:
         issue = p['run'] and self.iv and (self.blocked or tick and not self.dly_cnt)
         execute = bool(issue and ready and not p['restart'])
         if unknown_instruction and execute:
-            raise ValueError(f'uninitialized program instruction at address {(self.pc - 1) & 127}, '
+            raise ValueError(f'uninitialized program instruction at address {(self.pc - 1) & 255}, '
                              f'cycle {self.cycles}; load program memory before running')
         timeout = bool(p['run'] and not p['restart'] and self.iv and self.blocked
                        and not ready and c['timeout'] and self.tmo_cnt >= c['timeout'])
@@ -185,12 +185,12 @@ class EngineModel:
                     flag_clr=(1 << (arg & 3)) if ex and op == 6 and flag_act == 1 else 0,
                     irq=bool(ex and op == 6 and flag_act == 2 or p['overflow'] and not self.rx_ovf),
                     execute=ex, issue=bool(p['issue']), instruction=self.instr_q,
-                    instruction_pc=(self.pc - 1) & 127 if self.iv else self.pc)
+                    instruction_pc=(self.pc - 1) & 255 if self.iv else self.pc)
 
     def step(self, program, **inputs):
         """Advance one rising edge, returning the effects consumed on that edge.
 
-        ``program`` may be a sequence of 128 words or a callable read(address).
+        ``program`` may be a sequence of 256 words (the engine's own memory, D82) or a callable read(address).
         Host program writes must be applied by the caller *after* this method,
         since the edge samples the pre-write memory value.
         """
@@ -232,15 +232,15 @@ class EngineModel:
         # target for a one-clock refill. Writes refetch the next instruction.
         next_pc = self.pc
         if not old_iv:
-            next_pc = (self.pc + 1) & 127
+            next_pc = (self.pc + 1) & 255
         if execute:
-            next_pc = (c['start_pc'] + (arg & 63) if jump else self.pc + 1) & 127
+            next_pc = (c['start_pc'] + (arg & 63) if jump else self.pc + 1) & 255
         if p['timeout_hit']:
-            next_pc = (c['start_pc'] + (c['line_cfg'] & 63)) & 127
+            next_pc = (c['start_pc'] + (c['line_cfg'] & 63)) & 255
         if p['pm_wr'] and not (execute and jump) and not p['timeout_hit']:
-            next_pc = (self.pc - 1) & 127 if old_iv and not execute else self.pc
+            next_pc = (self.pc - 1) & 255 if old_iv and not execute else self.pc
         if p['restart']:
-            next_pc = c['start_pc'] & 127
+            next_pc = c['start_pc'] & 255
             self.iv = False
             self.div_cnt = self.dly_cnt = self.tmo_cnt = 0
             self.blocked = False

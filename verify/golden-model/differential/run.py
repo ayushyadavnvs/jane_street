@@ -41,8 +41,11 @@ def main():
     os.environ.update(PBE_N=str(a.n),PBE_SEED=str(a.seed),PBE_CYCLES=str(a.cycles),PBE_DIFF_OUTPUT_DIR=str(build))
     sys.path[:0]=[str(GM),str(Path(__file__).parent)]
     r=get_runner(a.sim)
-    r.build(sources=list(a.source_dir.resolve().glob('*.sv')),hdl_toplevel='tt_um_ayushyadavnvs_pbe',
-            build_dir=build,build_args=flags,timescale=('1ps','1ps'))
+    # D82: the program memories are IHP SRAM macros; simulate IHP's model (FUNCTIONAL core)
+    sram=GM.parents[1]/'macros'/'RM_IHPSG13_1P_256x16_c2_bm_bist'
+    model=[sram/'RM_IHPSG13_1P_256x16_c2_bm_bist.v',sram/'RM_IHPSG13_1P_core_behavioral_bm_bist.v']
+    r.build(sources=sorted(a.source_dir.resolve().glob('*.sv'))+model,hdl_toplevel='tt_um_ayushyadavnvs_pbe',
+            build_dir=build,build_args=flags,defines={'FUNCTIONAL':1},timescale=('1ps','1ps'))
     if a.coverage:
         sys.path.insert(0,str(COV))
         from data_file import clear_coverage, require_coverage

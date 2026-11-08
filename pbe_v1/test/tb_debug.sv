@@ -3,7 +3,7 @@
 //
 //   engine 0: jtag.pbe (word 0), pins 0..3 = TCK, TMS, TDI, TDO, against IEEE 1149.1 TAPs
 //             (jtag_tap.sv): one TAP, or a chain of two (TDI -> TAP A -> TAP B -> TDO)
-//   engine 1: swd.pbe (word 64), pins 4..5 = SWCLK, SWDIO, against an ADIv5 SW-DP (swd_dp.sv)
+//   engine 1: swd.pbe (word 192 of its own memory, D82), pins 4..5 = SWCLK, SWDIO, against an ADIv5 SW-DP (swd_dp.sv)
 //
 // The target models are written from the standards, not from the programs. SWDIO, TMS, TDI
 // and TDO have pull-ups (SWDIO needs one, ADIv5 B4.1.1; TDO is high-impedance outside
@@ -389,7 +389,7 @@ module tb_debug;
       reg_write(b + 2, e ? 4 : 0);    // pin base
       reg_write(b + 3, 0);
       reg_write(b + 4, 0);            // LSB first both ways
-      reg_write(b + 5, e ? 64 : 0);   // start
+      reg_write(b + 5, e ? 192 : 0);  // start: swd ends at word 255 of engine 1's memory
       reg_write(b + 'hB, 0);          // CRC off
       reg_write(b + 'hC, 0);          // no timeout
       reg_write(b + 'hD, 0);
@@ -418,7 +418,7 @@ module tb_debug;
     repeat (5) @(posedge clk);
     @(negedge clk) rst_n = 1;  // released between edges, not at one (BUG-102)
     repeat (5) @(posedge clk);
-    load_program("debug_image.hex");   // jtag at word 0, swd at word 64
+    load_program("debug_image.hex");   // jtag at engine 0 word 0, swd at engine 1 word 192
     jt_on = 1;
     sw_on = 1;
 

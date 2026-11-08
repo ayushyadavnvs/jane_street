@@ -21,6 +21,9 @@ def prepare(out=None):
  for kind in range(4):eng+=add('pbe_engine',f'pull_kind_{kind}',f'exec && op == OP_FIFO && !arg_hi && arg[7:6] == {kind}')
  eng+=add('pbe_engine','linectl_width','lctl && bsm && !arg[4]')+add('pbe_engine','linectl_action','lctl && bsm && arg[4]')
  eng+=add('pbe_engine','line_event_vector','lv_hit')
+ # D82: 8-bit pc and START_PC in each engine's own 256-word memory
+ eng+=add('pbe_engine','start_pc_upper_half','exec && start_pc[7]')+add('pbe_engine','exec_word_255','exec && iv && pc == 8\'d0')
+ eng+=add('pbe_engine','jump_wraps_256','exec && jump && ({1\'b0, start_pc} + {3\'b0, arg[5:0]}) > 9\'d255')
  for bit in range(8):
   eng+=add('pbe_engine',f'status_{bit}_set',f'status[{bit}] && !pbe_cov_previous_status[{bit}]')
   eng+=add('pbe_engine',f'status_{bit}_clear',f'!status[{bit}] && pbe_cov_previous_status[{bit}]')
@@ -44,7 +47,11 @@ def prepare(out=None):
                    ('busoff_recovered','cs == C_BUSOFF && sample && rseq == 7\'d127 && rrun == 4\'d10 && b')]:
   bs+=add('pbe_bsync',f'bsync_{name}',cond)
  bs+='  end\n'
- top='  always @(posedge clk) if (rst_n) begin\n'+add('tt_um_pbe','both_engines','run == 2\'b11')+'  end\n'
+ top='  always @(posedge clk) if (rst_n) begin\n'+add('tt_um_pbe','both_engines','run == 2\'b11')
+ # D82: each engine's memory written, a write while the other engine runs, the SRAM's second refetch
+ top+=add('tt_um_pbe','pm_write_engine0','pm_wr_e[0]')+add('tt_um_pbe','pm_write_engine1','pm_wr_e[1]')
+ top+=add('tt_um_pbe','pm_write_other_running','(pm_wr_e[0] && run[1]) || (pm_wr_e[1] && run[0])')
+ top+=add('tt_um_pbe','pm_second_refetch','pm_wr_q != 2\'b00 && pm_wr_e == 2\'b00')+'  end\n'
  for source in sorted((PBE/'src').glob('*.sv')):
   s=source.read_text();extra={'pbe_engine.sv':eng,'pbe_line.sv':line,'tt_um_pbe.sv':top,'pbe_bsync.sv':bs}.get(source.name,'')
   # Every used top can dump after final() in the simulator's normal shutdown path.

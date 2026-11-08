@@ -4,7 +4,8 @@
 # Tiny Tapeout test of the Programmable Bit Engine, used both on the RTL and, by the gl_test
 # workflow, on the gate-level netlist after place and route. It goes through the chip's pins
 # only, like the full suite in pbe_v1/test (which runs on the RTL):
-#   1. the host SPI port: write a register and read it back
+#   1. the host SPI port: write a register and read it back; the program memory pointer
+#      (PM_ADDR_H, D82) and an 8-bit START_PC
 #   2. load the UART programs into program memory, loop protocol pin 0 back to pin 1, and send
 #      bytes from engine 0 (UART TX) to engine 1 (UART RX)
 
@@ -63,13 +64,16 @@ class Host:
         return d
 
     async def load_program(self, words):
-        await self.write(0x06, 0)        # program memory byte pointer = 0
-        await self.cs(0)
-        await self.byte(0x80 | 0x07)     # burst into PM_DATA
-        for w in words:
-            await self.byte(w >> 8)
-            await self.byte(w & 0xFF)
-        await self.cs(1)
+        """An image from pbe_asm.py: 512 words, engine 0's memory then engine 1's (D82)."""
+        for e in range(2):
+            await self.write(0x0F, e << 1)   # PM_ADDR_H: engine e, word bit 7 = 0
+            await self.write(0x06, 0)        # PM_ADDR: word 0, high byte
+            await self.cs(0)
+            await self.byte(0x80 | 0x07)     # burst into PM_DATA; the pointer advances per byte
+            for w in words[e * 256:(e + 1) * 256]:
+                await self.byte(w >> 8)
+                await self.byte(w & 0xFF)
+            await self.cs(1)
 
 
 async def bus(dut, loop01):
@@ -106,6 +110,14 @@ async def test_registers(dut):
         got = await host.read(0x10)
         assert got == v, f"CLKDIV_L read back {got:02x}, wrote {v:02x}"
     assert await host.read(0x0A) == 0, "RX_COUNT of engine 0 should be 0 after reset"
+    # D82: START_PC is 8 bits; the program memory pointer is {PM_ADDR_H[1:0], PM_ADDR}
+    await host.write(0x25, 0xC8)
+    assert await host.read(0x25) == 0xC8, "START_PC of engine 1 should hold 200"
+    await host.write(0x0F, 0x03)                 # engine 1, word bit 7
+    await host.write(0x06, 0xFF)                 # word 255, low byte
+    await host.write(0x07, 0x00)                 # write it: {word, byte} wraps to 0
+    assert await host.read(0x06) == 0x00, "PM_ADDR should wrap to 0"
+    assert await host.read(0x0F) == 0x02, "PM_ADDR_H should keep engine 1 and carry word 255 to 0"
 
 
 @cocotb.test()
@@ -114,7 +126,7 @@ async def test_uart_loopback(dut):
     loop01 = {"on": False}
     cocotb.start_soon(bus(dut, loop01))
     words = [int(x, 16) for x in IMAGE.read_text().split()]
-    await host.load_program(words)       # uart_tx at word 0, uart_rx at word 8
+    await host.load_program(words)       # uart_tx: engine 0 word 0; uart_rx: engine 1 word 8
     await host.write(0x10, UART_BIT // 2 - 1)  # E0 tick = 1/2 bit
     await host.write(0x11, 0)
     await host.write(0x12, 0)            # E0 pins start at 0
@@ -125,7 +137,7 @@ async def test_uart_loopback(dut):
     await host.write(0x22, 1)            # E1 pins start at 1
     await host.write(0x23, 0)            # JMP pin = rx
     await host.write(0x24, 0)
-    await host.write(0x25, 8)            # uart_rx starts at word 8
+    await host.write(0x25, 8)            # uart_rx starts at word 8 of engine 1's memory
     await host.write(0x03, 0b0000_0010)  # pin 1 belongs to E1
     loop01["on"] = True
     await host.write(0x00, 0b0011_0011)  # restart + run both engines

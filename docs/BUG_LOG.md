@@ -74,6 +74,10 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-104 | RTL (`pbe_bsync`, `pbe_line`) | The registered sample count reset to 0: on the first clock after reset the coder sampled at once, not at the sample point | Race-free reset release in `tb_engine_ops` (BUG-102 audit) | Fixed (`tb_line` E0) |
 | BUG-105 | Testbench | `tb_line` E2 said it tested the late join, but queued its unit before the hard synchronization; the late join was never exercised | `make coverage`: bin `bsync_late_join` 0 | Fixed (new E2b) |
 | BUG-106 | Tooling | `make coverage` left out `tb_debug` (and its program image), so the JTAG and SWD programs were not in the campaign | Comparing the coverage files with `make test` | Fixed |
+| BUG-107 | Tooling / testbench | Icarus 12 cannot pass a queue literal (`'{...}`) as a task argument (vvp segfaults) or initialise an unpacked array from one (elaboration fails) | Writing `tb_fetch` (d)-(h) (D82) | Worked around (fixed byte arguments, a `case` function) |
+| BUG-108 | Testbench | `tb_fetch` (g): the second run started with pin 0 high, so the program's first `DRV0` added an edge and every gap after it was compared with the wrong pass position | First run of (g) | Fixed |
+| BUG-109 | Testbench | `tb_fetch` (g) expected one longer gap per word written, but a word is two `PM_DATA` byte writes, each with its own two refetches | First run of (g) | Fixed |
+| BUG-110 | Flow (D62, `sram/flow.patch`) | The SRAM flow patch powered the macros only by aligning the PDN stripes with their columns; it lacked the step that extends the stripes onto the macros' Metal4 supply columns, so the macros could have been left unpowered | Owner's review against Tiny Tapeout's SRAM example | Retired (`sram/` deleted; D82, `docs/SRAM_8x4_FLOW_STEPS.md`) |
 
 ---
 
@@ -2000,6 +2004,10 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Not caught by any test** (D62, investigation §3.7): `pm_wr_q` resetting to 0 (every test
   writes its program after reset, which refetches), and a refetch only one clock after the
   write (an instruction would have to complete in exactly that clock).
+- **Now caught (D82):** both, by `tb_fetch` (g) (exactly 2 clocks lost per byte written to the
+  engine's own memory at `CLKDIV` 0; a late-only or single refetch loses 1) and (h) (after a
+  reset, without rewriting the memory, the engine must run word 0 first). See BUG-109. Since D82
+  `pm_wr_q` is per engine (`logic [1:0]`, reset `2'b11`) and only the written engine refetches.
 
 ## BUG-075 — Stress bench imported the bus models from their pre-D63 location (merge interaction, fixed)
 
@@ -2842,3 +2850,108 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   ```
 - **Test:** the rerun's `runs.json` lists `tb_debug PASS` with a fresh coverage file; the
   `make test-coverage-tools` guards pass.
+
+## BUG-107 — Icarus 12: a queue literal as a task argument crashes vvp; an unpacked array cannot be initialised from one (tool, worked around)
+
+- **Where:** `pbe_v1/test/tb_fetch.sv`, the new checks (d)-(h) of D82, before their first commit.
+- **Found by:** the first runs. An unpacked array declared with a literal initialiser stops
+  elaboration (`sorry: Assignment to an entire array or to an array slice is not yet
+  supported.`, `Elaboration failed`); with that removed, passing `'{...}` to a task's queue
+  argument made `vvp` exit 139 (segmentation fault) before printing anything. Icarus 12.0
+  (Ubuntu 24.04, the CI's).
+- **Before:**
+  ```systemverilog
+  logic [15:0] wrap_prog[14] = '{16'h9610, 16'hDB80, ...};
+  task automatic expect_bytes(input string what, input logic [7:0] want[$], input int n);
+  expect_bytes("(f) ...", '{8'h61, 8'h62, 8'h63}, 3);
+  ```
+- **After:** the program is a function of the index, and the expected bytes are three
+  arguments:
+  ```systemverilog
+  function automatic logic [15:0] wrap_word(input int i);
+    case (i) 0: return 16'h9610; ... endcase
+  endfunction
+  task automatic expect_bytes(input string what, input logic [7:0] w0, w1, w2, input int n);
+  expect_bytes("(f) ...", 8'h61, 8'h62, 8'h63, 3);
+  ```
+- **Test:** `make test` (`tb_fetch`): before, `Elaboration failed`, then exit 139 with no output;
+  after, `PASS`.
+
+## BUG-108 — tb_fetch (g): the program's first DRV0 shifted the edge count when pin 0 started high (test)
+
+- **Where:** `pbe_v1/test/tb_fetch.sv`, check (g) (D82), before its first commit.
+- **Cause:** (g) numbers engine 0's pin 0 edges from the first `TOG` of a pass and expects a
+  3-clock gap at the start of each pass of 62 (the `JMP` and its bubble), 1 clock otherwise.
+  `fetch_stream.pbe` starts with `PIN 0, DRV0`. The first run left the pin low, but the second
+  run started where the first had stopped, sometimes high: `DRV0` then made an edge of its own,
+  and every gap was compared with the position one off.
+- **Before:**
+  ```systemverilog
+  edges.delete();
+  reg_write(7'h00, 8'h11);
+  ...
+  reg_write(7'h00, 8'h00);
+  stream_extra(extra, grown, bad);
+  ```
+- **After:** the pin level at the start is recorded, and the `DRV0` edge dropped:
+  ```systemverilog
+  task automatic stream_start;
+    stream_high = uio_out[0];
+    edges.delete();
+    reg_write(7'h00, 8'h11);
+  endtask
+  task automatic stream_stop;
+    reg_write(7'h00, 8'h00);
+    if (stream_high) void'(edges.pop_front());
+  endtask
+  ```
+- **Test:** `tb_fetch` (g), second run: before, `FAIL: ... 226 gaps grew, by 24 clocks in all,
+  107 not by 2`; after, the expected 2 clocks per write (see BUG-109 for the count).
+
+## BUG-109 — tb_fetch (g) counted one write per word; a word is two byte writes (test)
+
+- **Where:** `pbe_v1/test/tb_fetch.sv`, check (g) (D82), before its first commit.
+- **Cause:** each `pm_write` sends a word as two `PM_DATA` bytes (high, then low) in one burst,
+  about 128 clocks apart. Each byte is a write to the macro, with its own two refetches. The
+  check expected `nw` longer gaps for `nw` words.
+- **Before:**
+  ```systemverilog
+  check(grown == nw && bad == 0 && extra == 2 * nw, ...);
+  ```
+- **After:**
+  ```systemverilog
+  // each word is two PM_DATA writes (its high and low byte), 128 clocks apart
+  check(grown == 2 * nw && bad == 0 && extra == 4 * nw, ...);
+  ```
+- **Test:** `tb_fetch` (g): before, `FAIL: (g) 6 writes to engine 0's own memory: 12 gaps grew,
+  by 24 clocks in all, 0 not by 2; expected 6 gaps, 2 clocks each`; after, `(g) 12 byte writes to
+  engine 0's own memory: 12 gaps grew by 24 clocks in all (2 each)` and `PASS`. With BUG-074's
+  single refetch, or with only the late refetch (`eng_pm_wr = pm_wr_q`), (g) reports
+  `12 gaps grew, by 12 clocks in all, 12 not by 2` and fails; with `pm_wr_q` resetting to 0, (h)
+  fails (`byte 0 is 00, expected 62`). These were BUG-074's two cases "not caught by any test".
+
+## BUG-110 — sram/flow.patch would have left the SRAM macros unpowered (flow, retired)
+
+- **Where:** `sram/flow.patch`, `sram/config.json`, `sram/pdn_cfg.tcl` (D62's proposal; never
+  applied to `main` or run in the `gds` workflow).
+- **Cause:** on SG13CMOS5L the tile's power grid is one layer of vertical Metal4 stripes, and the
+  macro's supply pins (`VDD!`, `VDDARRAY!`, `VSS!`) are Metal4 columns. The patch chose a
+  stripe pitch and offset (67.44 µm, 25.40 µm) to put stripes over the columns, and a `pdn_cfg.tcl`
+  that let pdngen draw through the macros. But pdngen cuts its stripes around a macro, and
+  nothing completed the connection: Tiny Tapeout's example does it with a flow step of its own,
+  `Project.ExtendPowerStripes` (`librelane_plugin_sram_pdn.py`, `odb_stripes.py`, after
+  `OpenROAD.GeneratePDN`), which moves the stripes onto the columns and completes the VPWR/VGND
+  pairs. Without it the macros' supply columns could stay unconnected: LVS and the IR-drop
+  report would fail, or worse, the precheck would pass a design with dead memories.
+- **Before** (`sram/config.json`, abridged):
+  ```json
+  "PDN_CFG": "dir::../sram/pdn_cfg.tcl",
+  "FP_PDN_VPITCH": 67.44, "FP_PDN_VOFFSET": 25.40, "FP_PDN_VSPACING": 3.52, "FP_PDN_VWIDTH": 2.1,
+  ```
+- **After:** `sram/` is deleted (D82; in git history at `ea6672f`). The flow follows the example:
+  `meta.substituting_steps` `{"+OpenROAD.GeneratePDN": "Project.ExtendPowerStripes"}`, its
+  `pdn_cfg.tcl`, `FP_PDN_VPITCH` 44.96, `VWIDTH` 2.1, `VSPACING` 3.52, `VOFFSET` 6.15, both
+  macros at x = 3.36 µm. The owner makes these changes (`docs/SRAM_8x4_FLOW_STEPS.md`).
+- **Test:** none can run here (no LibreLane in this repository's tests). The check is in the
+  flow: the `*-project-extendpowerstripes` log must list stripes on both macros, LVS must match,
+  and the IR-drop report must say all VPWR/VGND shapes are connected (the guide, "What to check").

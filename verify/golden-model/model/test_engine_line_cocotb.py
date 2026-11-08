@@ -12,7 +12,7 @@ async def differential_engine_line(dut):
     seed = 0x454c494e45
     rng = random.Random(seed)
     model = EngineModel()
-    program = [0xd800] * 128
+    program = [0xd800] * 256  # one engine's memory (D82)
     cycle = 0
     effects_names = ('tx_pop', 'rx_push', 'rx_data', 'flag_set', 'flag_clr', 'irq')
     states = ('pins_out', 'pins_oe', 'status', 'crc_now', 'pc')
@@ -56,13 +56,13 @@ async def differential_engine_line(dut):
     for trial in range(64):
         cfg = (trial & 1) + 1 | (trial >> 1 & 3) << 2 | (trial >> 3 & 1) << 4 | (trial >> 4 & 1) << 5
         model.configure(run=True, coder_cfg=cfg, sync=rng.choice((0, 0x80, 0x55)),
-                        clkdiv=rng.choice((0, 1, 3, 7, 19)), start_pc=rng.choice((0, 64)),
+                        clkdiv=rng.choice((0, 1, 3, 7, 19)), start_pc=rng.choice((0, 64, 200, 250)),
                         pin_base=rng.randrange(8), jmp_pin=rng.randrange(8),
                         out_msb_first=bool(rng.getrandbits(1)), in_msb_first=bool(rng.getrandbits(1)),
                         crc_cfg=rng.randrange(256), crc_poly=rng.randrange(65536),
                         crc_good=rng.choice((0, 0x800d)), timeout=rng.choice((0, 1, 4, 20)),
                         line_cfg=rng.randrange(256))
-        program[:] = [rng.randrange(65536) for _ in range(128)]
+        program[:] = [rng.randrange(65536) for _ in range(256)]
         await edge(**dict(defaults, restart=True))
         for _ in range(1000):
             inputs = dict(defaults, pins_in=rng.randrange(256), flags=rng.randrange(16),
@@ -74,5 +74,5 @@ async def differential_engine_line(dut):
             model.config['run'] = rng.random() >= .02
             await edge(**inputs)
             if inputs['pm_wr']:
-                program[rng.randrange(128)] = rng.randrange(65536)
+                program[rng.randrange(256)] = rng.randrange(65536)
     dut._log.info('Engine/line composition matched %d clocks, seed=%#x', cycle, seed)

@@ -12,8 +12,8 @@ module tb_engine_ops;
   logic clk = 0, rst_n = 0;
   always #5 clk = ~clk;
 
-  logic [15:0] prog[128];
-  logic [6:0]  pc;
+  logic [15:0] prog[512];  // an image: engine 0's memory is words 0-255
+  logic [7:0]  pc;
   logic [7:0]  pins_out, pins_oe, rx_data, tx_q[$], got[$];
   logic [3:0]  flag_set, flag_clr;
   logic        tx_pop, rx_push, irq;
@@ -31,7 +31,7 @@ module tb_engine_ops;
       .clk, .rst_n,
       .run(1'b1), .restart(1'b0),
       .clkdiv(16'd0), .pin_base(3'd0), .jmp_pin(3'd0),
-      .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(7'd0),
+      .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(8'd0),
       .crc_poly(16'h8005), .crc_cfg(8'h7F), .timeout(16'h0), .line_cfg(8'h0),
       .coder_cfg(8'h0), .coder_cfg2(8'h0), .sync(8'h0), .crc_good(16'h800D),
       .host_crc_init(1'b0), .host_tmo_clr(1'b0), .host_ovf_clr(1'b0), .host_lerr_clr(1'b0),
@@ -45,8 +45,8 @@ module tb_engine_ops;
   );
 
   // ---- e2: bit-synchronous mode ----
-  logic [15:0] prog2[128];
-  logic [6:0]  pc2;
+  logic [15:0] prog2[512];
+  logic [7:0]  pc2;
   logic [7:0]  po2, oe2, rxd2, tx2_din = 0, tx2_dout, got2[$];
   logic        tx2_push = 0, tx2_empty, tx2_pop, tx2_mark, tx2_rewind, rx2_push;
   logic [3:0]  flags2 = 0;
@@ -61,7 +61,7 @@ module tb_engine_ops;
       .clk, .rst_n,
       .run(1'b1), .restart(1'b0),
       .clkdiv(16'd47), .pin_base(3'd0), .jmp_pin(3'd0),
-      .out_msb_first(1'b1), .in_msb_first(1'b1), .start_pc(7'd0),
+      .out_msb_first(1'b1), .in_msb_first(1'b1), .start_pc(8'd0),
       .crc_poly(16'h4599), .crc_cfg(8'h8E), .timeout(16'h0), .line_cfg(8'h40 | 8'd39),
       .coder_cfg(8'h0D), .coder_cfg2(8'h72), .sync(8'h0), .crc_good(16'h0),
       .host_crc_init(1'b0), .host_tmo_clr(1'b0), .host_ovf_clr(1'b0), .host_lerr_clr(1'b0),

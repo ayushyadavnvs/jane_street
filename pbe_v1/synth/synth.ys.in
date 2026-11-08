@@ -1,7 +1,8 @@
-read_verilog -sv $SRC
+read_verilog $DEFS -sv $SRC
 synth -top tt_um_ayushyadavnvs_pbe -flatten
 dfflibmap -liberty $LIB
 abc -liberty $LIB
 opt_clean -purge
 stat -liberty $LIB
+select -list t:RM_IHPSG13_1P_256x16_c2_bm_bist
 write_verilog -noattr synth/tt_um_pbe_netlist.v

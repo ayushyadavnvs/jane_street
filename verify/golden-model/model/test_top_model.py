@@ -31,7 +31,7 @@ class TestTopModel(unittest.TestCase):
         self.assertEqual(h.miso,0)
 
     def test_flag_wrap_and_clear_priority(self):
-        m=PBEModel(); m.program=[0xd800]*128
+        m=PBEModel(); m.program=[0xd800]*512
         m.write(0x18,7); m.write(0x28,0)
         for e in m.engines:
             e.instr_q=0xc010; e.iv=True; e.pc=1
@@ -46,13 +46,37 @@ class TestTopModel(unittest.TestCase):
         m.engines[1].pout=0; m.engines[1].poe=0
         self.assertEqual(m.outputs[:2],(0x55,0x55))
         m.write(0x12,0xff); m.write(0x15,0xff)
-        self.assertEqual(m.read(0x12),7); self.assertEqual(m.read(0x15),127)
+        self.assertEqual(m.read(0x12),7); self.assertEqual(m.read(0x15),255)  # 8-bit START_PC (D82)
 
-    def test_program_byte_order_pointer_wrap(self):
+    def test_program_byte_order_pointer_carry(self):
+        # D82: word 127's low byte carries into PM_ADDR_H[0] (word 128)
         m=PBEModel(); m.write(6,254)
         m.write(7,0x12); m.write(7,0x34)
         self.assertEqual(m.program[127],0x1234)
-        self.assertEqual(m.read(6),0)
+        self.assertEqual((m.read(15),m.read(6)),(1,0))
+
+    def test_engine_select_and_wrap_within_engine(self):
+        # D82: PM_ADDR_H[1] selects engine 1's memory; word 255 wraps to 0 of the same engine
+        m=PBEModel(); m.write(15,3); m.write(6,254)
+        for b in (0x12,0x34,0x56,0x78): m.write(7,b)
+        self.assertEqual(m.program[256+255],0x1234)
+        self.assertEqual(m.program[256+0],0x5678)
+        self.assertIsNone(m.program[255]); self.assertIsNone(m.program[0])
+        self.assertEqual((m.read(15),m.read(6)),(2,2))
+
+    def test_write_refetches_only_its_engine_twice(self):
+        # D82, BUG-074: a write to engine 1's memory invalidates engine 1 at the write and one
+        # clock later; engine 0 is untouched. After reset both refetch once.
+        m=PBEModel(); m.program=[0xd800]*512
+        self.assertEqual(m.pm_wr_q,[True,True])
+        m.edge(); m.edge()
+        for e in m.engines: self.assertTrue(e.iv)
+        m.write(15,2); m.host.wr=(7,0xd8); m.edge()
+        self.assertTrue(m.engines[0].iv); self.assertFalse(m.engines[1].iv)
+        m.edge()
+        self.assertTrue(m.engines[0].iv); self.assertFalse(m.engines[1].iv)
+        m.edge()
+        self.assertTrue(m.engines[1].iv)
 
     def test_partial_program_word_stays_unspecified_until_both_bytes_written(self):
         m=PBEModel()
@@ -74,7 +98,7 @@ class TestTopModel(unittest.TestCase):
         self.assertEqual(m.program[0],0x3456)
 
     def test_tx_only_flush_leaves_rx(self):
-        m=PBEModel(); m.program=[0xd800]*128
+        m=PBEModel(); m.program=[0xd800]*512
         m.tx[0].edge(push=True,data=0xab); m.rx[0].edge(push=True,data=0xcd)
         m.host.wr=(14,1); m.edge()
         self.assertEqual(m.tx[0].count,0)

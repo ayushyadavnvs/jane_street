@@ -5,14 +5,14 @@
 module tb_spec_boundaries;
   logic clk = 0, rst_n = 0, restart = 0, pm_wr = 0;
   always #5 clk = ~clk;
-  logic [15:0] prog[128];
-  wire [6:0] pc;
+  logic [15:0] prog[256];
+  wire [7:0] pc;
   wire [7:0] pins_out, pins_oe;
   bit saw_prefetch64 = 0, saw_instruction64 = 0;
   pbe_engine dut (
     .clk, .rst_n, .run(1'b1), .restart,
     .clkdiv(16'd0), .pin_base(3'd0), .jmp_pin(3'd0),
-    .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(7'd0),
+    .out_msb_first(1'b0), .in_msb_first(1'b0), .start_pc(8'd0),
     .crc_poly(16'd0), .crc_cfg(8'd0), .timeout(16'd0), .line_cfg(8'd0),
     .coder_cfg(8'd0),.coder_cfg2(8'd0), .sync(8'd0), .crc_good(16'd0),
     .host_crc_init(1'b0), .host_tmo_clr(1'b0), .host_ovf_clr(1'b0), .host_lerr_clr(1'b0),.host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),
@@ -34,18 +34,18 @@ module tb_spec_boundaries;
     sample_clock(); // target fetch; current instruction is now word 0
   endtask
   initial begin
-    for (int i = 0; i < 128; i++) prog[i] = 16'hd800;
+    for (int i = 0; i < 256; i++) prog[i] = 16'hd800;
     repeat (3) sample_clock();
     @(negedge clk); rst_n = 1;
     reset_at_start();
     for (int i = 0; i < 130; i++) begin
-      if (dut.exec && pc == 7'd64) begin
+      if (dut.exec && pc == 8'd64) begin
         saw_prefetch64 = 1;
         $display("BUG-058 prefetch pc=64 while instruction 63 executes");
         if ($test$plusargs("EXPECT_WINDOW_FENCE"))
           $fatal(1, "original requested pc<=start_pc+63 property fails");
       end
-      if (dut.exec && pc == 7'd65) begin
+      if (dut.exec && pc == 8'd65) begin
         saw_instruction64 = 1;
         $display("BUG-058 actual instruction 64 executes outside offset window");
         if ($test$plusargs("EXPECT_INSTRUCTION_WINDOW_FENCE"))

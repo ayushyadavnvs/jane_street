@@ -6,7 +6,17 @@ SIM ?= icarus
 FST ?= -fst # Use more efficient FST format
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
-PROJECT_SOURCES = pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv pbe_engine.sv tt_um_pbe.sv
+PROJECT_SOURCES = pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv pbe_engine.sv pbe_pmem_sram.sv tt_um_pbe.sv sram_bb.v
+
+# Behavioural model of the IHP SRAM macro, one per engine (RTL and gate level simulation, D82),
+# as Tiny Tapeout's ttihp-cmos5l-sram-example does (its model is in test/sram_model; ours is the
+# same IHP files in macros/). FUNCTIONAL selects the model's behavioural core; SIM also skips the
+# macro's black-box declaration in src/sram_bb.v. The model goes first: sram_bb.v sets
+# `default_nettype none`, under which the model's untyped port declarations would not compile.
+SRAM_MODEL = $(PWD)/../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.v \
+             $(PWD)/../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_core_behavioral_bm_bist.v
+VERILOG_SOURCES += $(SRAM_MODEL)
+COMPILE_ARGS += -DFUNCTIONAL -DSIM
 
 ifneq ($(GATES),yes)
 
@@ -19,8 +29,6 @@ else
 # Gate level simulation:
 SIM_BUILD				= sim_build/gl
 COMPILE_ARGS    += -DGL_TEST
-COMPILE_ARGS    += -DFUNCTIONAL
-COMPILE_ARGS    += -DSIM
 # Cell models for the PDK in $(PDK) (ihp-sg13cmos5l or ihp-sg13g2), e.g. sg13cmos5l_stdcell.v
 PDK ?= ihp-sg13cmos5l
 PDK_CELL_PREFIX = $(patsubst ihp-%,%,$(PDK))

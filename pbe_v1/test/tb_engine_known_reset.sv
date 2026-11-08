@@ -10,14 +10,14 @@ module tb_engine_known_reset;
   wire [7:0] can_rec;
   wire [1:0] can_state;
   wire [15:0] crc_now;
-  wire [6:0] pc;
-  wire [20:0] pc_copy;
+  wire [7:0] pc;
+  wire [23:0] pc_copy;
   wire [3:0] flag_set,flag_clr;
   wire tx_pop,rx_push,irq;
   always #5 clk=~clk;
   pbe_engine dut(.clk,.rst_n,.run,.restart,.clkdiv(16'd3),
     .pin_base(3'd0),.jmp_pin(3'd0),.out_msb_first(1'b0),.in_msb_first(1'b0),
-    .start_pc(7'd0),.crc_poly(16'h8005),.crc_cfg(8'h3f),.timeout(16'd0),
+    .start_pc(8'd0),.crc_poly(16'h8005),.crc_cfg(8'h3f),.timeout(16'd0),
     .line_cfg(8'h40),.coder_cfg,.coder_cfg2,.sync(8'h80),.crc_good(16'd0),
     .host_crc_init(1'b0),.host_tmo_clr(1'b0),.host_ovf_clr(1'b0),.host_lerr_clr(1'b0),
     .host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),

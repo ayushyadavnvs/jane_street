@@ -42,6 +42,7 @@ mark the old one **Changed** instead of deleting it.
 | USB (its firmware) | Burst reads could lose a byte; a flush on SETUP threw away an OUT record | `RX_COUNT`/`TX_COUNT` registers, `TX_FLUSH` | D43, BUG-030, BUG-031 |
 | 48 MHz (USB, D18) in the first routed run | 0.586 ns of setup slack: pc → program memory → decode → next pc in one clock, through long buffer chains | An instruction register with a prefetch; four copies of the read address. A taken jump costs one clock more at CLKDIV = 0 | D7, D18, D50 |
 | JTAG, SWD | Nothing: both are programs on the existing instructions (SWD fills its 64-word window; the host computes the write parity, as `OUTPAR` covers one OSR load) | — | D75, D76 |
+| USB, SWD, CAN, Modbus (programs of 61-64 words) and the planned protocols | The 128 shared flip-flop words were full and half the chip | An IHP SRAM per engine, 256 separate words each (8-bit PC and `START_PC`, `PM_ADDR_H`); 8x4 tile | D4, D13, D50, D62, D82 |
 
 ---
 
@@ -81,7 +82,7 @@ mark the old one **Changed** instead of deleting it.
   either. Four would multiply area for a benefit no protocol so far needs; with area use at
   15–21 %, adding engines later remains possible.
 
-## D4. Shared program memory, 32 → 64 → 128 words — **Changed (I2C, then two protocols at once)**
+## D4. Shared program memory, 32 → 64 → 128 words — **Changed (I2C, then two protocols at once; then the SRAM, D82)**
 
 - **Chosen originally:** 32 × 16-bit words shared by both engines, flip-flop based,
   each engine with its own start address (`START_PC`).
@@ -108,6 +109,10 @@ mark the old one **Changed** instead of deleting it.
 - **Cost:** 164,095 → 262,618 µm² (18 % → 29 % of 6×4). I estimated +49,000 µm² beforehand; the
   real cost is about twice that, because doubling the words also doubles both engines'
   128-way read multiplexers. Worst logic path 3.97 ns.
+- **Changed (D82, the SRAM program memory):** the memory is no longer shared. Each engine has
+  its own 256-word IHP SRAM, the PC and `START_PC` are 8 bits, and jumps stay relative to
+  `START_PC` (64-word windows, mod 256). The "separate memories waste words" objection above no
+  longer holds at 256 words each; the cost is that two engines cannot share one copy of code.
 - **Proposal D62:** SRAM macros instead of flip-flops (one 256 × 16 per engine, written
   together, so this shared image stays); not the design yet.
 - **Next option:** latches instead of flip-flops for program memory (31 µm² per bit instead of
@@ -223,13 +228,15 @@ mark the old one **Changed** instead of deleting it.
 - **Why:** 4 wires, any microcontroller (or the Tiny Tapeout demo board's RP2040) can drive
   it, and it leaves the 8 bidirectional pins free for protocols.
 
-## D13. Loading programs: direct-mapped → pointer register — **Changed (I2C, via D4)**
+## D13. Loading programs: direct-mapped → pointer register — **Changed (I2C, via D4; extended by D82)**
 
 - **Chosen originally:** Program memory mapped at register addresses 0x40–0x7F (32 words ×
   2 bytes).
 - **Changed:** 64 words need 128 bytes, more than the 7-bit address space has left.
 - **Chosen now:** `PM_ADDR` (0x06) holds a byte pointer, `PM_DATA` (0x07) writes a byte and
   advances it. A program loads in one SPI burst. With 128 words (D4) the pointer uses all 8 bits.
+- **Extended (D82):** two 256-word memories need a 10-bit pointer. `PM_ADDR_H` (0x0F) holds its
+  top two bits, word[7] and the engine; `PM_DATA` advances {word, byte} and never the engine.
 - **Alternative:** An 8-bit address command. Rejected: changes the host protocol for every
   register.
 
@@ -796,7 +803,11 @@ mark the old one **Changed** instead of deleting it.
 - **Why:** the first page (+0..+F) was full (D32). The free +7 slot alone could not hold four
   bytes of new settings.
 
-## D45. Area and timing after USB — **Changed (first routed run: timing)**
+## D45. Area and timing after USB — **Changed (first routed run: timing; then the SRAM, D82)**
+
+**Changed (D82):** the program memory is now two SRAM macros; the standard cells went from
+392,179 to 198,770 µm² (`make synth`), and the tile is 8x4. D82 has the numbers.
+
 
 | | Area | Share of 6×4 tiles | Worst logic path (slow corner) |
 |---|---|---|---|
@@ -1008,7 +1019,13 @@ clean (0 design violations).
   allows 2 ms.
 
 
-## D50. An instruction register cuts the clock's worst path in two
+## D50. An instruction register cuts the clock's worst path in two — **Changed (the SRAM, D82)**
+
+**Changed (D82):** with the SRAM program memory the memory read (stage 1) is inside the macro,
+addressed with `pc_d`; a host write refetches twice (BUG-074), and only the engine whose memory
+was written. The four copies of the read address exist only in the flip-flop fallback
+(`PBE_PMEM_FF`, the engine's `PC_COPIES` parameter).
+
 
 - **Problem:** the first full Tiny Tapeout run (LibreLane, routed) met 48 MHz with only
   0.586 ns of setup slack at the slow corner (1.08 V, 125 °C; typical 7.95 ns, fast 12.3 ns).
@@ -1481,7 +1498,18 @@ clean (0 design violations).
   BUG-070 records a corrected evidence-export interpreter invocation. No
   dependency installs occur in targets and no physical-design flow is invoked.
 
-## D62. Program memory: flip-flops vs SRAM — **Proposal (prototype behind `USE_SRAM`, not the design yet)**
+## D62. Program memory: flip-flops vs SRAM — **Changed (adopted with separate images, D82)**
+
+**Changed (D82):** the owner adopted the SRAM, on an 8x4 tile, with **separate** 256-word
+images per engine (alternative 7 below) instead of mirrored writes; the SRAM is the default
+build and the flip-flops are a 64-word-per-engine fallback behind `PBE_PMEM_FF` (`USE_SRAM` is
+gone). The flow part below (item 5: the 67.44 µm stripe lattice, `sram/pdn_cfg.tcl`,
+`sram/flow.patch`) is **retired**: it had no step extending the stripes onto the macros'
+supply columns (Tiny Tapeout's `Project.ExtendPowerStripes`), so the macros could have been
+left unpowered; `sram/` is deleted. The flow now follows Tiny Tapeout's example
+(`docs/SRAM_8x4_FLOW_STEPS.md`). The instance names are now `u_pmem.u_sram0`/`u_sram1`. The
+prototype text is kept below as it was.
+
 
 - **Number:** made as D55; renumbered D62 when round 2's D55-D61 were merged (D64).
 - **Problem:** the 128 × 16 flip-flop memory is about half the chip. In the first routed run
@@ -1572,6 +1600,9 @@ clean (0 design violations).
   were: no move, but no clear split between our tests and the independent ones.
 - Recorded evidence (`evidence/`, `bus_models/results.json`) keeps the commands as they were run,
   with the old paths: it is a dated record, not instructions.
+- **Extended by D82:** the model and the differential now simulate the SRAM program memory:
+  IHP's behavioural model in the RTL run, per-engine 256-word programs, `PM_ADDR_H` and the
+  SRAM's second refetch in the model (`sram=True`, the default).
 - **Extended by D64:** round 2's verification (D55-D61: formal, reference vectors, coverage,
   stress, mutation testing and the specification-boundary checks) arrived after this move, still
   under `pbe_v1/`. It now lives beside `verify/golden-model/` under `verify/`; D64 has the layout.
@@ -2281,3 +2312,110 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   - *Combinational sample count* (before BUG-088): puts the adders back on the compare path.
 - **Not changed:** the documented one-clock lag after a CLKDIV or LINE2 write (D65, D66); the
   default sample point (`sp_base`, combinational) is untouched, so LINE2 = 0 behaves as before.
+
+## D82. Program memory: an IHP SRAM per engine, 256 separate words each, on an 8x4 tile
+
+- **Decided by the owner** (after D62's prototype and the organisers' confirmation): the
+  program memory is IHP's `RM_IHPSG13_1P_256x16_c2_bm_bist`, one macro per engine, and the tile
+  is 8x4 (Jane Street and Tiny Tapeout confirmed both). This entry is the RTL and verification
+  side; the flow configuration is the owner's, with `docs/SRAM_8x4_FLOW_STEPS.md` as the guide.
+- **Separate images, not mirrored** (D62's alternative 7, now chosen): each engine has its own
+  256 words, 512 in all. The host writes only the selected engine's macro.
+  - *Why:* mirrored writes gave both engines the same 128 (at most 256) words, so half of the
+    512 words we pay for were copies. Programs are full (USB 64 of 64, SWD 64, CAN 61, Modbus
+    62) and the planned protocols need more; separate memories double the space for no area.
+    A write to one engine's memory no longer stalls the other engine (it does not refetch).
+  - *Cost:* the host loads each engine separately (one more register write per image), and
+    the two engines can no longer share one copy of a program (two CAN nodes need two copies;
+    D4's "shared code" point). D4 rejected separate memories for wasting words when one engine
+    runs a short program; with 256 words each that no longer bites.
+- **Host interface:** a 10-bit byte pointer {engine, word[7:0], byte}.
+  - `PM_ADDR` (0x06) keeps its meaning for the low byte: [7:1] word[6:0], [0] byte (0 high).
+  - **New `PM_ADDR_H` (0x0F, RW):** [0] word[7], [1] engine. 0x0F was the free address in the
+    first page (D62 already named it); reads of [7:2] are 0; reset 0.
+  - `PM_DATA` (0x07) writes the byte and advances {word, byte} by one: the low byte carries
+    into the next word, word 127 into word 128 (`PM_ADDR` into `PM_ADDR_H[0]`), and word 255
+    wraps to word 0 **of the same engine**: the increment never changes the engine bit, so a
+    burst of any length cannot spill into the other engine's program. Bursts work as before.
+  - *Alternatives:* a 16-bit `PM_ADDR` (two bytes at 0x06/0x07 would move `PM_DATA`, breaking
+    every loader); an engine select in the engine pages (+0x7, free) — two registers for one
+    pointer, and the pointer would not read back as one number; carrying into the engine bit
+    (one 1024-byte burst could load both engines, but a long burst for engine 0 would silently
+    overwrite engine 1).
+  - Old host code that writes only `PM_ADDR` still loads engine 0's words 0-127 (reset value
+    of `PM_ADDR_H`).
+- **Engine:** `pc`, `pc_d` and `START_PC` are 8 bits, inside the engine's own memory. Jumps keep
+  6-bit targets relative to `START_PC` (64-word windows), now mod 256; sequential execution
+  wraps 255 → 0. `START_PC` (+5) reads back all 8 bits. No `PAGE` instruction now: programs over
+  64 words will need it, and EXT sub-op 7 with param[5] = 1 stays reserved for it (D67), with up
+  to 5 page bits — a page of 2 already covers 128 words, 4 the whole memory.
+- **The refetch rule** (D50, BUG-074): a write to engine e's memory refetches engine e at the
+  write and one clock later (`pm_wr_q`, now per engine); both refetch once after reset.
+  At `CLKDIV` 0 a byte written to an engine's own memory costs that engine exactly 2 clocks; a
+  write to the other engine's memory costs it nothing (`tb_fetch` (g)).
+- **Wrapper** (`src/pbe_pmem_sram.sv`): two written-out instances, `u_pmem.u_sram0` (engine 0)
+  and `u_pmem.u_sram1`, so that the flattened names have no generate-loop brackets to escape
+  in `MACROS`. Checked against IHP's datasheet and model and Tiny Tapeout's example
+  (`ttihp-cmos5l-sram-example`, `src/project.v`): `A_DLY` tied 1, the BIST port tied off,
+  byte writes through the bit mask. Two differences from the example, both on purpose:
+  1. `A_MEN` is tied 1 (the example drives it from a register that is 0 in reset). No write can
+     happen in reset (`wr_en` is a reset flip-flop), and the reads during reset are discarded by
+     the reset refetch.
+  2. The read address is the engine's `pc_next` (combinational), not a register, so that the
+     read lines up with D50's prefetch. Registering it would add a clock to every fetch: a taken
+     jump would cost 2 bubbles at `CLKDIV` 0 and every cycle count in the protocol programs
+     (USB's 32-clock bit, the SPI peripheral, BUG-043) would change. The write controls, address
+     and data come from flip-flops through a small decode, as in the example. The slow-corner
+     setup at `A_ADDR` is negative (about -0.6 ns) and `make timing` gives 3.59 ns of logic to
+     the pins, so 48 MHz has room; the flow's STA must confirm it (the guide says where).
+- **Fallback: the flip-flop memory stays, behind `PBE_PMEM_FF`, 64 words per engine.**
+  - *Why keep it:* insurance for the tapeout. The SRAM's power hookup is new to us (the TT
+    example says it is not yet proven in silicon) and depends on a flow plugin; if the
+    hardening fails close to the deadline, one define gives a design that has passed the flow
+    before (D45, D50), with the same register interface, programs and assembler. It also keeps
+    D50's read-address copies honest (they are only generated in this build, `PC_COPIES`).
+  - *Why 64 words:* 2 × 64 × 16 is the same 2,048 flip-flops as the old shared 128 words, so it
+    fits the area the flow has already routed; 2 × 256 would double the old memory, which was
+    already half the chip. Every program fits (the largest are 64 words). Word addresses
+    (pointer, `pc`, `START_PC`) are taken mod 64, so an image must keep each engine's programs
+    below word 64: `make test-ff` runs `tb_usb` and `tb_proto`, whose images do.
+  - *Alternative:* retire it — one memory implementation less to test, but no way back if the
+    macro's power or LVS fails late. Rejected for now; retire it once the SRAM build has passed
+    `gds`, `precheck` and `gl_test`.
+- **Synthesis and lint:** the macro is a black box from `src/sram_bb.v` (Tiny Tapeout's file,
+  Apache-2.0, skipped when `SIM` is defined). `make synth`, `make timing` and the CI lint read
+  it; the owner adds it to `info.yaml` for LibreLane (the guide). `macros/.../*_bb.v` (ours) is
+  gone. Simulation uses IHP's model with `FUNCTIONAL` (`pbe_v1/Makefile`, `test/Makefile`, the
+  differential and coverage runners).
+- **Measured** (`make synth`, Yosys, typical library; standard cells only):
+
+  | Build | Area | Cells | Flip-flops |
+  |---|---|---|---|
+  | Before (flip-flops, 128 shared words) | 392,179 µm² | 17,641 | 3,907 |
+  | **SRAM** (2 × 256 words; + 2 × 28,127 µm² of macros) | **198,770 µm²** | 11,808 | 1,825 |
+  | `PBE_PMEM_FF` (2 × 64 words) | 366,093 µm² | 17,018 | 3,899 |
+
+  `make timing` (slow corner, logic only): 3.59 ns, from `g_eng[1].u_eng.instr_q` (3.61 ns
+  before). An 8x4 die is 1724.16 × 710.64 µm (1.225 mm²): 198,770 + 56,254 µm² is about 21 %.
+- **Tests added:** `tb_fetch` (d) a write to engine 0's memory at engine 1's program address
+  leaves engine 1 alone; (e) pointer carries (word 127 → 128 into `PM_ADDR_H`, 255 → 0 within
+  the engine) by readback; (f) `START_PC` 252, sequential 255 → 0 and a jump target wrapping
+  mod 256; (g) the refetch cost: 0 clocks for a write to the other engine's memory while it
+  runs, exactly 2 per byte for its own; (h) after a reset the memories keep their contents and
+  an engine run without a restart starts at word 0 (the reset refetch). (g) and (h) close the
+  two gaps BUG-074 listed as not caught (a refetch only one clock late; `pm_wr_q` resetting to
+  0). `START_PC` ≥ 128 in real protocols: `tb_debug` runs SWD at engine 1's words 192-255 (its
+  jumps reach the top word), `tb_can` the second CAN node at 128, `tb_pbe` 1-Wire at 130. The
+  model: pointer, engine select, wrap, per-engine refetch and an 8-bit pc (`test_top_model.py`,
+  `test_model.py`); the differential test loads each engine at a random `START_PC` of 0, 64, 128
+  or 192 and randomises `PM_ADDR_H` in its running writes. Formal: `engine.sby` gains
+  `fetch_sram`, the D50 equality property (`instr_q` = the memory word at `pc - 1`) on an SRAM
+  memory model; the default-configuration equivalence compares `pc` modulo 128. Coverage: seven
+  new bins (`start_pc_upper_half`, `exec_word_255`, `jump_wraps_256`, `pm_write_engine0/1`,
+  `pm_write_other_running`, `pm_second_refetch`). The cocotb test (also the gate-level test)
+  runs with IHP's model and reads back `PM_ADDR_H` and an 8-bit `START_PC`.
+- **Retired:** `sram/` (D62's flow patch). Its PDN approach (a stripe lattice of pitch 67.44 µm
+  matched to the columns, and its own `pdn_cfg.tcl`) had no step that extends the stripes onto
+  the macros' Metal4 supply columns, the `Project.ExtendPowerStripes` step of the Tiny Tapeout
+  example, so the macros could have been left unpowered. The files are in git history
+  (`git show ea6672f:sram/README.md`).

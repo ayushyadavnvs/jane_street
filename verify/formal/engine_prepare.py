@@ -36,8 +36,8 @@ def main():
       end
       if (`F_KIND == 1 && iv) assert (instr_q == f_mem_current);
       // Original requested assertions are kept, not assumed away.
-      if (`F_KIND == 2) assert (((pc - start_pc) & 7'h7f) < 64);
-      if (`F_KIND == 3 && iv) assert ((((pc - 1'b1) - start_pc) & 7'h7f) < 64);
+      if (`F_KIND == 2) assert (((pc - start_pc) & 8'hff) < 64);
+      if (`F_KIND == 3 && iv) assert ((((pc - 1'b1) - start_pc) & 8'hff) < 64);
     end
   end
   reg [7:0] f_wait_ticks = 0;
@@ -65,7 +65,7 @@ def main():
         assert (f_wait_ticks <= timeout + 2);
       end
       if (f_past && $past(tmo_hit)) begin
-        assert (pc == start_pc + {1'b0,line_cfg[5:0]});
+        assert (pc == start_pc + {2'b0,line_cfg[5:0]});
         assert (tmo_seen && !blocked);
       end
     end

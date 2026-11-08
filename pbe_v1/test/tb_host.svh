@@ -55,17 +55,40 @@
     cs(1);
   endtask
 
+  // Program memory (D82): each engine has its own 256 words. The pointer is
+  // {PM_ADDR_H[1:0], PM_ADDR} = {engine, word[7:0], byte}; PM_DATA writes a byte and advances it.
+  task automatic pm_select(input int e, input int w);
+    reg_write(7'h0F, 8'({e[0], w[7]}));  // PM_ADDR_H: [1] engine, [0] word bit 7
+    reg_write(7'h06, 8'({w[6:0], 1'b0}));  // PM_ADDR: word bits 6..0, high byte first
+  endtask
+
+  // An image from pbe_asm.py: lines 0-255 are engine 0's memory, lines 256-511 engine 1's.
+  // Each engine's memory is written whole, so no word is left unknown, with one burst each.
   task automatic load_program(input string file);
-    logic [15:0] img[128];
+    logic [15:0] img[512];
     logic [7:0] d;
     $readmemh(file, img);
-    reg_write(7'h06, 0);         // program memory pointer = word 0, high byte
-    cs(0);
-    spi_byte({1'b1, 7'h07}, d);  // burst into PM_DATA; the pointer advances per byte
-    for (int w = 0; w < 128; w++) begin
-      spi_byte(img[w][15:8], d);
-      spi_byte(img[w][7:0], d);
+    for (int e = 0; e < 2; e++) begin
+      pm_select(e, 0);
+      cs(0);
+      spi_byte({1'b1, 7'h07}, d);  // burst into PM_DATA; the pointer advances per byte
+      for (int w = 0; w < 256; w++) begin
+        spi_byte(img[e*256+w][15:8], d);
+        spi_byte(img[e*256+w][7:0], d);
+      end
+      cs(1);
     end
+    pm_select(0, 0);
+  endtask
+
+  // Write one program word of engine e while the engines may be running.
+  task automatic pm_write(input int e, input int w, input logic [15:0] data);
+    logic [7:0] d;
+    pm_select(e, w);
+    cs(0);
+    spi_byte({1'b1, 7'h07}, d);
+    spi_byte(data[15:8], d);
+    spi_byte(data[7:0], d);
     cs(1);
   endtask
 

@@ -566,7 +566,7 @@ module tb_pbe;
     reg_write(7'h22, 1);                 // E1 pins start at 1
     reg_write(7'h23, 0);                 // JMP pin = rx
     reg_write(7'h24, 2'b00);
-    reg_write(7'h25, 8);                 // start at word 8
+    reg_write(7'h25, 8);                 // start at word 8 of engine 1's memory
     reg_write(7'h03, 8'b0000_0010);      // pin 1 belongs to E1
     loop01 = 1;
     uart_mon_en = 1;
@@ -640,7 +640,7 @@ module tb_pbe;
     reg_write(7'h21, 0);
     reg_write(7'h22, 4);                 // E1 pins start at 4
     reg_write(7'h24, 2'b11);             // MSB first
-    reg_write(7'h25, 8);                 // i2c_ctrl at word 8
+    reg_write(7'h25, 8);                 // i2c_ctrl at word 8 of engine 1's memory
     uart_seen.delete();
     uart_mon_en = 1;
     i2c_en = 1;
@@ -1011,13 +1011,13 @@ module tb_pbe;
     mb_en = 0;
     reg_write(7'h04, 8'h00);
     reg_write(7'h02, 8'h03);
-    load_program("conc_image.hex");      // i2c_ctrl at word 0, onewire_ctrl at word 64
+    load_program("conc_image.hex");      // onewire_ctrl at engine 0 word 130, i2c_ctrl at engine 1 word 0
     reg_write(7'h03, 8'b0011_0000);      // pins 4, 5 to E1; pin 6 to E0
     reg_write(7'h10, 8'($rtoi(1000.0 / CLK_NS + 0.5) - 1));  // E0: 1-Wire, tick = 1 us
     reg_write(7'h11, 0);
     reg_write(7'h12, OW);
     reg_write(7'h14, 2'b00);
-    reg_write(7'h15, 64);
+    reg_write(7'h15, 130);               // START_PC >= 128 (D82)
     reg_write(7'h20, 17);                // E1: I2C fast mode
     reg_write(7'h21, 0);
     reg_write(7'h22, 4);
@@ -1094,7 +1094,7 @@ module tb_pbe;
 
       reg_write(7'h00, 8'b1100_0000);
       reg_write(7'h04, 8'h00);
-      load_program("conc_image.hex");    // i2c_ctrl at word 0
+      load_program("conc_image.hex");    // i2c_ctrl at engine 1 word 0
       reg_write(7'h03, 8'b0011_0000);
       reg_write(7'h20, 17);              // E1: I2C fast mode, as in test 3
       reg_write(7'h21, 0);

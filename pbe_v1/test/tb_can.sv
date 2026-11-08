@@ -199,7 +199,7 @@ module tb_can;
       reg_write(b + 2, e ? 8'd2 : 8'd0);   // PIN_BASE
       reg_write(b + 3, 8'd1);              // JMP_PIN = RXD
       reg_write(b + 4, 8'h03);             // MSB first
-      reg_write(b + 5, e ? 8'd64 : 8'd0);  // START_PC
+      reg_write(b + 5, e ? 8'd128 : 8'd0);  // START_PC: engine 1's copy is at word 128 of its memory
       reg_write(b + 9, 8'h99);             // CRC_POLY 0x4599
       reg_write(b + 10, 8'h45);
       reg_write(b + 11, 8'h8E);            // CRC-15, fed by received bits

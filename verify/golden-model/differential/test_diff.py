@@ -2,7 +2,8 @@
 
 Internal RTL reads are diagnostic/final-state checks only. No engine state is
 copied to the oracle. Test-only memory initialisation avoids unspecified Xs:
-128 NOP words before reset; all subsequent program writes use the host pins.
+NOP in all 2 x 256 words of the SRAM models (D82) before reset; all subsequent
+program writes use the host pins.
 """
 import json
 import os
@@ -72,9 +73,12 @@ class Harness:
     async def reset(self):
         d=self.dut
         d.clk.value=0; d.rst_n.value=0; d.ui_in.value=2; d.uio_in.value=0; d.ena.value=1
-        for i in range(128):
-            d.pmem[i].value=0xd800
-            self.model.program[i]=0xd800
+        # each engine's IHP SRAM model (pbe_pmem_sram: u_sram0, u_sram1)
+        for e,inst in enumerate((d.u_pmem.u_sram0,d.u_pmem.u_sram1)):
+            mem=inst.i_SRAM_1P_behavioral_bm_bist.memory
+            for i in range(256):
+                mem[i].value=0xd800
+                self.model.program[e*256+i]=0xd800
         for _ in range(3):
             await Timer(10416,unit='ps'); d.clk.value=1
             await Timer(10416,unit='ps'); d.clk.value=0
@@ -155,14 +159,17 @@ class Harness:
 
     async def write(self,addr,data): await self.host(addr,[data] if isinstance(data,int) else data)
 
-    async def setup(self,programs,divs=(0,1),timeout=3):
-        # Real SPI loading and all configuration share the same edge oracle.
-        await self.write(6,0)
-        await self.write(7,[b for prog in programs for w in prog for b in (w >> 8,w & 255)])
+    async def setup(self,programs,divs=(0,1),timeout=3,bases=(0,0)):
+        # Real SPI loading and all configuration share the same edge oracle. Each engine's
+        # program goes into its own memory (D82) at its START_PC, bases[e].
+        for e,prog in enumerate(programs):
+            await self.write(15,e << 1 | bases[e] >> 7)
+            await self.write(6,(bases[e] & 127) << 1)
+            await self.write(7,[b for w in prog for b in (w >> 8,w & 255)])
         await self.write(3,0xf0)
         for e in range(2):
             a=0x10+16*e
-            await self.write(a,[divs[e],0,e*4,self.rng.randrange(8),self.rng.randrange(4),e*64])
+            await self.write(a,[divs[e],0,e*4,self.rng.randrange(8),self.rng.randrange(4),bases[e]])
             await self.write(a+8,self.rng.randrange(8))
             await self.write(a+9,[5,128,0xff,timeout,0,0x40 | self.rng.randrange(64)])
             await self.write(a+6,[self.rng.randrange(256) for _ in range(16)])
@@ -199,7 +206,9 @@ async def random_differential(dut):
         programs=[random_program(h.rng),random_program(h.rng)]
         if index == 0: programs[0]=coverage_program()
         divs=(index%2,h.rng.choice([0,1,2,3,7,15]))
-        await h.setup(programs,divs,timeout=h.rng.choice([0,1,3,7]))
+        # START_PCs from the whole 256-word memory, 192 putting a program's end at word 255
+        bases=(h.rng.choice([0,64,128,192]),h.rng.choice([0,64,128,192]))
+        await h.setup(programs,divs,timeout=h.rng.choice([0,1,3,7]),bases=bases)
         h.random_pins=True
         # Host operations interleave random pin changes on every clock. The
         # seeded schedule includes streaming FIFO traffic, readback, flags,
@@ -211,7 +220,8 @@ async def random_differential(dut):
                 elif kind in (1,2): await h.write(8 if kind == 1 else 9,h.rng.randrange(256))
                 elif kind == 3: await h.write(0,3 | 16 << e)
                 elif kind == 4:
-                    await h.write(6,h.rng.randrange(256)); await h.write(7,h.rng.randrange(256))
+                    await h.write(15,h.rng.randrange(4)); await h.write(6,h.rng.randrange(256))
+                    await h.write(7,h.rng.randrange(256))
                 elif kind == 5: await h.write(0x1f+16*e,h.rng.randrange(16))
                 elif kind == 6:
                     if h.model.rx[e].count: await h.host(0x16+16*e,count=1)
@@ -219,7 +229,7 @@ async def random_differential(dut):
             await h.step(pins=h.rng.randrange(256))
         # Stop both engines, then test status/flags/count/config reads through pins.
         await h.write(0,0)
-        for addr in (0,1,2,3,4,6,10,11,12,13,0x1f,0x2f):
+        for addr in (0,1,2,3,4,6,10,11,12,13,15,0x15,0x25,0x1f,0x2f):
             expected=h.model.read(addr); actual=(await h.host(addr))[0]
             if actual != expected: h.mismatch(f'register {addr:02x}: {actual} != {expected}')
         h.check_final(); coverage.update(h.coverage); clocks+=h.clocks

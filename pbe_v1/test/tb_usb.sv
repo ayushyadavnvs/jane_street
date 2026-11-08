@@ -347,6 +347,8 @@ module tb_usb;
   int  fw_vlen;
   int  fw_resends = 0, fw_resets = 0;  // IN packets queued again (BUG-041), bus resets seen (BUG-042)
 
+  // A word of engine 0's program (a < 128): load_program leaves PM_ADDR_H at 0 (engine 0, words
+  // 0-127), so only PM_ADDR is written, as before D82; the firmware's timing is unchanged.
   task automatic pm_write_word(input int a, input logic [15:0] w);
     logic [7:0] d;
     reg_write(7'h06, 8'(2 * a));

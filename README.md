@@ -1,7 +1,7 @@
 # Jane Street protocol emulator ASIC
 
 Entry for the Jane Street protocol emulator ASIC competition (Tiny Tapeout, IHP CMOS5L 130 nm,
-up to 6×4 tiles, due 18 January 2027).
+8×4 tiles, due 18 January 2027).
 
 | Folder | What |
 |---|---|
@@ -11,7 +11,7 @@ up to 6×4 tiles, due 18 January 2027).
 | `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware, the protocol programs (see Protocols below), the testbenches and the assembler |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `verify/` | Independent verification (D63, D64): the golden model, differential, sigrok and bus-model checks (`verify/golden-model/`, with the reports and evidence), formal properties, reference vectors, coverage, stress and mutation testing; run from `pbe_v1/` with `make` |
-| `macros/`, `sram/` | The proposed SRAM program memory (D62): IHP's macro views, and the flow change set (`docs/SRAM_INVESTIGATION.md`) |
+| `macros/` | The program memory's SRAM macro (D62, D82): IHP's views and simulation model; the flow steps are in `docs/SRAM_8x4_FLOW_STEPS.md` |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
 ## Protocols: 13 implemented and tested
@@ -77,7 +77,10 @@ In `test/`: `make` runs the Tiny Tapeout cocotb test (needs `cocotb`).
 
 ## Tiny Tapeout
 
-The top module is `tt_um_ayushyadavnvs_pbe` (6×4 tiles, 48 MHz, `CLOCK_PERIOD` 20.833 ns). The
+The top module is `tt_um_ayushyadavnvs_pbe` (48 MHz, `CLOCK_PERIOD` 20.833 ns). Since D82 the
+program memory is an IHP SRAM macro per engine (256 words each) and the design moves to 8×4
+tiles; the flow configuration for that (`info.yaml`, `src/config.json`) is the next step, in
+`docs/SRAM_8x4_FLOW_STEPS.md`. Until it is done, `info.yaml` still says 6×4. The
 Tiny Tapeout flow runs on GitHub Actions (`gds` workflow, started by hand while the RTL is
 being finished): LibreLane synthesis, place and route, timing and DRC for IHP `sg13cmos5l`,
 the Tiny Tapeout precheck, and the cocotb test on the routed netlist. `gl_regression` then runs
@@ -99,7 +102,10 @@ the clock input pad is specified up to about 66 MHz, and the demo board's RP2040
 The design works at any clock up to that limit; each engine's `CLKDIV`
 turns the clock into the bit rate a protocol needs.
 
-| Results, version 1 | Area (6×4 = 916,229 µm²) | Worst path, slow corner | Setup / hold slack, slow corner |
+| SRAM build (D82, 8×4 = 1,225,257 µm²) | 198,770 µm² of standard cells + 2 × 28,127 µm² of macros (21 %) | 3.59 ns (logic only) | not routed yet |
+|---|---|---|---|
+
+| Results, version 1 (flip-flop memory) | Area (6×4 = 916,229 µm²) | Worst path, slow corner | Setup / hold slack, slow corner |
 |---|---|---|---|
 | Estimate (Yosys + ABC, before place and route) | 333,913 µm² (36 %) | 4.33 ns (logic only) | — |
 | Routed (first full run, commit df2e881) | 44.3 % utilization, incl. 3,590 hold-fix cells | ~20.3 ns | 0.586 ns / 0.602 ns |

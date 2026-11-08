@@ -24,7 +24,7 @@ class EngineSpecificationTests(unittest.TestCase):
             top.edge()
 
     def program(self, *words):
-        return list(words) + [NOP] * (128 - len(words))
+        return list(words) + [NOP] * (256 - len(words))  # one engine's memory (D82)
 
     def start(self, model, program):
         model.step(program, restart=True)
@@ -129,9 +129,23 @@ class EngineSpecificationTests(unittest.TestCase):
         model = EngineModel(run=True, start_pc=0)
         program = self.program()
         self.start(model, program)
-        addresses = [model.step(program)['instruction_pc'] for _ in range(130)]
+        addresses = [model.step(program)['instruction_pc'] for _ in range(258)]
         self.assertEqual(addresses[:65], list(range(65)))
-        self.assertEqual(addresses[127:130], [127, 0, 1])
+        self.assertEqual(addresses[127:130], [127, 128, 129])  # D82: 8-bit pc
+        self.assertEqual(addresses[255:258], [255, 0, 1])
+
+    def test_jump_target_wraps_mod_256(self):
+        # D82: START_PC 250, JMP 10 goes to word (250 + 10) mod 256 = 4
+        model = EngineModel(run=True, start_pc=250)
+        program = self.program()
+        program[250] = instruction(3, 10)
+        program[4] = instruction(0, 1 << 3)  # DRV1
+        self.start(model, program)
+        self.assertEqual(model.step(program)['instruction_pc'], 250)
+        model.step(program)  # target fetch bubble
+        effects = model.step(program)
+        self.assertEqual(effects['instruction_pc'], 4)
+        self.assertEqual(model.pins_out, 1)
 
     def test_timeout_disabled_and_enabled(self):
         program = self.program(instruction(5, 0), instruction(0, 1 << 3))

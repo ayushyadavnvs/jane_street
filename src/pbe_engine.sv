@@ -14,7 +14,8 @@
 //                tick is at least 2 clocks away, and the bubble fits in between).
 //   CLKDIV = 0, and the line coder (instructions run every clock): DLY + 1 clocks, plus 1 for
 //                a taken jump. The first instruction after a restart starts 1 clock later.
-// A host write to any program word invalidates the next-to-run instruction (one bubble).
+// A host write to any word of this engine's program memory invalidates the next-to-run
+// instruction (one bubble; two with the SRAM, whose port the write takes, BUG-074).
 // It does not cancel an instruction already ready to execute on that same edge: that
 // instruction uses the old registered word. If blocked/stopped, the current word is fetched
 // again; after an executing instruction, its successor (or taken target) is fetched again.
@@ -97,9 +98,12 @@
 //
 // Pin numbers are relative to pin_base (mod 8); the JMP pin is jmp_pin + pin_base.
 // Program addresses are relative to start_pc: a program starts at its own word 0, and every
-// jump (JMP, JCRCBAD, JEQ, JNE, JLINE, the timeout) goes to (start_pc + target) mod 128.
+// jump (JMP, JCRCBAD, JEQ, JNE, JLINE, the timeout) goes to (start_pc + target) mod 256.
 // A target is 6 bits; this is a branch-offset window, not a memory-protection boundary.
-// Sequential execution increments the full 7-bit PC and can leave that window or wrap 127->0.
+// Sequential execution increments the full 8-bit PC and can leave that window or wrap 255->0.
+// Each engine has its own 256-word program memory (D82), so pc and start_pc address only it.
+// A program longer than 64 words needs a way to move its window: the reserved EXT 7
+// param[5]=1 encoding (D67) is kept for a PAGE instruction that would do that (D82).
 //
 // Cycle contract, clarified by the round-2 model audit (existing behavior, no RTL change):
 // - All decisions use pre-edge inputs/state. Reset zeros engine state and CRC; restart
@@ -131,7 +135,9 @@
 //   write. Other writes refetch pc-1 if valid and not executing, else pc. Delays survive
 //   PM invalidation. Fetch validity describes a snapshot, not equality to live RAM after
 //   a write; a host write does not suppress same-edge instruction/FIFO/flag side effects.
-module pbe_engine (
+module pbe_engine #(
+    parameter bit PC_COPIES = 1'b1  // register three copies of pc (only the flip-flop memory reads them)
+) (
     input  logic        clk,
     input  logic        rst_n,
     input  logic        run,
@@ -142,7 +148,7 @@ module pbe_engine (
     input  logic [2:0]  jmp_pin,
     input  logic        out_msb_first,
     input  logic        in_msb_first,
-    input  logic [6:0]  start_pc,     // where this engine's program starts (its word 0)
+    input  logic [7:0]  start_pc,     // where this engine's program starts (its word 0)
     input  logic [15:0] crc_poly,
     input  logic [7:0]  crc_cfg,      // [3:0] width-1, [4] init ones, [5] reversed, [6] feed OUT, [7] feed IN
     input  logic [15:0] timeout,      // ticks a blocked instruction may wait (0 = forever)
@@ -165,9 +171,9 @@ module pbe_engine (
     output logic [1:0]  can_state,    // {bus-off, error-passive}
     output logic [15:0] crc_now,      // the CRC unit's current value, for the host
     // program memory
-    output logic [6:0]  pc,           // program memory read address (absolute): the next word
-    output logic [20:0] pc_copy,      // three more copies of pc, to share out its fan-out
-    output logic [6:0]  pc_d,         // the value pc takes at the next clock (an SRAM's address, D62)
+    output logic [7:0]  pc,           // program memory read address (absolute): the next word
+    output logic [23:0] pc_copy,      // three more copies of pc, to share out its fan-out
+    output logic [7:0]  pc_d,         // the value pc takes at the next clock (the SRAM's address, D62)
     input  logic [15:0] instr,        // the program memory word at pc
     input  logic        pm_wr,        // the host is writing the program memory (any word)
     // pins
@@ -450,19 +456,19 @@ module pbe_engine (
       default: jump = 1'b0;
     endcase
   end
-  wire [6:0] jump_pc = start_pc + {1'b0, arg[5:0]};
+  wire [7:0] jump_pc = start_pc + {2'b0, arg[5:0]};
   // OSRCRC param[2]: the CRC left-justified to 16 bits (CRC-15: bits 14..7 in the high byte)
   wire [15:0] crc_osr = arg[2] ? (crc_value << (4'd15 - crc_cfg[3:0])) : crc_value;
 
   // ---- fetch address ----
-  logic [6:0] pc_next;
+  logic [7:0] pc_next;
   always_comb begin
     pc_next = pc;
     if (restart) pc_next = start_pc;
     else begin
       if (!iv) pc_next = pc + 1'b1;  // the fetch fills instr_q: read on
       if (exec) pc_next = jump ? jump_pc : pc + 1'b1;
-      if (tmo_hit || lv_hit) pc_next = start_pc + {1'b0, tmo_pc};
+      if (tmo_hit || lv_hit) pc_next = start_pc + {2'b0, tmo_pc};
       // A host write to the program memory may change the current or the next word: fetch the
       // instruction that runs next again (a jump fetches its target anyway). pm_wr appears only
       // in `if`s: the unit testbenches leave it unconnected, and z must read as no write.
@@ -470,20 +476,26 @@ module pbe_engine (
     end
   end
 
-  // pc drives the read multiplexers of all 16 bits of the program memory: thousands of inputs,
-  // which place and route had to reach through long buffer chains (D50). Four copies each read
-  // 4 bits. `keep` stops synthesis from merging them back into one register.
+  // The SRAM reads at pc_d, the address pc takes at the edge (D62), so its output is the word at pc.
   assign pc_d = pc_next;
 
-  (* keep *)
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      pc      <= '0;
-      pc_copy <= '0;
-    end else begin
-      pc      <= pc_next;
-      pc_copy <= {3{pc_next}};
+    if (!rst_n) pc <= '0;
+    else pc <= pc_next;
+  end
+
+  // With the flip-flop program memory (PBE_PMEM_FF, D82), pc drives the read multiplexers of all
+  // 16 bits: thousands of inputs, which place and route had to reach through long buffer chains
+  // (D50). Four copies each read 4 bits. `keep` stops synthesis from merging them back into one
+  // register. The SRAM has one 8-bit address input, so it needs no copies.
+  if (PC_COPIES) begin : g_pc_copy
+    (* keep *)
+    always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) pc_copy <= '0;
+      else pc_copy <= {3{pc_next}};
     end
+  end else begin : g_no_pc_copy
+    assign pc_copy = '0;
   end
 
   // ---- side-effect pulses (combinational, valid in the exec cycle) ----

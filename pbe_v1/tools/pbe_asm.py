@@ -2,12 +2,14 @@
 """Assembler for the Programmable Bit Engine.
 
 Usage:
-    pbe_asm.py -o image.hex prog_a.pbe@0 prog_b.pbe@8
+    pbe_asm.py -o image.hex prog_a.pbe@0:0 prog_b.pbe@1:200
 
-Each source is placed at the given word address (default 0). Jump targets are relative
-to the program's own start, so the engine running it must have START_PC = that address.
-The output is a 128-line hex file (one 16-bit word per line, unused words are 0000) that can be
-loaded with $readmemh or written to program memory over SPI.
+Each engine has its own 256-word program memory (D82). A source is placed in engine E's memory
+at word W with @E:W (@W alone means engine 0; no @ means engine 0, word 0). Jump targets are
+relative to the program's own start, so the engine running it must have START_PC = W.
+The output is a 512-line hex file (one 16-bit word per line, unused words are 0000): lines 0-255
+are engine 0's memory, lines 256-511 engine 1's. It can be loaded with $readmemh, and is written
+to the program memories over SPI by selecting each engine with PM_ADDR_H (pbe_v1/README.md).
 
 Syntax (case-insensitive, ';' starts a comment):
     .equ name value           define a constant (handy for pin names)
@@ -36,7 +38,8 @@ import argparse
 import re
 import sys
 
-MEM_WORDS = 128   # program memory
+ENGINES = 2
+MEM_WORDS = 256   # each engine's program memory
 PROG_WORDS = 64   # one program: jump targets are 6 bits, relative to its start
 
 OPS = {"PIN": 0, "IN": 1, "WAIT": 2, "JMP": 3, "SET": 4, "PULL": 5, "PUSH": 5, "MARK": 5, "REWIND": 5,
@@ -214,17 +217,32 @@ def assemble(text, base, name="<src>"):
     return words, labels
 
 
+def parse_spec(spec):
+    """file.pbe[@[engine:]word] -> (path, engine, word)."""
+    path, _, at = spec.rpartition("@") if "@" in spec else (spec, "", "")
+    engine, _, w = at.rpartition(":")
+    try:
+        engine = int(engine, 0) if engine else 0
+        base = int(w, 0) if w else 0
+    except ValueError:
+        raise AsmError(f"{spec}: the placement must be @word or @engine:word")
+    if not 0 <= engine < ENGINES:
+        raise AsmError(f"{spec}: engine must be 0..{ENGINES - 1}")
+    if not 0 <= base < MEM_WORDS:
+        raise AsmError(f"{spec}: word must be 0..{MEM_WORDS - 1}")
+    return path, engine, base
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("sources", nargs="+", help="file.pbe[@address]")
+    ap.add_argument("sources", nargs="+", help="file.pbe[@[engine:]word]")
     ap.add_argument("-o", "--output", required=True)
     a = ap.parse_args()
 
-    image = [None] * MEM_WORDS
+    image = [None] * (ENGINES * MEM_WORDS)
     try:
         for spec in a.sources:
-            path, _, at = spec.partition("@")
-            base = int(at, 0) if at else 0
+            path, engine, base = parse_spec(spec)
             with open(path) as f:
                 words, labels = assemble(f.read(), base, path)
             if len(words) > PROG_WORDS:
@@ -232,10 +250,11 @@ def main():
             if base + len(words) > MEM_WORDS:
                 raise AsmError(f"{path}: {len(words)} words at {base} does not fit in {MEM_WORDS}")
             for i, w in enumerate(words):
-                if image[base + i] is not None:
-                    raise AsmError(f"{path}: overlaps another program at word {base + i}")
-                image[base + i] = w
-            print(f"{path}: {len(words)} words at {base}..{base + len(words) - 1}")
+                at = engine * MEM_WORDS + base + i
+                if image[at] is not None:
+                    raise AsmError(f"{path}: overlaps another program at engine {engine} word {base + i}")
+                image[at] = w
+            print(f"{path}: {len(words)} words in engine {engine} at {base}..{base + len(words) - 1}")
     except AsmError as e:
         sys.exit(f"error: {e}")
 

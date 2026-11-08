@@ -1,88 +1,99 @@
 # Requires: iverilog, yosys, python3.  IHP_LIB points at an IHP sg13g2 standard-cell liberty file
 # (github.com/IHP-GmbH/IHP-Open-PDK, ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/).
-SRC     := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_bsync.sv src/pbe_engine.sv src/tt_um_pbe.sv
+# ENG_SRC: everything below the top level (the engine-only benches compile only these).
+# SRC: the design. The program memory is an IHP SRAM macro per engine (pbe_pmem_sram.sv, D82):
+#  - simulation uses IHP's model of the macro (SRAM_MODEL, FUNCTIONAL selects its behavioural core);
+#  - synthesis and lint use the black box src/sram_bb.v (the flow does too, via info.yaml).
+# PBE_PMEM_FF selects the flip-flop fallback instead (64 words per engine, `make test-ff`).
+ENG_SRC := src/pbe_fifo.sv src/pbe_host_spi.sv src/pbe_crc.sv src/pbe_line.sv src/pbe_bsync.sv src/pbe_engine.sv
+SRC     := $(ENG_SRC) src/pbe_pmem_sram.sv src/tt_um_pbe.sv
+SRAM_BB := src/sram_bb.v
 IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
 # the debug-port target models (D75, D76)
 DEBUG_MODELS := jtag_tap.sv swd_dp.sv
 
-.PHONY: test test-proto test-usb test-can test-debug test-gl test-sram synth synth-sram timing clean
+.PHONY: test test-proto test-usb test-can test-debug test-gl test-ff synth timing clean
 
-# The SRAM program memory (D62, a proposal): the wrapper, IHP's model of the macro (FUNCTIONAL
-# selects its behavioural core) and, for synthesis, the macro as a black box.
+# IHP's model of the SRAM macro, for simulation (the same files as test/sram_model, D82)
 SRAM_DIR   := ../macros/RM_IHPSG13_1P_256x16_c2_bm_bist
 SRAM_MODEL := $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist.v $(SRAM_DIR)/RM_IHPSG13_1P_core_behavioral_bm_bist.v
-SRAM_SRC   := src/pbe_pmem_sram.sv
+# Top-level benches: the design and the model. Engine-only benches: ENG_SRC alone (an
+# uninstantiated top level would become a root with an unconnected macro, whose model stops).
+TOP     = -DFUNCTIONAL $(addprefix ../,$(SRC) $(SRAM_MODEL))
+ENG     = $(addprefix ../,$(ENG_SRC))
 
 test/uart_image.hex: programs/uart_tx.pbe programs/uart_rx.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/uart_tx.pbe@0 programs/uart_rx.pbe@8
+	python3 tools/pbe_asm.py -o $@ programs/uart_tx.pbe@0:0 programs/uart_rx.pbe@1:8
 
 test/spi_image.hex: programs/spi_ctrl.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/spi_ctrl.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/spi_ctrl.pbe@0:0
 
 test/mixed_image.hex: programs/uart_tx.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/uart_tx.pbe@0 programs/i2c_ctrl.pbe@8
+	python3 tools/pbe_asm.py -o $@ programs/uart_tx.pbe@0:0 programs/i2c_ctrl.pbe@1:8
 
 test/nop_image.hex: programs/nop_test.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/nop_test.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/nop_test.pbe@0:0
 
 test/ow_image.hex: programs/onewire_ctrl.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@1:0
 
 test/modbus_image.hex: programs/modbus_rtu.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/modbus_rtu.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/modbus_rtu.pbe@0:0
 
 test/ws2812_image.hex: programs/ws2812.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/ws2812.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/ws2812.pbe@0:0
 
 test/spi_periph_image.hex: programs/spi_periph.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/spi_periph.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/spi_periph.pbe@0:0
 
 test/i2c_target_image.hex: programs/i2c_target.pbe programs/i2c_watch.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/i2c_target.pbe@0 programs/i2c_watch.pbe@64
+	python3 tools/pbe_asm.py -o $@ programs/i2c_target.pbe@0:0 programs/i2c_watch.pbe@1:0
 
 test/usb_image.hex: programs/usb_dev.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/usb_dev.pbe@0
+	python3 tools/pbe_asm.py -o $@ programs/usb_dev.pbe@0:0
 
 test/can_image.hex: programs/can_node.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/can_node.pbe@0 programs/can_node.pbe@64
+	python3 tools/pbe_asm.py -o $@ programs/can_node.pbe@0:0 programs/can_node.pbe@1:128
 
 test/debug_image.hex: programs/jtag.pbe programs/swd.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/jtag.pbe@0 programs/swd.pbe@64
+	python3 tools/pbe_asm.py -o $@ programs/jtag.pbe@0:0 programs/swd.pbe@1:192
 
-test/conc_image.hex: programs/i2c_ctrl.pbe programs/onewire_ctrl.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ programs/i2c_ctrl.pbe@0 programs/onewire_ctrl.pbe@64
+test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
 IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_engine_restart tb_engine_ops tb_fetch tb_line tb_usb tb_proto tb_pbe tb_can tb_debug; do \
-	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(addprefix ../,$(SRC)) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
+LINT = cd test && for tb in tb_fetch tb_usb tb_proto tb_pbe tb_can tb_debug; do \
+	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
+	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
+	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
 
 test/ops_image.hex: test/ops_test.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ test/ops_test.pbe@0
+	python3 tools/pbe_asm.py -o $@ test/ops_test.pbe@0:0
 
 test/can_ops_image.hex: test/can_ops.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ test/can_ops.pbe@0
+	python3 tools/pbe_asm.py -o $@ test/can_ops.pbe@0:0
 
-test/fetch_image.hex: test/fetch_timing.pbe test/fetch_host.pbe tools/pbe_asm.py
-	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0 test/fetch_host.pbe@64
+test/fetch_image.hex: test/fetch_timing.pbe test/fetch_stream.pbe test/fetch_host.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0:0 test/fetch_stream.pbe@0:128 test/fetch_host.pbe@1:200
 
 test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
 	$(LINT)
 	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
-	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(addprefix ../,$(SRC)) && vvp -n known_reset.vvp
-	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(addprefix ../,$(SRC)) && vvp -n restart.vvp
-	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(addprefix ../,$(SRC)) && vvp -n ops.vvp
-	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(addprefix ../,$(SRC)) && vvp -n fetch.vvp
-	cd test && iverilog -g2012 -o line.vvp tb_line.sv $(addprefix ../,$(SRC)) && vvp -n line.vvp
-	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
-	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
-	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(addprefix ../,$(SRC)) && vvp -n sim.vvp
-	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(addprefix ../,$(SRC)) && vvp -n can.vvp
-	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(addprefix ../,$(SRC)) && vvp -n debug.vvp
-	$(MAKE) test-sram
+	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(ENG) && vvp -n known_reset.vvp
+	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(ENG) && vvp -n restart.vvp
+	cd test && iverilog -g2012 -o ops.vvp tb_engine_ops.sv $(ENG) && vvp -n ops.vvp
+	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(TOP) && vvp -n fetch.vvp
+	cd test && iverilog -g2012 -o line.vvp tb_line.sv $(ENG) && vvp -n line.vvp
+	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
+	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(TOP) && vvp -n proto.vvp
+	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(TOP) && vvp -n sim.vvp
+	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(TOP) && vvp -n can.vvp
+	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp
+	$(MAKE) test-ff
 	$(PYTHON) $(V)/spec_boundaries/check_spec_boundaries.py
 	$(MAKE) test-model
 	$(PYTHON) -m unittest discover -s $(V)/formal -p test_runner.py -v
@@ -91,15 +102,13 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	$(MAKE) diff N=2 CYCLES=600 SEED=0x504245
 	$(MAKE) diff-can CAN_TRIALS=3
 
-# The end-to-end testbenches on the SRAM program memory (USE_SRAM, D62). The engine-only
+# The flip-flop fallback (PBE_PMEM_FF, D82): 64 words per engine, so only the benches whose
+# programs all sit below word 64 of their engine's memory (tb_usb, tb_proto). The engine-only
 # testbenches do not use the top level, so they are not repeated.
-SRAM_FLAGS = -DUSE_SRAM -DFUNCTIONAL
-SRAM_ALL   = $(addprefix ../,$(SRC) $(SRAM_SRC) $(SRAM_MODEL))
-test-sram: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
-	cd test && iverilog -g2012 $(SRAM_FLAGS) -o fetch_sram.vvp tb_fetch.sv $(SRAM_ALL) && vvp -n fetch_sram.vvp
-	cd test && iverilog -g2012 $(SRAM_FLAGS) -o usb_sram.vvp tb_usb.sv $(SRAM_ALL) && vvp -n usb_sram.vvp
-	cd test && iverilog -g2012 $(SRAM_FLAGS) -o proto_sram.vvp tb_proto.sv $(SRAM_ALL) && vvp -n proto_sram.vvp
-	cd test && iverilog -g2012 $(SRAM_FLAGS) -o sim_sram.vvp tb_pbe.sv $(SRAM_ALL) && vvp -n sim_sram.vvp
+FF_ALL = -DPBE_PMEM_FF $(addprefix ../,$(ENG_SRC) src/tt_um_pbe.sv)
+test-ff: test/usb_image.hex test/ws2812_image.hex test/spi_periph_image.hex test/i2c_target_image.hex
+	cd test && iverilog -g2012 -o usb_ff.vvp tb_usb.sv $(FF_ALL) && vvp -n usb_ff.vvp
+	cd test && iverilog -g2012 -o proto_ff.vvp tb_proto.sv $(FF_ALL) && vvp -n proto_ff.vvp
 
 # Testbenches under Verilator as well as Icarus (BUG-102). Two simulators may run the processes
 # woken by one clock edge in different orders, so a testbench race shows up as a difference: each
@@ -114,12 +123,13 @@ test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_ima
 	mkdir -p $(VL_BUILD)
 	set -e; for tb in $(VL_BENCHES); do \
 	  echo "== $$tb"; \
+	  case $$tb in tb_line|tb_engine_*|tb_fifo_*) srcs="$(ENG)";; *) srcs="$(TOP)";; esac; \
 	  (cd test && $(VERILATOR) --binary --timing --assert -Wno-fatal -j 2 --top-module $$tb \
-	    --Mdir ../$(VL_BUILD)/obj_$$tb -o sim $$tb.sv $(addprefix ../,$(SRC))) > $(VL_BUILD)/$$tb-build.log 2>&1 \
+	    --Mdir ../$(VL_BUILD)/obj_$$tb -o sim $$tb.sv $$srcs) > $(VL_BUILD)/$$tb-build.log 2>&1 \
 	    || { tail -20 $(VL_BUILD)/$$tb-build.log; exit 1; }; \
 	  (cd test && ../$(VL_BUILD)/obj_$$tb/sim) > $(VL_BUILD)/$$tb-verilator.log 2>&1 \
 	    || { tail -20 $(VL_BUILD)/$$tb-verilator.log; exit 1; }; \
-	  (cd test && iverilog -g2012 -o ../$(VL_BUILD)/$$tb.vvp $$tb.sv $(addprefix ../,$(SRC)) 2>/dev/null \
+	  (cd test && iverilog -g2012 -o ../$(VL_BUILD)/$$tb.vvp $$tb.sv $$srcs 2>/dev/null \
 	    && vvp -n ../$(VL_BUILD)/$$tb.vvp) > $(VL_BUILD)/$$tb-icarus.log 2>&1 \
 	    || { tail -20 $(VL_BUILD)/$$tb-icarus.log; exit 1; }; \
 	  grep -v '\$$finish' $(VL_BUILD)/$$tb-icarus.log > $(VL_BUILD)/$$tb-icarus.cmp; \
@@ -132,22 +142,22 @@ test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_ima
 # only USB (tb_usb), a quicker loop while working on it
 test-usb: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
-	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(addprefix ../,$(SRC)) && vvp -n usb.vvp
+	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
 
 # only CAN (tb_can); ONLY=rates|arb|ack|inject|biterr|busoff|two runs one scenario
 test-can: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
-	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(addprefix ../,$(SRC)) && vvp -n can.vvp $(if $(ONLY),+ONLY=$(ONLY))
+	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(TOP) && vvp -n can.vvp $(if $(ONLY),+ONLY=$(ONLY))
 
 # only JTAG and SWD (tb_debug); ONLY=jtag|swd|both|slow runs one phase
 test-debug: test/debug_image.hex
 	$(LINT)
-	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(addprefix ../,$(SRC)) && vvp -n debug.vvp $(if $(ONLY),+ONLY=$(ONLY))
+	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp $(if $(ONLY),+ONLY=$(ONLY))
 
 # only the device-side and LED protocols (tb_proto), a quicker loop while working on them
 test-proto: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
-	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(addprefix ../,$(SRC)) && vvp -n proto.vvp
+	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(TOP) && vvp -n proto.vvp
 
 # The end-to-end testbenches on the gate-level netlist from the Tiny Tapeout flow (run by the
 # gds workflow). GL_NETLIST is the routed netlist (tt_submission/*.v); PDK_ROOT and PDK point at
@@ -155,7 +165,8 @@ test-proto: $(IMAGES:%=test/%_image.hex)
 PDK      ?= ihp-sg13cmos5l
 PDK_CELL  = $(patsubst ihp-%,%,$(PDK))
 PDK_VLOG  = $(PDK_ROOT)/$(PDK)/libs.ref/$(PDK_CELL)_stdcell/verilog
-GL_SRC    = $(abspath $(GL_NETLIST)) $(wildcard $(PDK_VLOG)/$(PDK_CELL)_udp.v) $(PDK_VLOG)/$(PDK_CELL)_stdcell.v
+GL_SRC    = $(abspath $(GL_NETLIST)) $(wildcard $(PDK_VLOG)/$(PDK_CELL)_udp.v) $(PDK_VLOG)/$(PDK_CELL)_stdcell.v \
+            $(addprefix ../,$(SRAM_MODEL))
 GL_FLAGS  = -DGL_TEST -DFUNCTIONAL -DSIM
 
 test-gl: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
@@ -165,32 +176,31 @@ test-gl: $(IMAGES:%=test/%_image.hex) test/fetch_image.hex
 	cd test && iverilog -g2012 $(GL_FLAGS) -o usb_gl.vvp tb_usb.sv $(GL_SRC) && vvp -n usb_gl.vvp
 	cd test && iverilog -g2012 $(GL_FLAGS) -o sim_gl.vvp tb_pbe.sv $(GL_SRC) && vvp -n sim_gl.vvp
 
+# Synthesis of the default build. The SRAM macros are black boxes (src/sram_bb.v), so the
+# area is the standard cells only (the macros add 2 x 28,127 um2, from the LEF). The macros'
+# instance names after flattening are listed: the flow's MACROS uses them.
+# `make synth FF=1` synthesizes the flip-flop fallback (PBE_PMEM_FF) instead.
+SYNTH_DEFS = $(if $(FF),-DPBE_PMEM_FF)
 synth:
 	mkdir -p synth
-	sed -e 's#\$$LIB#$(IHP_LIB)#g' -e 's#\$$SRC#$(SRC)#' synth/synth.ys.in > synth/synth.ys
+	sed -e 's#\$$LIB#$(IHP_LIB)#g' -e 's#\$$SRC#$(SRC) $(SRAM_BB)#' -e 's#\$$DEFS#$(SYNTH_DEFS)#' \
+	  synth/synth.ys.in > synth/synth.ys
 	yosys -q -l synth/synth.log synth/synth.ys
 	@grep "Chip area" synth/synth.log | tail -1
-
-# Synthesis with the SRAM program memory; the macros are black boxes, so their area is not in
-# the total (2 x 28,127 um2, from the LEF).
-synth-sram:
-	mkdir -p synth
-	yosys -q -l synth/synth_sram.log -p "read_verilog -DUSE_SRAM -sv $(SRC) $(SRAM_SRC); \
-	  read_verilog $(SRAM_DIR)/RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v; \
-	  synth -top tt_um_ayushyadavnvs_pbe -flatten; dfflibmap -liberty $(IHP_LIB); abc -liberty $(IHP_LIB); \
-	  opt_clean -purge; stat -liberty $(IHP_LIB); select -list t:RM_IHPSG13_*"
-	@grep "Chip area" synth/synth_sram.log | tail -1
-	@grep "/u_pmem" synth/synth_sram.log
+	@grep "^tt_um_ayushyadavnvs_pbe/u_pmem\." synth/synth.log
 
 clean:
 	rm -f test/*.vvp test/*.vcd synth/synth.ys synth/*.log synth/*_netlist.v
 
 # Logic-only critical path with ABC (no wires, no clock tree). Add clk-to-Q (~0.57 ns) and
-# setup (~0.31 ns) from the slow library for a register-to-register estimate.
+# setup (~0.31 ns) from the slow library for a register-to-register estimate. The SRAM macros
+# are black boxes: their outputs count as path start points with no delay, so add the macro's
+# clock-to-DOUT (5.06 ns at the slow corner, its datasheet) to a path that starts at A_DOUT,
+# and its inputs are end points (A_ADDR setup is negative, about -0.6 ns, at the slow corner).
 IHP_SLOW ?= ../ihp_lib/sg13g2_stdcell_slow_1p08V_125C.lib
 timing:
 	mkdir -p synth
-	yosys -q -l synth/timing.log -p "read_verilog -sv $(SRC); synth -top tt_um_ayushyadavnvs_pbe -flatten; \
+	yosys -q -l synth/timing.log -p "read_verilog $(SYNTH_DEFS) -sv $(SRC) $(SRAM_BB); synth -top tt_um_ayushyadavnvs_pbe -flatten; \
 	  dfflibmap -liberty $(IHP_SLOW); \
 	  abc -liberty $(IHP_SLOW) -script +strash;dch,-f;map,-B,0.9;topo;buffer,-p;upsize;dnsize;stime,-p" >/dev/null
 	@grep -o 'Delay = *[0-9.]* ps' synth/timing.log | tail -1

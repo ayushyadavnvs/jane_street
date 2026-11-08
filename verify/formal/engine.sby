@@ -2,6 +2,7 @@
 activity
 invariants
 fetch
+fetch_sram
 pc_window
 instruction_window
 timeout
@@ -12,6 +13,7 @@ activity: mode cover
 activity: depth 20
 invariants: depth 40
 fetch: depth 40
+fetch_sram: depth 40
 pc_window: depth 70
 instruction_window: depth 70
 timeout: depth 50
@@ -25,6 +27,7 @@ smtbmc yices
 activity: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
 invariants: read -formal -D F_KIND=0 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
 fetch: read -formal -D F_KIND=1 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
+fetch_sram: read -formal -D F_KIND=1 -D F_SRAM engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
 pc_window: read -formal -D F_KIND=2 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
 instruction_window: read -formal -D F_KIND=3 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv
 timeout: read -formal -D F_KIND=4 engine_instrumented.sv engine_formal.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv

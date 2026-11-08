@@ -14,12 +14,12 @@ jobs:
       - name: Lint (Verilator, all warnings)
         run: |
           cd src
+          # the default build: the SRAM program memory (D82), the macro as a black box (sram_bb.v)
           verilator --lint-only -Wall -Wno-DECLFILENAME --top-module tt_um_ayushyadavnvs_pbe \
+            pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv pbe_engine.sv pbe_pmem_sram.sv tt_um_pbe.sv sram_bb.v
+          # the flip-flop fallback (PBE_PMEM_FF, D82)
+          verilator --lint-only -Wall -Wno-DECLFILENAME --top-module tt_um_ayushyadavnvs_pbe -DPBE_PMEM_FF \
             pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv pbe_engine.sv tt_um_pbe.sv
-          # the SRAM program memory (D62, a proposal), with the macro as a black box
-          verilator --lint-only -Wall -Wno-DECLFILENAME --top-module tt_um_ayushyadavnvs_pbe -DUSE_SRAM \
-            pbe_fifo.sv pbe_host_spi.sv pbe_crc.sv pbe_line.sv pbe_bsync.sv pbe_engine.sv tt_um_pbe.sv pbe_pmem_sram.sv \
-            ../macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v
       - name: Testbenches under Verilator and Icarus, identical logs (race check, BUG-102)
         run: cd pbe_v1 && make test-verilator
       - name: Setup Python

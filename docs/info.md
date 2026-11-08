@@ -24,7 +24,8 @@ Each engine has:
   frames and error counters in hardware);
 - 16-byte TX and RX FIFOs to the host, and a window of 4 of 8 shared flags.
 
-The two engines share a 128 × 16-bit program memory, so two protocols can run at once.
+Each engine has its own 256 × 16-bit program memory, an IHP SRAM macro (512 words in all), so
+two protocols can run at once, each with up to 256 words.
 
 Programs written and tested so far (in `pbe_v1/programs`):
 - UART TX and RX;
@@ -51,10 +52,16 @@ The host talks to the chip over SPI mode 0. Use `ui[0]` SCK (at most clk/8), `ui
 - **Transaction:** a command byte (bit 7 = write, bits 6..0 = register address), then data bytes.
 - **Burst:** the address auto-increments, except for the program memory and the FIFO data
   registers, which can be streamed.
+- **Program memory:** a 10-bit byte pointer {engine, word[7:0], byte}: `0x06` `PM_ADDR` holds
+  [7:1] word[6:0] and [0] the byte (0 high), `0x0F` `PM_ADDR_H` holds [0] word[7] and [1] the
+  engine. Each byte written to `0x07` `PM_DATA` advances {word, byte}; word 255 wraps to word 0
+  of the same engine. Each engine's `START_PC` (`0x15`, `0x25`) is 8 bits.
 
 Example, a UART loopback (what the Tiny Tapeout test does):
-1. Load the UART programs: write 0 to `0x06` (program pointer), then stream the 128 words of
-   `pbe_v1/test/uart_image.hex` (high byte first) into `0x07`.
+1. Load the UART programs. `pbe_v1/test/uart_image.hex` holds 512 words: engine 0's memory
+   (words 0-255), then engine 1's. For each engine e: write `e << 1` to `0x0F` (`PM_ADDR_H`:
+   engine e, word bit 7 = 0) and 0 to `0x06` (`PM_ADDR`), then stream that engine's 256 words
+   (high byte first) into `0x07` (`PM_DATA`).
 2. Engine 0 (UART TX on pin 0):
    - `0x10` CLKDIV = 49 (tick = half a bit at 480 kbaud and 48 MHz);
    - `0x12` = 0 (pin base);
@@ -64,7 +71,7 @@ Example, a UART loopback (what the Tiny Tapeout test does):
    - `0x20` = 24;
    - `0x22` = 1;
    - `0x23` = 0;
-   - `0x25` = 8 (start at word 8);
+   - `0x25` = 8 (start at word 8 of engine 1's memory);
    - `0x03` = 0x02 (pin 1 belongs to engine 1).
 4. Connect `uio[0]` to `uio[1]`, and write 0x33 to `0x00` to restart and run both engines.
 5. Write bytes to `0x16` (engine 0's TX FIFO). They come back in `0x26` (engine 1's RX FIFO);

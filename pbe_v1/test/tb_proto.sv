@@ -418,7 +418,7 @@ module tb_proto;
     reg_write(7'h1E, 0);
     reg_write(7'h04, 8'h00);
     reg_write(7'h02, 8'h03);
-    load_program("i2c_target_image.hex");  // bit engine at word 0, watcher at word 64
+    load_program("i2c_target_image.hex");  // bit engine: engine 0 word 0; watcher: engine 1 word 0
     reg_write(7'h03, 8'h00);             // both pins belong to E0
     reg_write(7'h10, 0);                 // E0: bit engine
     reg_write(7'h11, 0);
@@ -430,7 +430,7 @@ module tb_proto;
     reg_write(7'h21, 0);
     reg_write(7'h22, 0);
     reg_write(7'h23, 1);                 // JMP pin = scl
-    reg_write(7'h25, 64);
+    reg_write(7'h25, 0);                 // its own memory's word 0 (D82)
     reg_write(7'h28, 0);                 // FLAG_BASE 0, like engine 0
     ic_en = 1;
     reg_write(7'h00, 8'b0011_0011);      // restart + run both

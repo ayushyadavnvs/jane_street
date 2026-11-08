@@ -1,7 +1,7 @@
 # RM_IHPSG13_1P_256x16_c2_bm_bist
 
-IHP's 256 x 16 single-port SRAM, the proposed program memory (D62; one per engine). Used only
-with `USE_SRAM` (`make test-sram`, `make synth-sram`, `sram/flow.patch`).
+IHP's 256 x 16 single-port SRAM, the program memory: one per engine, each with its own 256-word
+image (D62, D82). The default build uses it; `PBE_PMEM_FF` selects the flip-flop fallback.
 
 **Source:** [IHP-Open-PDK](https://github.com/IHP-GmbH/IHP-Open-PDK)
 `ihp-sg13g2/libs.ref/sg13g2_sram/` (`ihp-sg13cmos5l/libs.ref/sg13cmos5l_sram` is a symlink to
@@ -21,5 +21,7 @@ it), commit `89d42ee6d2fd9b50b86a1aada6fee6673c3e6008`: the PDK that LibreLane 3
 | `RM_IHPSG13_1P_core_behavioral_bm_bist.v` | `d0a6258f8e9c93d1d5b1f78c0a1d66f30d28b1ad8037e5e07f53d1a4e3670b12` | its behavioural core |
 | `RM_IHPSG13_1P_256x16_c2_bm_bist.txt` | — | IHP's datasheet |
 
-`RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v` is ours: the interface as a black box, for synthesis,
-lint and the flow's `nl` view. Never list the model files in `info.yaml`.
+The black box for synthesis, lint and the flow is `src/sram_bb.v` (Tiny Tapeout's, D82; it
+replaced our `RM_IHPSG13_1P_256x16_c2_bm_bist_bb.v`). The simulation model (the two `.v` files
+above, compiled with `FUNCTIONAL`) is used by `pbe_v1/Makefile`, `test/Makefile` (the cocotb and
+gate-level runs) and the verification tools. Never list the model files in `info.yaml`.

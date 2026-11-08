@@ -26,14 +26,25 @@
 //                    arrives during the burst is not in it (the host would get a stale value)
 //   0x0E TX_FLUSH W  [0] empties E0's TX FIFO, [1] E1's, leaving the RX FIFOs alone (to drop a
 //                    queued reply while received data keeps arriving)
-//   0x06 PM_ADDR  RW program memory byte pointer [7:0]: word = [7:1], [0] = 0 high byte, 1 low byte
-//                    (128 words; each engine runs the program that starts at its START_PC)
-//   0x07 PM_DATA  W  write the byte at PM_ADDR, then PM_ADDR += 1 (program memory is write only)
+//   Program memory (D82): each engine has its own 256 x 16 memory (an IHP SRAM macro), 512
+//   words in all. The host writes through a 10-bit byte pointer {PM_ADDR_H[1:0], PM_ADDR[7:0]}
+//   = {engine, word[7:0], byte}:
+//   0x06 PM_ADDR  RW pointer [7:0]: [7:1] word[6:0], [0] = 0 high byte, 1 low byte
+//   0x0F PM_ADDR_H RW pointer [9:8]: [0] word[7], [1] engine (0 = E0's memory, 1 = E1's);
+//                    [7:2] read 0. Reset 0: engine 0, word 0, high byte
+//   0x07 PM_DATA  W  write the byte at the pointer into the selected engine's memory, then
+//                    {word, byte} += 1: the low byte carries into the next word and word 255
+//                    into word 0 of the same engine (the engine bit never changes). A burst
+//                    (one SPI write with many data bytes) streams a whole image. Write only.
+//                    Only the selected engine refetches (two bubbles, BUG-074); the other runs on.
+//   With PBE_PMEM_FF (the flip-flop fallback, D82) each engine has 64 words: the same registers,
+//   and word addresses (pointer, pc, START_PC) are taken mod 64.
 //   0x10+0x10*e   engine e (e = 0, 1):
 //      +0 CLKDIV_L, +1 CLKDIV_H   tick every (CLKDIV + 1) clocks
 //      +2 PIN_BASE[2:0]  +3 JMP_PIN[2:0]  +4 SHIFT [0] OUT msb first, [1] IN msb first
-//      +5 START_PC[6:0]   the program's first word; 6-bit jump offsets are relative to it,
-//                         modulo 128; sequential execution is not confined to 64 words
+//      +5 START_PC[7:0]   the program's first word in this engine's own memory; 6-bit jump
+//                         offsets are relative to it, modulo 256; sequential execution is not
+//                         confined to 64 words (a PAGE instruction is reserved for that, D82)
 //      +8 FLAG_BASE[2:0]  first physical flag this engine sees (reset: 0 for E0, 4 for E1)
 //      +9 CRC_POLY_L, +A CRC_POLY_H   W: CRC polynomial (top term implied); R: the CRC's current value
 //      +B CRC_CFG    [3:0] width - 1, [4] init all ones, [5] reversed output, [6] feed OUT bits,
@@ -73,9 +84,11 @@
 // Full FLAGS write wins over all same-edge flag events; otherwise clear wins over set
 // across host and both engines. IRQ W1C wins over same-edge IRQ assertion. CTRL run bits
 // are always replaced, even for a restart/flush write; restart and flush are independent.
-// PM_DATA byte writes wrap the 8-bit byte pointer and invalidate both engine fetches,
-// regardless of which address was written. Other byte of a partially written word is
-// retained/unspecified, never zero-initialized by the write. PM_DATA has no readable RAM.
+// PM_DATA byte writes wrap the 9-bit {word, byte} pointer within the selected engine and
+// invalidate that engine's fetch (twice: at the write and one clock later, and once after
+// reset, BUG-074), regardless of which of its words was written; the other engine is
+// untouched. Other byte of a partially written word is retained/unspecified, never
+// zero-initialized by the write. PM_DATA has no readable RAM.
 // FIFO acceptance and flush ordering are in pbe_fifo. An empty FIFO read returns its
 // unqualified head storage (possibly stale/unknown); only a nonempty pop changes count.
 // Unmapped register reads return 0 and unmapped writes do nothing. Only the documented
@@ -141,16 +154,16 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [31:0] clkdiv;
   logic [5:0]  pin_base, jmp_pin;
   logic [3:0]  shiftcfg;
-  logic [13:0] start_pc;  // 7 bits per engine
-  logic [7:0]  pm_ptr;
+  logic [15:0] start_pc;  // 8 bits per engine
+  logic [9:0]  pm_ptr;    // {engine, word[7:0], byte}
 
   wire [1:0] restart = (wr_en && wr_addr == 7'h00) ? wr_data[5:4] : 2'b00;
   wire [1:0] flush   = (wr_en && wr_addr == 7'h00) ? wr_data[7:6] : 2'b00;
   wire [1:0] tx_flush = flush | ((wr_en && wr_addr == 7'h0E) ? wr_data[1:0] : 2'b00);
 
   // engine-facing signals
-  logic [13:0] pc;  // 7 bits per engine
-  logic [41:0] pc_copy;  // 3 x 7 bits per engine
+  logic [15:0] pc;       // 8 bits per engine
+  logic [47:0] pc_copy;  // 3 x 8 bits per engine
   logic [31:0] instr;
   logic [15:0] e_out, e_oe, tx_data, rx_din, rx_dout;
   logic [1:0]  tx_empty, tx_full, tx_pop, tx_mark, tx_rewind, rx_empty, rx_full, rx_push, e_irq;
@@ -200,8 +213,9 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
           7'h02: irq_pend <= (irq_pend | e_irq) & ~wr_data[1:0];
           7'h03: pin_own <= wr_data;
           7'h04: flags <= wr_data;
-          7'h06: pm_ptr <= wr_data;
-          7'h07: pm_ptr <= pm_ptr + 1'b1;
+          7'h06: pm_ptr[7:0] <= wr_data;
+          7'h0F: pm_ptr[9:8] <= wr_data[1:0];
+          7'h07: pm_ptr[8:0] <= pm_ptr[8:0] + 1'b1;  // the engine bit stays
           default: ;
         endcase
       end
@@ -212,7 +226,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
           4'h2: pin_base[2:0] <= wr_data[2:0];
           4'h3: jmp_pin[2:0]  <= wr_data[2:0];
           4'h4: shiftcfg[1:0] <= wr_data[1:0];
-          4'h5: start_pc[6:0]  <= wr_data[6:0];
+          4'h5: start_pc[7:0]  <= wr_data;
           4'h8: flag_base[2:0] <= wr_data[2:0];
           4'h9: crc_poly[7:0]   <= wr_data;
           4'hA: crc_poly[15:8]  <= wr_data;
@@ -230,7 +244,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
           4'h2: pin_base[5:3] <= wr_data[2:0];
           4'h3: jmp_pin[5:3]  <= wr_data[2:0];
           4'h4: shiftcfg[3:2] <= wr_data[1:0];
-          4'h5: start_pc[13:7] <= wr_data[6:0];
+          4'h5: start_pc[15:8] <= wr_data;
           4'h8: flag_base[5:3] <= wr_data[2:0];
           4'h9: crc_poly[23:16] <= wr_data;
           4'hA: crc_poly[31:24] <= wr_data;
@@ -267,7 +281,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       4'h2:    eng_rd = {5'b0, rd_e1 ? pin_base[5:3] : pin_base[2:0]};
       4'h3:    eng_rd = {5'b0, rd_e1 ? jmp_pin[5:3] : jmp_pin[2:0]};
       4'h4:    eng_rd = {6'b0, rd_e1 ? shiftcfg[3:2] : shiftcfg[1:0]};
-      4'h5:    eng_rd = {1'b0, rd_e1 ? start_pc[13:7] : start_pc[6:0]};
+      4'h5:    eng_rd = rd_e1 ? start_pc[15:8] : start_pc[7:0];
       4'h8:    eng_rd = {5'b0, rd_e1 ? flag_base[5:3] : flag_base[2:0]};
       4'h9:    eng_rd = rd_e1 ? e_crc[23:16] : e_crc[7:0];   // reads give the CRC value
       4'hA:    eng_rd = rd_e1 ? e_crc[31:24] : e_crc[15:8];
@@ -307,7 +321,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       7'h03:   rd_data = pin_own;
       7'h04:   rd_data = flags;
       7'h05:   rd_data = pins_s2;
-      7'h06:   rd_data = pm_ptr;
+      7'h06:   rd_data = pm_ptr[7:0];
+      7'h0F:   rd_data = {6'b0, pm_ptr[9:8]};
       7'h0A:   rd_data = {3'b0, rx_count[4:0]};
       7'h0B:   rd_data = {3'b0, rx_count[9:5]};
       7'h0C:   rd_data = {3'b0, tx_count[4:0]};
@@ -316,42 +331,55 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
     endcase
   end
 
-  // ---- program memory: 128 x 16, written by the host, read by both engines ----
+  // ---- program memory: one 256 x 16 memory per engine, written by the host (D82) ----
   // Each engine reads the word after its current instruction into its instruction register
-  // (D50), so this read is a pipeline stage of its own.
+  // (D50), so this read is a pipeline stage of its own. A write goes to the engine that the
+  // pointer's top bit selects, and only that engine refetches.
   wire         pm_wr = wr_en && wr_addr == 7'h07;
-  logic [13:0] pc_d;      // each engine's next read address (7 bits per engine)
-  logic        eng_pm_wr; // the engines' refetch
-`ifdef USE_SRAM
-  // One SRAM macro per engine, both written by the host (D62, a proposal). A write takes the
-  // macros' port for that clock, so the engines refetch at the write and once more one clock
-  // later. The reset value refetches once after reset, when the macros' output is unknown.
-  logic pm_wr_q;
+  wire  [1:0]  pm_wr_e = {pm_wr && pm_ptr[9], pm_wr && !pm_ptr[9]};
+  logic [15:0] pc_d;      // each engine's next read address (8 bits per engine)
+  logic [1:0]  eng_pm_wr; // each engine's refetch
+`ifndef PBE_PMEM_FF
+  // The default: an IHP SRAM macro per engine (pbe_pmem_sram, D62, D82). A write takes that
+  // macro's port for that clock, so its engine refetches at the write and once more one clock
+  // later (BUG-074). The reset value refetches once after reset, when the macros' output is
+  // unknown.
+  localparam bit PC_COPIES = 1'b0;
+  logic [1:0] pm_wr_q;
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) pm_wr_q <= 1'b1;
-    else pm_wr_q <= pm_wr;
+    if (!rst_n) pm_wr_q <= 2'b11;
+    else pm_wr_q <= pm_wr_e;
   end
-  assign eng_pm_wr = pm_wr || pm_wr_q;
+  assign eng_pm_wr = pm_wr_e | pm_wr_q;
 
-  pbe_pmem_sram u_pmem (.clk, .pm_wr, .pm_ptr, .wr_data, .pc_d, .instr);
+  pbe_pmem_sram u_pmem (.clk, .pm_wr(pm_wr_e), .pm_ptr(pm_ptr[8:0]), .wr_data, .pc_d, .instr);
   wire _unused_pc = &{pc, pc_copy, 1'b0};
 `else
-  assign eng_pm_wr = pm_wr;
-  logic [15:0] pmem[128];
+  // The flip-flop fallback (D82): 64 x 16 per engine, the same flip-flop count as the shared
+  // 128-word memory before D82. Word addresses are taken mod 64.
+  localparam bit PC_COPIES = 1'b1;
+  assign eng_pm_wr = pm_wr_e;
+  logic [15:0] pmem0[64], pmem1[64];
+  wire  [5:0]  pm_word = pm_ptr[6:1];
   always_ff @(posedge clk) begin
-    if (pm_wr) begin
-      if (pm_ptr[0]) pmem[pm_ptr[7:1]][7:0] <= wr_data;
-      else pmem[pm_ptr[7:1]][15:8] <= wr_data;
+    if (pm_wr_e[0]) begin
+      if (pm_ptr[0]) pmem0[pm_word][7:0] <= wr_data;
+      else pmem0[pm_word][15:8] <= wr_data;
+    end
+    if (pm_wr_e[1]) begin
+      if (pm_ptr[0]) pmem1[pm_word][7:0] <= wr_data;
+      else pmem1[pm_word][15:8] <= wr_data;
     end
   end
   // Each engine reads its 16 bits as four 4-bit slices, each at its own copy of the address.
-  for (genvar e = 0; e < 2; e++) begin : g_rd
-    wire [27:0] ra = {pc_copy[e*21+:21], pc[e*7+:7]};
-    for (genvar k = 0; k < 4; k++) begin : g_slice
-      assign instr[e*16+k*4+:4] = pmem[ra[k*7+:7]][k*4+:4];
-    end
+  wire [31:0] ra0 = {pc_copy[23:0], pc[7:0]};
+  wire [31:0] ra1 = {pc_copy[47:24], pc[15:8]};
+  for (genvar k = 0; k < 4; k++) begin : g_slice
+    assign instr[k*4+:4]      = pmem0[ra0[k*8+:6]][k*4+:4];
+    assign instr[16+k*4+:4]   = pmem1[ra1[k*8+:6]][k*4+:4];
   end
-  wire _unused_pc_d = &{pc_d, 1'b0};
+  wire _unused_pc_d = &{pc_d, pm_ptr[8:7], ra0[31:30], ra0[23:22], ra0[15:14], ra0[7:6],
+                        ra1[31:30], ra1[23:22], ra1[15:14], ra1[7:6], 1'b0};
 `endif
 
   // ---- engines and their FIFOs ----
@@ -395,7 +423,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
     assign p_set[e*8+:8]   = set2[7:0] | set2[15:8];
     assign p_clr[e*8+:8]   = clr2[7:0] | clr2[15:8];
 
-    pbe_engine u_eng (
+    pbe_engine #(.PC_COPIES(PC_COPIES)) u_eng (
         .clk, .rst_n,
         .run          (run[e]),
         .restart      (restart[e]),
@@ -404,7 +432,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .jmp_pin      (jmp_pin[e*3+:3]),
         .out_msb_first(shiftcfg[e*2]),
         .in_msb_first (shiftcfg[e*2+1]),
-        .start_pc     (start_pc[e*7+:7]),
+        .start_pc     (start_pc[e*8+:8]),
         .crc_poly     (crc_poly[e*16+:16]),
         .crc_cfg      (crc_cfg[e*8+:8]),
         .timeout      (timeout[e*16+:16]),
@@ -425,11 +453,11 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .can_rec      (can_rec[e*8+:8]),
         .can_state    (can_state[e*2+:2]),
         .crc_now      (e_crc[e*16+:16]),
-        .pc           (pc[e*7+:7]),
-        .pc_copy      (pc_copy[e*21+:21]),
-        .pc_d         (pc_d[e*7+:7]),
+        .pc           (pc[e*8+:8]),
+        .pc_copy      (pc_copy[e*24+:24]),
+        .pc_d         (pc_d[e*8+:8]),
         .instr        (instr[e*16+:16]),
-        .pm_wr        (eng_pm_wr),
+        .pm_wr        (eng_pm_wr[e]),
         .pins_in      (pins_s2),
         .pins_out     (e_out[e*8+:8]),
         .pins_oe      (e_oe[e*8+:8]),

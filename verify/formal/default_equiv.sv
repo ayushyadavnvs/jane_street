@@ -11,7 +11,7 @@ module default_equiv(input wire clk);
   (* anyseq *) reg run, restart, pm_wr, tx_empty, rx_full, hci, htc, hoc, hlc;
   (* anyseq *) reg [15:0] instr, clkdiv, crc_poly, timeout, crc_good;
   (* anyseq *) reg [7:0] crc_cfg, line_cfg, pins, txd;
-  (* anyseq *) reg [6:0] start_pc;
+  (* anyseq *) reg [7:0] start_pc;  // 8 bits since D82; the old engine takes [6:0]
   (* anyseq *) reg [3:0] flags;
   (* anyseq *) reg [2:0] pin_base, jmp_pin;
   wire [2:0] op = instr[15:13];
@@ -24,7 +24,8 @@ module default_equiv(input wire clk);
   end
   wire [7:0] st_new; wire [4:0] st_old;
   wire [15:0] crc_new, crc_old;
-  wire [6:0] pc_new, pc_old, pcd_new, pcd_old;
+  wire [7:0] pc_new, pcd_new;
+  wire [6:0] pc_old, pcd_old;
   wire [7:0] po_new, po_old, poe_new, poe_old, rxd_new, rxd_old;
   wire [3:0] fs_new, fs_old, fc_new, fc_old;
   wire pop_new, pop_old, push_new, push_old, irq_new, irq_old;
@@ -37,7 +38,7 @@ module default_equiv(input wire clk);
     .tx_data(txd), .tx_empty, .tx_pop(pop_new), .tx_mark(), .tx_rewind(), .rx_data(rxd_new), .rx_full,
     .rx_push(push_new), .flags, .flag_set(fs_new), .flag_clr(fc_new), .irq(irq_new));
   pbe_engine_old o(.clk, .rst_n, .run, .restart, .clkdiv, .pin_base, .jmp_pin, .out_msb_first(omsb),
-    .in_msb_first(imsb), .start_pc, .crc_poly, .crc_cfg, .timeout, .line_cfg, .coder_cfg(cfg),
+    .in_msb_first(imsb), .start_pc(start_pc[6:0]), .crc_poly, .crc_cfg, .timeout, .line_cfg, .coder_cfg(cfg),
     .sync, .crc_good, .host_crc_init(hci), .host_tmo_clr(htc), .host_ovf_clr(hoc),
     .host_lerr_clr(hlc), .status(st_old), .crc_now(crc_old), .pc(pc_old), .pc_copy(),
     .pc_d(pcd_old), .instr, .pm_wr, .pins_in(pins), .pins_out(po_old), .pins_oe(poe_old),
@@ -47,7 +48,9 @@ module default_equiv(input wire clk);
     if (!f_past) assume(!rst_n);
     if (f_past) begin
       assert(st_new == {3'b000, st_old});
-      assert(crc_new == crc_old && pc_new == pc_old && pcd_new == pcd_old);
+      // D82: pc is 8 bits (mod 256), the old one 7 (mod 128). pc only ever changes by +1, -1
+      // or start_pc + offset, so the two agree modulo 128: compare the low 7 bits.
+      assert(crc_new == crc_old && pc_new[6:0] == pc_old && pcd_new[6:0] == pcd_old);
       assert(po_new == po_old && poe_new == poe_old && rxd_new == rxd_old);
       assert(fs_new == fs_old && fc_new == fc_old && pop_new == pop_old && push_new == push_old);
       assert(irq_new == irq_old);

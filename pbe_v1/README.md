@@ -9,12 +9,14 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | Path | What |
 |---|---|
 | `src/tt_um_pbe.sv` | Top level: pin map, register map, program memory, FIFOs, pin mux |
+| `src/pbe_pmem_sram.sv` | Program memory: one IHP SRAM macro (256 × 16) per engine (D82) |
+| `src/sram_bb.v` | The macro as a black box, for synthesis, lint and the flow (Tiny Tapeout's) |
 | `src/pbe_engine.sv` | One engine: decoder, PC/branch, timing and timeout, pin unit, X counter, OSR/ISR, parity |
 | `src/pbe_crc.sv` | General CRC unit (one per engine) |
 | `src/pbe_line.sv` | Line coder (one per engine): NRZ/NRZI, bit stuffing, pair mode, SYNC hunt |
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
-| `tools/pbe_asm.py` | Assembler: `.pbe` text → 128-word hex image; labels relative to each program's start |
+| `tools/pbe_asm.py` | Assembler: `.pbe` text → 512-word hex image (engine 0's 256 words, then engine 1's), `prog.pbe@engine:word`; labels relative to each program's start |
 | `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
@@ -24,7 +26,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
 | `test/tb_line.sv` | Unit test: the line coder in USB, CAN and HDLC styles against reference models |
-| `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up |
+| `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up; separate memories, pointer carries, `START_PC` 252 wrapping, the refetch cost, the reset refetch (D82) |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
 
 ## Run
@@ -34,10 +36,11 @@ make test                                  # Icarus Verilog, all testbenches
 make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
-make test-sram                             # end-to-end testbenches on the SRAM program memory (D62, also in make test)
+make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
 make test-verilator                        # tb_line and 4 more under Verilator and Icarus: both pass, identical logs (D80)
-make synth                                 # area, IHP library in ../ihp_lib
-make synth-sram                            # the same with USE_SRAM (macros as black boxes)
+make synth                                 # area of the standard cells, IHP library in ../ihp_lib; the SRAM macros
+                                           #   are black boxes (src/sram_bb.v); prints their instance names
+make synth FF=1                            # the same for the flip-flop fallback
 make timing                                # critical path, slow corner
 ```
 
@@ -51,11 +54,28 @@ make timing                                # critical path, slow corner
 | `uo_out[7:2]` | status: running, RX has data, TX full (per engine) |
 | `uio[7:0]` | protocol pins |
 
-The full register map is in the header comment of `src/tt_um_pbe.sv`. Programs are loaded by
-writing a byte pointer to `PM_ADDR` (0x06) and then streaming bytes into `PM_DATA` (0x07).
-Program memory holds 128 words shared by both engines. An engine runs the program that starts at
-its `START_PC`, and all its jumps are relative to that address, so each engine has its own
-64-word window and a program can be loaded anywhere.
+The full register map is in the header comment of `src/tt_um_pbe.sv`.
+
+**Program memory (D82).** Each engine has its own 256 × 16 memory, an IHP SRAM macro: 512 words
+in all. The host writes it through a 10-bit byte pointer {engine, word[7:0], byte}:
+
+| Register | Address | Bits |
+|---|---|---|
+| `PM_ADDR` | 0x06 RW | [7:1] word[6:0], [0] byte (0 high, 1 low) |
+| `PM_ADDR_H` | 0x0F RW | [0] word[7], [1] engine (0 or 1); [7:2] read 0 |
+| `PM_DATA` | 0x07 W | writes the byte, then {word, byte} += 1 |
+
+To load engine e's program at word w: write `PM_ADDR_H` = {e, w[7]}, `PM_ADDR` = {w[6:0], 0},
+then stream the words (high byte first) into `PM_DATA` in one burst. The pointer carries from the
+low byte into the next word and from word 127 into 128, and wraps from word 255 to word 0 of the
+**same** engine: a burst never spills into the other engine's memory. The program memory is
+write only. A write refetches only the engine whose memory it writes, costing it 2 clocks at
+`CLKDIV` 0 (BUG-074); the other engine runs on undisturbed.
+
+An engine runs the program that starts at its `START_PC` (8 bits, in its own memory), and all
+its jumps are relative to that address (6-bit targets, mod 256), so each program has a 64-word
+window and can be loaded anywhere. The assembler's images hold both memories (`@engine:word`).
+With `PBE_PMEM_FF` (the flip-flop fallback) each engine has 64 words, addressed mod 64.
 
 ## Instruction set
 
@@ -332,7 +352,7 @@ ends the frame (3.5 characters in all), a start bit makes the frame invalid.
      engine-appended CRC, parity or second stop bit, driver enable and glitches on the TX line.
   6. Two flag-using protocols at once: a 1-Wire Search ROM on engine 0 while engine 1 runs I2C
      write/read rounds, from two host processes sharing the host port. The 1-Wire program sits
-     at word 64, so this also checks jumps relative to `START_PC`.
+     at word 130 of engine 0's memory, so this also checks jumps relative to a `START_PC` ≥ 128.
   7. SMBus PEC: Write Word and Read Word against a device model that computes its own PEC;
      the engine's PEC must match, and a corrupted PEC must be reported.
   8. WS2812 (`tb_proto`): 2 frames of 5 LEDs; a decoder checks every high and low phase against
@@ -376,6 +396,9 @@ ends the frame (3.5 characters in all), a start bit makes the frame invalid.
     - no CRC5 check;
     - no CRC check before the ACK;
     - "CRC ok" back to zero.
+- Area now (D82, `make synth`): 198,770 µm² of standard cells, plus two SRAM macros of
+  28,127 µm² each, on an 8x4 tile (1724.16 × 710.64 µm): about 21 %. The flip-flop fallback
+  (`make synth FF=1`) is 366,093 µm². The figures below are from before D82.
 - Area, Yosys with the IHP sg13g2 typical library: 333,841 µm² of cell area. 6×4 tiles are
   1289.28 × 710.64 µm = 916,229 µm², so cells fill about 36%.
   - USB's features added 71,223 µm²: FIFOs 4 → 16 bytes 33,121, two line coders 24,283, and

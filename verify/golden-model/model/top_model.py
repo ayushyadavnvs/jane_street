@@ -3,6 +3,10 @@
 The model has separate old-state evaluation and edge commit: host transactions,
 engine side effects, synchronizers and FIFO accepts all see pre-edge values.
 No RTL is read at runtime. Unwritten memory is deliberately None (unspecified).
+Program memory (D82): each engine has its own 256 words; ``program`` holds both, engine e's
+word w at index e*256 + w. The host pointer is {PM_ADDR_H[1:0], PM_ADDR} = {engine, word, byte}.
+The default build is the SRAM (``sram=True``): a write refetches its engine at the write and
+one clock later, and both engines refetch once after reset (pm_wr_q, BUG-074).
 Cycle priorities beyond the original register map are implementation-informed
 and explicitly inventoried in verify/golden-model/ROUND2_MODEL_AUDIT.md. Direct write()
 commits storage only; edge() is required for bus events/flush/restart behavior.
@@ -95,9 +99,13 @@ class HostSPI:
             self.tx_unknown = (self.tx_unknown << 1) & 255
 
 
+WORDS = 256   # each engine's program memory (D82)
+
+
 class PBEModel:
-    def __init__(self):
-        self.program = [None] * 128
+    def __init__(self, sram=True):
+        self.sram = sram
+        self.program = [None] * (2 * WORDS)
         self._pm_partial = {}
         self.reset()
 
@@ -112,6 +120,7 @@ class PBEModel:
                             coder_cfg=0,sync=0,crc_good=0) for _ in range(2)]
         self.flag_base = [0, 4]
         self.run = self.flags = self.irq = self.pin_own = self.pm_ptr = 0
+        self.pm_wr_q = [self.sram, self.sram]   # the SRAM's reset refetch
         self.host1 = self.host2 = 2
         self.pins1 = self.pins2 = 0
         self.host = HostSPI()
@@ -132,7 +141,8 @@ class PBEModel:
             return sum((f.empty << (e*4+2) | f.full << (e*4+3) |
                         self.rx[e].empty << (e*4) | self.rx[e].full << (e*4+1))
                        for e,f in enumerate(self.tx))
-        fixed = {2:self.irq,3:self.pin_own,4:self.flags,5:self.pins2,6:self.pm_ptr,
+        fixed = {2:self.irq,3:self.pin_own,4:self.flags,5:self.pins2,6:self.pm_ptr & 255,
+                 15:self.pm_ptr >> 8,
                  10:self.rx[0].count,11:self.rx[1].count,12:self.tx[0].count,13:self.tx[1].count}
         if addr in fixed: return fixed[addr]
         page, reg = addr >> 4, addr & 15
@@ -155,9 +165,10 @@ class PBEModel:
         elif addr == 2: self.irq &= ~(data & 3)
         elif addr == 3: self.pin_own = data
         elif addr == 4: self.flags = data
-        elif addr == 6: self.pm_ptr = data
+        elif addr == 6: self.pm_ptr = (self.pm_ptr & 0x300) | data
+        elif addr == 15: self.pm_ptr = (self.pm_ptr & 0xff) | (data & 3) << 8
         elif addr == 7:
-            word = self.pm_ptr >> 1
+            word = (self.pm_ptr >> 9) * WORDS + (self.pm_ptr >> 1 & 255)
             old = self.program[word]
             shift = 0 if self.pm_ptr & 1 else 8
             if old is None:
@@ -175,7 +186,8 @@ class PBEModel:
             else:
                 self.program[word] = (old & ~(255 << shift)) | data << shift
                 self._pm_partial.pop(word, None)
-            self.pm_ptr = (self.pm_ptr+1) & 255
+            # {word, byte} advances and wraps within the engine; the engine bit stays
+            self.pm_ptr = (self.pm_ptr & 0x200) | ((self.pm_ptr+1) & 0x1ff)
         page, reg = addr >> 4, addr & 15
         if page in (1,2):
             e=page-1; c=self.config[e]
@@ -185,7 +197,7 @@ class PBEModel:
                 key,shift=halves[reg]; c[key]=(c[key] & ~(255 << shift)) | data << shift
             elif reg in (2,3): c[{2:'pin_base',3:'jmp_pin'}[reg]]=data & 7
             elif reg == 4: c['out_msb_first'],c['in_msb_first']=data & 1,(data >> 1) & 1
-            elif reg == 5: c['start_pc']=data & 127
+            elif reg == 5: c['start_pc']=data
             elif reg == 8: self.flag_base[e]=data & 7
             elif reg in (11,14): c[{11:'crc_cfg',14:'line_cfg'}[reg]]=data
         if page in (3,4):
@@ -204,11 +216,14 @@ class PBEModel:
             m.configure(**self.config[e])
             f=sum(((self.flags >> ((self.flag_base[e]+n)&7)) & 1) << n for n in range(4))
             clear=wd if wa == 0x1f+16*e else 0
-            signals.append(m.step(self.program,pins_in=self.pins2,flags=f,
+            pm_wr=wa == 7 and (self.pm_ptr >> 9) == e   # only the selected engine's memory
+            base=e*WORDS
+            signals.append(m.step(lambda a,base=base: self.program[base+a],pins_in=self.pins2,flags=f,
                 tx_data=self.tx[e].data,tx_empty=self.tx[e].empty,rx_full=self.rx[e].full,
                 run=bool(self.run & (1 << e)),restart=bool(wa == 0 and wd & (16 << e)),
-                pm_wr=wa == 7,host_crc_init=bool(clear & 1),host_tmo_clr=bool(clear & 2),
+                pm_wr=pm_wr or self.pm_wr_q[e],host_crc_init=bool(clear & 1),host_tmo_clr=bool(clear & 2),
                 host_ovf_clr=bool(clear & 4),host_lerr_clr=bool(clear & 8)))
+            if self.sram: self.pm_wr_q[e]=pm_wr
         sets=wd if wa == 8 else 0; clears=wd if wa == 9 else 0
         for e,s in enumerate(signals):
             for n in range(4):
