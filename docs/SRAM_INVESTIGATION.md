@@ -1,3 +1,11 @@
+> **Superseded (D82, November 2026).** The SRAM is now the design: one macro per engine with
+> **separate** 256-word images (not the mirrored writes below), on an 8x4 tile. The flow change
+> set this investigation proposed (`sram/flow.patch`, its 67.44 µm stripe lattice and
+> `pdn_cfg.tcl`) is retired and deleted: it had no step extending the stripes onto the macros'
+> supply columns (BUG-110). The flow now follows Tiny Tapeout's SRAM example; the steps are in
+> `docs/SRAM_8x4_FLOW_STEPS.md`. The instance names below (`g_mem[0]`) are now
+> `u_pmem.u_sram0` and `u_pmem.u_sram1`. The rest is kept as the record of the investigation.
+
 # Program memory: flip-flops or SRAM? (investigation, October 2026)
 
 Branch `investigate/sram`. Decision entry: D62 in `docs/DESIGN_DECISIONS.md` (a proposal).
