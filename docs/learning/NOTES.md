@@ -21,8 +21,12 @@ Branch `learn/notes` only.
   Artifacts downloaded to ~/tt/sram-example-run (via the Artifacts box at the very bottom of
   the run page, below all job summaries). Opened GDS in KLayout; found the SRAM cell
   (boundary 189/4, 236.8 x 118.78 in its own coordinates). Listed the 71 flow steps.
-  Next: instance position vs MACROS [3.36, 3.78] FS, Metal4 (50/0) stripes over the SRAM,
-  map the 71 steps onto the flow.
+  Saw MACROS position (3.36, 3.78) in KLayout; saw Metal4 (50/0) tile stripes continuing
+  over the SRAM onto its own (gapped) Metal4 columns = ExtendPowerStripes.
+  Mapped the 71 LibreLane steps to stages (lint 01-04, synth 05-09, floorplan 13-19,
+  PDN 20-23, place 24-35, CTS+hold 36-39, route 40-52, fill 53, RCX 55, signoff STA 56,
+  IR drop 57, GDS 58-61, LVS 63-66, final checks 67-71; no DRC in flow, precheck does it).
+  Next: signoff STA per corner (56-openroad-stapostpnr).
 
 ## What Ayush knows
 - Verilog and basic digital design. No ASIC physical design yet.
