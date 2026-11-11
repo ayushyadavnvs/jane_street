@@ -19,7 +19,10 @@ Branch `learn/notes` only.
 - 2026-11-12: KLayout 0.30.13 installed. Fork run: actions/runs/42174634387 (gds 4m27s,
   precheck 10/10, 130 cells, 7325 fill/decap, 47 dlygate4sd3 hold cells, util 2.291 %).
   Artifacts downloaded to ~/tt/sram-example-run (via the Artifacts box at the very bottom of
-  the run page, below all job summaries). Next: list files, open GDS in KLayout.
+  the run page, below all job summaries). Opened GDS in KLayout; found the SRAM cell
+  (boundary 189/4, 236.8 x 118.78 in its own coordinates). Listed the 71 flow steps.
+  Next: instance position vs MACROS [3.36, 3.78] FS, Metal4 (50/0) stripes over the SRAM,
+  map the 71 steps onto the flow.
 
 ## What Ayush knows
 - Verilog and basic digital design. No ASIC physical design yet.
