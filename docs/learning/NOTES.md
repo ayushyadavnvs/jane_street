@@ -15,8 +15,11 @@ Branch `learn/notes` only.
 6. Later: timing closure with his own reports.
 
 ## Status
-- 2026-11-08: session 1. Gauged knowledge. Next: install KLayout, download the fork's gds
-  artifacts, send run URL and file list.
+- 2026-11-08: session 1. Gauged knowledge.
+- 2026-11-12: KLayout 0.30.13 installed. Fork run: actions/runs/42174634387 (gds 4m27s,
+  precheck 10/10, 130 cells, 7325 fill/decap, 47 dlygate4sd3 hold cells, util 2.291 %).
+  Artifacts downloaded to ~/tt/sram-example-run (via the Artifacts box at the very bottom of
+  the run page, below all job summaries). Next: list files, open GDS in KLayout.
 
 ## What Ayush knows
 - Verilog and basic digital design. No ASIC physical design yet.
@@ -26,7 +29,8 @@ Branch `learn/notes` only.
   several stages and corners, signoff uses extracted parasitics (SPEF); hold buffers come
   after CTS; SRAM read is synchronous (one-cycle latency); a macro is a placement/routing
   blockage described by LEF (abstract) + .lib (timing) + GDS (layout).
-- Has never used KLayout or downloaded Actions artifacts. Cloned jane_street and his
+- Understands: hold buffers can hurt setup; fill/decap; SRAM bits live in bitcells.
+- Had never used KLayout or downloaded Actions artifacts. Cloned jane_street and his
   SRAM-example fork in ~.
 
 ## Open questions / to revisit
