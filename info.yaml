@@ -8,7 +8,7 @@ project:
   clock_hz:     48000000       # Clock frequency in Hz (or 0 if not applicable)
 
   # How many tiles your design occupies? A single tile is about 202x155 uM.
-  tiles: "6x4"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2, 8x2, 3x4, 4x4, 5x4, 6x4 or 8x4
+  tiles: "8x4"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2, 8x2, 3x4, 4x4, 5x4, 6x4 or 8x4
 
   # Your top module name must start with "tt_um_". Make it unique by including your github username:
   top_module:  "tt_um_ayushyadavnvs_pbe"
@@ -23,7 +23,9 @@ project:
     - "pbe_line.sv"
     - "pbe_bsync.sv"
     - "pbe_engine.sv"
+    - "pbe_pmem_sram.sv"
     - "tt_um_pbe.sv"
+    - "sram_bb.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).

@@ -32,6 +32,46 @@
   "//": "https://tinytapeout.com/faq/#how-can-i-map-an-additional-external-clock-to-one-of-the-gpios",
   "CLOCK_PORT": "clk",
 
+  "//": "======== IHP SRAM macros (RM_IHPSG13_1P_256x16_c2_bm_bist), one per engine (D82) ========",
+
+  "//": "Insert the Project.ExtendPowerStripes step (librelane_plugin_sram_pdn.py) after the PDN generator.",
+  "meta": {
+    "flow": "Classic",
+    "substituting_steps": { "+OpenROAD.GeneratePDN": "Project.ExtendPowerStripes" }
+  },
+
+  "//": "Both at x = 3.36 (stacked macros must share x); u_sram0 at the bottom flipped (FS),",
+  "//": "u_sram1 above it upright (N): their pin edges face each other across a routing gap.",
+  "MACROS": {
+    "RM_IHPSG13_1P_256x16_c2_bm_bist": {
+      "instances": {
+        "u_pmem.u_sram0": { "location": [3.36, 3.78],   "orientation": "FS" },
+        "u_pmem.u_sram1": { "location": [3.36, 170.10], "orientation": "N" }
+      },
+      "gds": ["pdk_dir::libs.ref/sg13cmos5l_sram/gds/RM_IHPSG13_1P_256x16_c2_bm_bist.gds"],
+      "lef": ["pdk_dir::libs.ref/sg13cmos5l_sram/lef/RM_IHPSG13_1P_256x16_c2_bm_bist.lef"],
+      "lib": {
+        "*_typ_*": ["pdk_dir::libs.ref/sg13cmos5l_sram/lib/RM_IHPSG13_1P_256x16_c2_bm_bist_typ_1p20V_25C.lib"],
+        "*_fast_*": ["pdk_dir::libs.ref/sg13cmos5l_sram/lib/RM_IHPSG13_1P_256x16_c2_bm_bist_fast_1p32V_m55C.lib"],
+        "*_slow_*": ["pdk_dir::libs.ref/sg13cmos5l_sram/lib/RM_IHPSG13_1P_256x16_c2_bm_bist_slow_1p08V_125C.lib"]
+      }
+    }
+  },
+
+  "//": "Each SRAM has two supply rails (VDD!, VDDARRAY!) and one ground rail (VSS!).",
+  "PDN_MACRO_CONNECTIONS": [
+    "u_pmem.u_sram0 VPWR VGND VDD! VSS!",
+    "u_pmem.u_sram0 VPWR VGND VDDARRAY! VSS!",
+    "u_pmem.u_sram1 VPWR VGND VDD! VSS!",
+    "u_pmem.u_sram1 VPWR VGND VDDARRAY! VSS!"
+  ],
+
+  "PDN_CFG": "dir::pdn_cfg.tcl",
+  "EXTEND_STRIPES_SRAM_ARRAY_EVERY_OTHER": true,
+  "ERROR_ON_PDN_VIOLATIONS": 0,
+  "RUN_MAGIC_DRC": 0,
+  "ERROR_ON_ILLEGAL_OVERLAPS": 0,
+
   "//": "Configuration docs: https://librelane.readthedocs.io/en/latest/reference/configuration.html",
 
   "//": "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
@@ -59,8 +99,12 @@
   "FP_IO_HLENGTH": 2,
   "FP_IO_VLENGTH": 2,
 
-  "FP_PDN_VPITCH": 50.0,
+  "//": "PDN stripes matched to the SRAM's Metal4 power columns (D82): 44.96 = 4 x 11.24 um column pitch,",
+  "//": "2.1 + 3.52 = 5.62 um from VPWR to VGND as in the macro, first VPWR stripe centred at 9.03 um.",
+  "FP_PDN_VPITCH": 44.96,
   "FP_PDN_VWIDTH": 2.1,
+  "FP_PDN_VSPACING": 3.52,
+  "FP_PDN_VOFFSET": 6.15,
 
   "//": "Clock",
   "RUN_CTS": 1,

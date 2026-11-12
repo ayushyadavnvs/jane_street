@@ -78,13 +78,17 @@ In `test/`: `make` runs the Tiny Tapeout cocotb test (needs `cocotb`).
 ## Tiny Tapeout
 
 The top module is `tt_um_ayushyadavnvs_pbe` (48 MHz, `CLOCK_PERIOD` 20.833 ns). Since D82 the
-program memory is an IHP SRAM macro per engine (256 words each) and the design moves to 8×4
-tiles; the flow configuration for that (`info.yaml`, `src/config.json`) is the next step, in
-`docs/SRAM_8x4_FLOW_STEPS.md`. Until it is done, `info.yaml` still says 6×4. The
+program memory is an IHP SRAM macro per engine (256 words each) on 8×4 tiles; `info.yaml`
+and `src/config.json` place and power the two macros as `docs/SRAM_8x4_FLOW_STEPS.md`
+explains (§1-4 done; the `gds` run on 8×4 is next). The
 Tiny Tapeout flow runs on GitHub Actions (`gds` workflow, started by hand while the RTL is
 being finished): LibreLane synthesis, place and route, timing and DRC for IHP `sg13cmos5l`,
 the Tiny Tapeout precheck, and the cocotb test on the routed netlist. `gl_regression` then runs
 the full testbenches on the routed netlist. The first full run (commit df2e881) passed both.
+
+The SRAM power step (`librelane_plugin_sram_pdn.py`, `odb_stripes.py`), `src/pdn_cfg.tcl` and
+`src/sram_bb.v` come from Tiny Tapeout's `ttihp-cmos5l-sram-example` (Apache-2.0), adapted
+from Ken Pettit's `ihp-um-janestreet-prism`.
 
 ## Clock frequency
 

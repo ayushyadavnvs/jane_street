@@ -2425,6 +2425,35 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   the macros' Metal4 supply columns, the `Project.ExtendPowerStripes` step of the Tiny Tapeout
   example, so the macros could have been left unpowered. The files are in git history
   (`git show ea6672f:sram/README.md`).
+- **Flow configuration (`docs/SRAM_8x4_FLOW_STEPS.md` §1-4, done as written there).**
+  - *Files:* `librelane_plugin_sram_pdn.py` and `odb_stripes.py` (repository root, where
+    LibreLane loads `librelane_plugin_*.py`) and `src/pdn_cfg.tcl`, copied unchanged with their
+    headers from `TinyTapeout/ttihp-cmos5l-sram-example` at commit `15ac9bc` (Apache-2.0;
+    credit in `README.md`). Our `src/sram_bb.v` is kept (the example's file plus a note).
+  - *`info.yaml`:* `tiles: "8x4"`; `pbe_pmem_sram.sv` before `tt_um_pbe.sv`, and `sram_bb.v`
+    last (its `` `default_nettype none `` must not apply to our files).
+  - *`src/config.json`:* the example's SRAM section after `CLOCK_PORT`: `meta` inserting
+    `Project.ExtendPowerStripes` after `OpenROAD.GeneratePDN`; `MACROS` with the `pdk_dir::`
+    `sg13cmos5l_sram` views and two instances, `u_pmem.u_sram0` at (3.36, 3.78) `FS` and
+    `u_pmem.u_sram1` at (3.36, 170.10) `N` (stacked, same x, pin edges facing a 47.54 µm gap);
+    four `PDN_MACRO_CONNECTIONS` lines (`VDD!` and `VDDARRAY!` per instance); `PDN_CFG`
+    `dir::pdn_cfg.tcl`; `EXTEND_STRIPES_SRAM_ARRAY_EVERY_OTHER` true; `ERROR_ON_PDN_VIOLATIONS`,
+    `RUN_MAGIC_DRC` and `ERROR_ON_ILLEGAL_OVERLAPS` 0. Below the "do not change" line,
+    `FP_PDN_VPITCH` 44.96 (was 50.0), `VWIDTH` 2.1, `VSPACING` 3.52, `VOFFSET` 6.15, as in the
+    example. Every other key (our `CLOCK_PERIOD` 20.833, `FP_PDN_MULTILAYER` 0, ...) is kept; a
+    key-by-key comparison with the example's file differs only in `CLOCK_PERIOD`, `MACROS`
+    instances and `PDN_MACRO_CONNECTIONS`. The reasons for each value are in the guide's §3-4.
+  - *Alternatives:* the example's single-instance layout (one macro, more rows free) does not
+    give each engine its own memory; macros side by side at x = 3.36 and 3.36 + n × 11.24 would
+    keep each on its columns too, but would take 2 × 237 µm of the die's width and put the pins
+    of both on the same edge facing the logic further away. Stacked with facing pins was chosen.
+  - *Checked before the commit:* `make test` passes; `make synth` prints
+    `tt_um_ayushyadavnvs_pbe/u_pmem.u_sram0` and `.../u_pmem.u_sram1`, the names in `MACROS`
+    (standard cells 199,896 µm² after D83); the cocotb test (`test/`, IHP's model) passes 2/2;
+    `python3 -m json.tool src/config.json` parses and `info.yaml` loads as YAML.
+    `test/Makefile` adds the model for RTL and gate level alike and `gl_regression`'s
+    `make test-gl` has it in `GL_SRC`, so neither needed a change. Not yet run: the `gds`
+    workflow on 8x4 (the owner runs it; the guide's §6 lists what to check).
 
 ## D83. PAGE: programs over 64 words, with a one-shot page prefix on page-relative jumps
 
