@@ -26,7 +26,15 @@ Branch `learn/notes` only.
   Mapped the 71 LibreLane steps to stages (lint 01-04, synth 05-09, floorplan 13-19,
   PDN 20-23, place 24-35, CTS+hold 36-39, route 40-52, fill 53, RCX 55, signoff STA 56,
   IR drop 57, GDS 58-61, LVS 63-66, final checks 67-71; no DRC in flow, precheck does it).
-  Next: signoff STA per corner (56-openroad-stapostpnr).
+  Read signoff STA summary (hold worst 0.137 fast corner, setup worst 9.68 slow, not reg2reg)
+  and walked line by line through the worst hold path (flop -> 2 dlygates -> sram/A_BM[14];
+  SRAM lib hold 0.217 + uncertainty 0.25). Understands pin/net lines, Time column, MET,
+  hold slack = arrival - required, hold independent of clock period.
+  Skipped for now: max.rpt (setup path), clock-skew questions.
+- 2026-11-12 (later): Ayush asked to move on to the PBE flow. Plan: quick read of the example's
+  extendpowerstripes log, irdrop.rpt, LVS, metrics; then docs/SRAM_8x4_FLOW_STEPS.md steps
+  1-3 on feature/sram-8x4 (he edits, tutor reviews diff); start CI run; set up local flow
+  while it runs.
 
 ## What Ayush knows
 - Verilog and basic digital design. No ASIC physical design yet.
