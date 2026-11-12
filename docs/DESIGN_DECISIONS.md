@@ -2522,3 +2522,276 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   random programs put a PAGE before 40 % of their jumps; formal (`engine.sby` invariants)
   asserts that a PAGE lasts exactly one executed instruction and that restart, timeout and
   line-event jumps clear it, and covers a jump into another page; three new coverage bins.
+
+## D84. PS/2 host: a program, open-drain, the parity bit computed from the wire
+
+- **Asked by the owner:** a PS/2 host (keyboard or mouse) as a program, with no RTL change.
+  `programs/ps2_host.pbe`, 74 words (the assembler inserts one PAGE: the program crosses into
+  page 1).
+- **The device drives the clock** (10–16.7 kHz). The engine never clocks; it waits for levels,
+  not edges: `WAIT clk, HIGH` then `WAIT clk, LOW` for each bit, and reads or changes DATA one
+  tick later. A level wait cannot miss an edge that happened while the engine was busy (the
+  idle poll, the pushes), which an edge wait (`FALL`) could. A tick of 5 µs (`CLKDIV` 239)
+  puts the read 5 µs into a 30–50 µs low phase; anything from 3.2 µs (the 100 µs inhibit is 32
+  ticks) to 10 µs works.
+- **Open drain everywhere:** `DRV0`, `OUTOD` and `REL` only. The host's parity bit is the
+  problem: `OUTPAR` drives push-pull. Instead the engine reads every data bit back from the wire
+  (`IN dat` one tick after `OUTOD`), so the receive parity unit holds the XOR of the 8 bits; with
+  `LINE_CFG` odd parity, `STAT`'s "parity error" bit is then exactly the odd parity bit to send,
+  and `MOV OSR, ISR` + `OUTOD` sends it open-drain. The same setting checks the device's parity
+  on receive (9 bits, including the parity bit, must have odd parity). The bits read back also
+  rebuild the command byte for its record.
+  - *Alternatives:* `OUTPAR` (push-pull for one bit while nobody else drives DATA: legal in
+    practice, not open-collector); the host sending the parity bit (as SWD's write parity,
+    D76): both work, the read-back needs neither.
+- **Idle:** a poll of `JMP PIN_LO` (DATA low: the device's start bit; `JMP_PIN` = DATA) and
+  `JMP TX_READY`. The device is checked first, so a command queued while the device sends waits
+  for the byte (tested). The host never inhibits the device except to send.
+- **Records:** two bytes per event, so the host can parse the stream without lengths:
+  `[byte][status]` (status 0x00, bit 0 parity error, 0x80 stop bit 0, bit 3 RX overflow),
+  `[cmd][0x20/0xA0]` (sent, ACK or no ACK), `[0x00][0x04]` timeout. Every record is pushed at
+  the end of its frame, so a timeout in mid-frame cannot leave half a record. After a frame the
+  program also waits for DATA high before polling again: a device that sent a 0 stop bit may
+  still hold DATA low, which the idle poll would take for a start bit (a guard; the bench passes
+  without it, BUG-118).
+- **Timeout:** `TIMEOUT` 4000 ticks (20 ms): a device that stops clocking or never answers a
+  request to send. Only `WAIT`s block (the idle poll does not), so it never fires while idle.
+  The vector releases both lines and reports `[0x00][0x04]` (a constant: `STAT` after a timeout
+  in the middle of a send would also show a meaningless parity bit, BUG-117).
+- **Speed:** set by the device (the PS/2 range is 10–16.7 kHz); the program needs each clock
+  phase to last at least 3 ticks (15 µs at the 5 µs tick).
+- **Limits:** no automatic resend (`0xFE`) and no inhibit for flow control: the host reads the
+  RX FIFO (8 records) in time, or `STATUS` bit 3 reports an overflow. A PS/2 device runs at 5 V:
+  the chip's 3.3 V pads need a level shifter (or series resistors and pull-ups to 3.3 V, if the
+  device accepts 3.3 V levels).
+- **Test:** `tb_ps2` against `ps2_dev.sv`, a keyboard written from the protocol description:
+  scan codes (make, break, extended), `0xED` + LED byte with the `0xFA` ACKs, `0xEE`, `0xF2`
+  (`FA AB 83`), `0xFF` (`FA AA`), a device byte with a bad parity bit and one with a 0 stop bit,
+  a command the device does not ACK, a request to send never clocked (timeout, then recovery),
+  and a command queued while the device sends. The model checks the inhibit (≥ 100 µs), that
+  the host changes DATA only while CLK is low, and the host's parity and stop bits; the bench
+  checks that the chip never drives a line high. 8/8 at 12.5 kHz.
+- **sigrok** (`make sigrok-proto2 PROTO2=ps2`): the stock `ps2` decoder decodes all 34 words in
+  both directions in the host's order, with the parity error where the host reported it. Its
+  0.5.3 version completes a word on the 12th falling edge (it stores a bit before testing the
+  count of 11), so consecutive device bytes lose their framing; the check adds one clock pulse
+  with DATA high in each idle gap, which the decoder ignores except to complete the pending
+  word (documented in `proto2_verify.py`).
+
+## D85. 24-bit GPIO expander: 74HC595 and 74HC165 chains, one shared shift clock
+
+- **Asked by the owner:** 24 outputs through three chained 74HC595 and 24 inputs through three
+  chained 74HC165, as a program. `programs/gpio_expander.pbe`, 33 words.
+- **Pins:** SCK (both chains' shift clock), SDO (595 SER), SDI (165 QH), RCLK (595 latch), LD#
+  (165 SH/LD#): 5 pins, so the other engine keeps 3.
+  - *A shared clock:* one exchange shifts 24 bits out and 24 bits in at once, so a full
+    read-and-write takes the time of one; the two chains never need different clocks.
+  - *Separate RCLK and LD#* rather than one wire for both (a common board trick): with one
+    wire, the latch edge that shows the new outputs is also the load that samples the inputs,
+    so either the outputs or the inputs lag by one exchange. One more pin buys exact
+    semantics: inputs sampled when the exchange starts (LD# low), outputs changed together when
+    it ends (RCLK rises).
+- **The program:** three copies of the byte loop (`OUT`, `IN`, SCK high, SCK low), one per
+  byte. X counts the bits, OSR holds the byte going out and ISR the byte coming in, so no
+  register is left to count bytes; three copies (24 words) are cheaper than shuffling a count
+  through `MOV`s, and keep every bit the same length. `IN` reads QH before the rising edge that
+  moves the chain on.
+- **Timing at `CLKDIV` 0:** 7 clocks per bit, SCK 6.86 MHz (high 2 clocks, 41.7 ns; low 5).
+  SDO is set 41.7 ns before SCK rises (595 setup: 25 ns at 4.5 V). SDI is read 5 clocks after
+  SCK rises; with the two synchronizer stages, QH may take up to 4 clocks (83 ns) to settle.
+  LD# is low for 3 clocks, RCLK high for 2. At `CLKDIV` n ≥ 1: 6 ticks per bit,
+  SCK = 48 MHz / (6 (n + 1)) (2 MHz at n = 3, measured). One 24-bit exchange takes about 190
+  clocks (4 µs) at `CLKDIV` 0; the host's three writes and three reads take longer.
+- **Parts:** 74HC at 3.3 V (the chip's pad voltage) is fast enough at `CLKDIV` 0 (the bench uses
+  60 ns CLK-to-QH, twice the 4.5 V datasheet value); 74HC at 2 V needs `CLKDIV` ≥ 3. 74HCT runs
+  at 5 V and would drive 5 V into the chip: not without a level shifter.
+- **Limits:** the chain length is fixed at 3 (another length is a copy more or less of the byte
+  loop); exchanges are started by the host, not periodically.
+- **Test:** `tb_gpio` against `hc_chain.sv`, 74HC595 and 74HC165 models written from TI's
+  datasheets with their setup, hold, pulse-width and RCLK-after-SRCLK checks: 40 random
+  exchanges at `CLKDIV` 0 and 8 at `CLKDIV` 3, the inputs changed during each exchange (the
+  values at LD# must come back), the outputs checked not to change before RCLK, and a walking one
+  through all 24 outputs and inputs for the bit order. Passed at the first run.
+- **sigrok** (`make sigrok-proto2 PROTO2=gpio`): the stock `spi` decoder (mode 0, MSB first)
+  on SCK, SDO and SDI decodes all 72 exchanges as the host wrote and read them.
+
+## D86. Logic analyser and waveform generator: two programs, uniform sample clocks
+
+- **Asked by the owner:** capture up to 4 pins per sample into bytes at a programmable rate,
+  streaming to the RX FIFO, with a level or edge trigger on a chosen pin; and a generator
+  replaying TX FIFO bytes onto 2 pins. `programs/la_capture.pbe` (30 words) and
+  `programs/wavegen.pbe` (16 words): one per engine, so both can run at once.
+- **Capture:** 4 `IN`s per sample, 2 samples per byte (bits 3..0 the first, 7..4 the second),
+  then `PUSH` and the loop jump. The first sample's last `IN` carries `[2]`, so every sample
+  starts 6 ticks after the one before: the sample clock is uniform at 6 (CLKDIV + 1) clocks
+  (4 MS/s at `CLKDIV` 1). At `CLKDIV` 0 the loop's taken jump adds one clock to every second
+  sample (6, 7, 6, 7 ...), so `CLKDIV` ≥ 1 is the documented range (D50's timing rule: at
+  `CLKDIV` ≥ 1 a taken jump costs nothing extra).
+  - **Channel skew:** one `IN` reads one pin, so channel k is read k ticks after channel 0.
+    The four channels are four captures at the same rate with offsets of 0..3 ticks; no
+    hardware samples several pins at one instant. Documented; a host can correct it.
+  - **Trigger:** `JMP_PIN` (a host register, any of the 8 pins) is polled by a one-instruction
+    loop (`hi: JMP PIN_LO, hi`), one test per tick; edges are two loops. The first sample is
+    3 ticks after the tick that saw the trigger in every mode (mode 4 got an extra `JMP go`
+    for that). Records: `[mode][n-1]`, mode 0 now, 1 high, 2 low, 3 rising, 4 falling.
+  - *Alternative:* a `WAIT` patched by the host into the program (as `usb_dev`'s address
+    words): one tick less latency, but the host would rewrite program memory per capture.
+- **Generator:** 2 `OUT`s per sample (A then B), 4 samples per byte, 4 ticks per sample:
+  6 MS/s at `CLKDIV` 1. The next byte is pulled during the last sample, and the loop jump is
+  `JMP X--`, so a byte boundary costs no extra tick; after the last byte that `PULL` reads the
+  next record's count (and waits for it, holding the last sample: a natural end). B changes one
+  tick after A in each sample. Records `[n-1][n bytes]`, nothing returned.
+- **Rates and bursts** (measured in `tb_la`, host SCK = 48 MHz / 8, the port's maximum, burst
+  reads and writes): a capture produces one byte per 12 (CLKDIV + 1) clocks; the host moves
+  one byte per 64 clocks plus its `RX_COUNT` polls. Sustained capture works at `CLKDIV` ≥ 6
+  (1.14 MS/s, 160 bytes checked); at `CLKDIV` 5 the FIFO fills. Faster captures are bursts of
+  16 bytes (32 samples), at any rate. When the FIFO is full the `PUSH` waits: the capture
+  pauses (a gap in time) and `STATUS` bit 3 (RX overflow) reports it, so a corrupted capture is
+  never silent (tested: 40 bytes at `CLKDIV` 1 with nobody reading). The generator consumes
+  one byte per 16 (CLKDIV + 1) clocks: a sustained stream works at `CLKDIV` ≥ 3 (3 MS/s, the
+  port's own rate) once 15 bytes are queued before the start; when the FIFO runs dry the
+  current sample is held (the waveform pauses, it is not corrupted). Up to 16 bytes (64
+  samples) can be queued whole and play at any rate.
+- **Limits:** 4 capture channels, 2 generator outputs (more pins per sample would lower the
+  rate in proportion); no sample counter or timestamps; no repeat mode for the generator (the
+  FIFO's MARK/REWIND, D70, could replay up to 16 bytes forever: a possible extension).
+- **Test:** `tb_la`: an independent counter on pins 0..3 advancing every 3.3-5.2 sample
+  periods (not a whole number, so its edges fall at every sampling phase); the captured values
+  must run in order with the right run lengths (one sample per boundary may mix two values, the
+  skew). Bursts at `CLKDIV` 1 and 3, a 160-byte sustained capture at `CLKDIV` 7 with the host
+  reading; rising-edge, falling-edge and high-level triggers (the first sample must show the
+  trigger value and the counter value at the trigger); the overflow report. The generator's
+  pins are timestamped: every edge must be on its sample grid (A at t0 + kS, B one tick later)
+  and the levels must be the bytes: 15 bytes queued at `CLKDIV` 1, 64 bytes streamed at
+  `CLKDIV` 4, 4 bytes at `CLKDIV` 20. 10/10.
+- **sigrok:** the capture is bytes the host reads, not wires a decoder could look at; the
+  bench's own independent stimulus and timestamps are the cross-check. (The stock `parallel`
+  decoder needs a clock line, which neither side has.)
+
+## D87. Quad SPI controller: records per phase, one pin per instruction
+
+- **Asked by the owner:** a quad SPI controller, e.g. reading a QSPI flash in 1-1-4 or 1-4-4,
+  driving or sampling 4 data lines one bit per instruction. `programs/qspi_flash.pbe`,
+  125 words (the assembler adds 6 PAGEs: the program spans pages 0 and 1).
+- **Pins:** SCK, CS#, IO0..IO3: 6 of the 8, on one engine (the other engine keeps 2). The
+  8-pin budget allows it; dual and quad need no more pins than this.
+- **Host protocol: a transaction is a list of phases**, each a record: `[0x01]` single write on
+  IO0, `[0x02]` single read on IO1, `[0x03]` quad write, `[0x04]` quad read, `[0x05]` dummy
+  clocks (IOs released), each with `[n-1]` and, for writes, the bytes; `[0x00]` ends the
+  transaction (CS# high). CS# falls with the first phase. This covers 1-1-1, 1-1-4, 1-4-4 and
+  4-4-4 (QPI) commands, reads and quad page programs, without the engine knowing any command.
+  - *Alternative:* a command-specific program (e.g. only 0x6B with a 3-byte address): fewer
+    host bytes, but every other command (ID, status, 0xEB, writes) would need another program.
+- **One pin per instruction:** a quad nibble out is `OUT io3, io2, io1, io0` then SCK up and
+  down; in, 4 `IN`s then the clock. MSB first in both directions (`SHIFT` 0x03), so IO3 carries
+  bit 7 and bit 3, as flashes do. Each byte loop is unrolled (8 single bits, or 2 nibbles): no
+  bit counter, so X counts bytes, and the clocks are as short as the instructions allow.
+- **Input timing:** an `IN` sees a pin 3 clocks after it changes (two synchronizer stages), and
+  the flash changes its output just after SCK falls (t_V ≈ 7 ns, under a clock). So every read
+  waits 3 clocks after the falling edge (`DRV0 [2]`, or the `PUSH` and the loop jump) and
+  finishes before the next falling edge reaches the synchronizers. SCK high is 1 clock
+  (20.8 ns), far above flash minimums (≈ 4.5 ns at 104 MHz parts).
+- **Measured SCK at `CLKDIV` 0** (`tb_qspi`): single write 16 MHz, single read 9.6 MHz, dummy
+  12 MHz, quad write 8 MHz (4 MB/s), quad read 6 MHz within a byte and 17 clocks per byte
+  overall (2.8 MB/s). At `CLKDIV` n ≥ 1 divide by n + 1 (less one clock per taken jump). A quad
+  read is faster than the host port (one byte per 64 clocks at its maximum), so long reads run
+  in 16-byte bursts: `PUSH` waits with SCK low, which mode 0 allows; nothing is lost.
+- **Limits:** no dual (1-1-2, 1-2-2) phases (two more record types would add them); no DTR
+  (double transfer rate) and no continuous-read mode tracking (the host simply sends mode 0x00);
+  SCK is far below a flash's limit, by the one-pin-per-instruction design.
+- **Test:** `tb_qspi` against `qspi_flash_model.sv`, a NOR flash written from the common
+  command set (W25Q-style timing: outputs t_V = 7 ns after the falling edge, set-up, hold,
+  clock widths, CS# set-up): JEDEC ID 0x9F, Read 0x03, Fast Read 0x0B, Fast Read Quad Output
+  0x6B (64 bytes, more than the RX FIFO, read while the engine runs), Fast Read Quad I/O 0xEB,
+  and Write Enable + Quad Page Program 0x32 (24 bytes) read back with 0x6B, at `CLKDIV` 0 and
+  2. The bench checks that the chip and the flash never drive an IO line together. 12/12.
+- **sigrok** (`make sigrok-proto2 PROTO2=qspi`): libsigrokdecode 0.5.3 has no quad SPI decoder;
+  its `spi` decoder on SCK, CS# and IO0 decodes the single-line command and address bytes of
+  all 22 transactions exactly as the host sent them.
+
+## D88. HDLC / SDLC: NRZ with exact flags around the line coder; NRZI needs hardware
+
+- **Asked by the owner:** HDLC/SDLC framing: 0x7E flags, zero-bit insertion and deletion by the
+  line coder's "after 5 ones" stuffing, CRC-16/X.25, abort detection; NRZ or NRZI. Two programs:
+  `programs/hdlc_tx.pbe` (41 words, engine 0) and `programs/hdlc_rx.pbe` (38 words, engine 1),
+  so the link is full duplex.
+- **What the line coder gives and lacks (pbe_line, D39):** stuffing after 5 ones in both
+  directions, NRZ/NRZI, bit transfers, bit timing and edge re-centring. It does **not** send an
+  unstuffed flag: `LINECTL` stuffing off/on exists only in the bit-synchronous (CAN) coder,
+  pbe_bsync (D67); in pbe_line every bit of a frame, the SYNC byte included, is stuffed, so six
+  1s can never leave it. And on receive, a stuffing violation ends a frame only when the line is
+  at its idle (high) level (BUG-033); elsewhere it is a line error.
+- **Transmit, NRZ, exact flags with no new hardware:** the pin unit holds TXD high (`DRV1`) under
+  the coder, so whatever the coder does not drive reads high. A coder frame starts with a 2-bit
+  gap (not driven) and the coder lets go of the line the moment a frame ends. A flag
+  `0 1 1 1 1 1 1 0` is therefore made of `0 1 1 1 1` at the end of one coder frame (four 1s: no
+  stuffing), the `1 1` of the next frame's gap (the pin unit's level) and that frame's first bit,
+  `0`. Measured: the gap is 2 bit times + 2 clocks when the next `OUT` is already waiting (the
+  program issues it within a bit time of the `END`), so the six 1s last 6 bit times + 2 clocks;
+  a receiver that samples mid-bit and re-centres on edges reads exactly six. Back-to-back frames
+  share one flag; after the last frame a "0 1" coder frame completes the flag and the line idles
+  high (mark). The opening flag after idle is a "0 1 1 1 1" coder frame of its own.
+  FCS: the CRC unit (poly 0x1021, init 0xFFFF, reflected output, fed by `OUT`) and
+  `OSRCRC LO/HI, INV`, low byte first.
+- **Receive, NRZ:** in NRZ every flag's six 1s are at the high level, so the coder ends a frame
+  at every flag (and at an abort), on the 6th 1. Bit transfers (not bytes) are used: the coder
+  starts its next frame at the flag's last 0, which would shift every byte by one bit; in bit
+  mode the program drops that first bit (`IN rx, NOCRC`) and assembles bytes itself. The bits
+  before the frame end include the closing flag's `0 1 1 1 1 1`, which the CRC unit is fed
+  with: since they are always the same 6 bits, the good value is the X.25 residue (0x1D0F
+  unreflected, 0xF0B8 reflected) advanced by them: `CRC_GOOD` = 0xD0F9. A good frame also has
+  exactly 6 bits after its last whole byte (X = 1 at the frame end).
+  - **Records:** the bytes (with the FCS) and `[0x7E][status]` at the end; a data 0x7E is sent
+    twice. Status: `STAT` for a whole frame (0x02 = CRC ok; bits 3, 4 overflow and line error),
+    0x40 abort, 0x80 not a whole number of bytes. Frames with no byte (runs of flags, idle) are
+    not reported (a `FLAG` bit remembers whether a byte was pushed).
+    *Alternatives:* a length prefix (impossible: the FIFO is smaller than a frame), a byte
+    count trailer as in `usb_dev` (needs the host to know where a record ends), a status byte
+    per data byte (halves the bandwidth). The escape costs two instructions per byte.
+  - **Abort (7+ 1s):** the coder ends the frame on the 6th 1 for a flag and for an abort alike;
+    the 7th bit decides. The program polls RXD for about one bit time after the frame end
+    (`JMP PIN_LO` every 10 clocks, d + 1 times): a flag's last 0 pulls it low half a bit later,
+    an abort keeps it high. d is set by the host as one byte in the receiving engine's (unused)
+    TX FIFO, read again at every frame end with `MARK`/`REWIND` (D70), so no program word is
+    patched: d = ceil((bit time / 2 + 4) / 10) (bit time in clocks), up to 255, i.e. abort
+    detection from 10 kbit/s up. *Why not `TIMEOUT`:* inside a frame a stuffed 0 makes the gap
+    between delivered bits 2 bit times, the same as the gap to the next 0 after an abort, so no
+    single timeout separates them.
+- **Speeds at 48 MHz:** transmit up to 4 Mbit/s (`CLKDIV` 11: a byte boundary takes about 10
+  clocks, which must fit in one bit time); receive up to 2 Mbit/s (`CLKDIV` 23: the frame-end
+  path, the abort poll and the trailer must finish before the second bit of the next frame).
+  Tested at 1, 2 (both directions) and 4 Mbit/s (transmit).
+- **NRZI cannot be done in a program** with the current line coder, in either direction:
+  1. *Transmit:* the coder starts every frame assuming the line is at level 1 (`level <= 1` at
+     the end of the gap). The level after a frame depends on its data, so the next frame (or
+     the pin-unit part of the flag) starts with the wrong reference half the time: its first
+     bit is inverted. Inverting it in the program would also inject a 1 into the coder's
+     stuffing count and move the next stuffed 0.
+  2. *Receive:* the six 1s of a flag are at a data-dependent level in NRZI; when it is low the
+     coder reports a line error instead of ending the frame (BUG-033's rule), and the frame
+     runs into the next one.
+  **Minimal general hardware** that would allow NRZI (and make flags cheaper in NRZ too):
+  - `LINECTL STUFFOFF` / `STUFFON` for pbe_line (the bit-synchronous coder already has them,
+    D67): a program sends `0x7E` (or an abort) unstuffed inside one coder frame, so the line
+    level stays continuous through flags and NRZI is encoded correctly. Useful beyond HDLC:
+    any protocol with an unstuffed delimiter in a stuffed stream.
+  - A `LINE` option bit (`LINE[6]` is reserved): "a stuffing violation ends the frame at either
+    level" (the frame-end rule of a flag-delimited protocol), and with it, ideally, a receive
+    flag pattern (a SYNC-style compare on the raw, unstuffed bits) so the coder could deliver
+    whole aligned bytes. A few gates and one register bit each.
+  No RTL is changed here (the owner's constraint); NRZ is supported, NRZI is not.
+- **Other limits:** no synchronous clock line (HDLC with an external TXC/RXC); the line coder
+  recovers the clock from the data, which NRZ HDLC does not guarantee in long runs of 0s
+  (NRZI's purpose): the receiver re-centres on every edge and tolerates the 0.5 % offset
+  tested; long 0 runs in NRZ are untested beyond the 64-byte random frames. No address
+  filtering (the host does it). The transmitter needs the host to keep the TX FIFO fed (a byte
+  per 8 bit times) for frames longer than 16 bytes; an underrun corrupts the frame and sets
+  `STATUS` bit 4.
+- **Test:** `tb_hdlc` against `hdlc_model.sv`, written from ISO/IEC 13239 (its own flag search,
+  zero deletion, abort rule and reflected X.25 residue check; its transmitter 0.5 % slow):
+  transmit: frames with 0x7E, 0x7D, 0xFF, 0x3E, 0x7C, 0xF8, 0x1F (runs of 5-8 ones and flag
+  look-alikes), a 1-byte frame, 40- and 64-byte frames, all back to back, at 1, 2 and 4 Mbit/s;
+  receive: good frames, a shared flag, three flags before a frame, a CRC error, an abort followed
+  by idle and an abort (exactly seven 1s) followed at once by a flag, a 64-byte frame, at 1 and
+  2 Mbit/s. 5/5. The model also checks that the chip's transmitter never sends an abort.
+- **sigrok:** libsigrokdecode 0.5.3 has no HDLC decoder; the cross-check is the model.

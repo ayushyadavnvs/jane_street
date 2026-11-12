@@ -1,0 +1,61 @@
+; 24-bit GPIO expander: three 74HC595 (serial in, parallel out) and three 74HC165 (parallel in,
+; serial out), each chain 3 deep, D85.
+; Pins (relative to pin base): SCK = 0 (both chains' shift clock: 595 SRCLK and 165 CLK),
+;   SDO = 1 (to the first 595's SER), SDI = 2 (from the first 165's QH), RCLK = 3 (595 latch
+;   clock), LD = 4 (165 SH/LD#). 595: SRCLR# high, OE# low (or driven by the board); QH' of each
+;   595 to the SER of the next. 165: CLK INH low; QH of each 165 to the SER of the one before it
+;   (the first 165, nearest the chip, drives SDI).
+; Engine settings: SHIFT = 0x03 (OUT and IN MSB first), CRC off, TIMEOUT 0, CLKDIV 0 (or more
+;   for slow parts: everything scales with CLKDIV + 1).
+; Timing at CLKDIV 0 (48 MHz): SCK 6.86 MHz (7 clocks per bit: high 2, low 5); SDO set 2 clocks
+;   (41.7 ns) before SCK rises; SDI read 5 clocks after SCK rises (QH may take up to 4 clocks,
+;   83 ns, to settle); LD low 3 clocks (62.5 ns), RCLK high 2 clocks. 74HC parts at 3.3 V are
+;   fast enough at CLKDIV 0 (the testbench's models use 60 ns CLK-to-QH); 74HC at 2 V needs
+;   CLKDIV >= 3. A 24-bit exchange takes about 190 clocks (4 us).
+;
+; Host protocol: each record is one exchange.
+;   TX FIFO: [o0] [o1] [o2]   the 24 output bits. o0 is shifted first, so it ends in the LAST 595
+;                             of the chain (QH = bit 7 ... QA = bit 0), o2 in the first (nearest).
+;   RX FIFO: [i0] [i1] [i2]   the 24 inputs, sampled when the exchange starts (LD low). i0 is the
+;                             FIRST 165 (nearest the chip: H = bit 7 ... A = bit 0), i2 the last.
+;   The 595 outputs change together at the end of the exchange (RCLK rises); they hold their
+;   value while the next one is shifted in. To only read, send the current outputs again.
+.equ sck  0
+.equ sdo  1
+.equ sdi  2
+.equ rclk 3
+.equ ld   4
+
+        PIN  sck, DRV0
+        PIN  rclk, DRV0
+        PIN  ld, DRV1
+        PIN  sdo, DRV0
+next:   PULL                    ; o0: an exchange starts
+        PIN  ld, DRV0 [2]       ; the 165s load their inputs (QH = H of the first one)
+        PIN  ld, DRV1           ; shift mode
+        SET  X, 7
+b0:     PIN  sdo, OUT           ; the bit for the 595s
+        IN   sdi                ; the 165s' bit (QH), before the edge moves it on
+        PIN  sck, DRV1 [1]      ; both chains shift
+        PIN  sck, DRV0
+        JMP  X--, b0
+        PUSH                    ; i0
+        PULL                    ; o1
+        SET  X, 7
+b1:     PIN  sdo, OUT
+        IN   sdi
+        PIN  sck, DRV1 [1]
+        PIN  sck, DRV0
+        JMP  X--, b1
+        PUSH                    ; i1
+        PULL                    ; o2
+        SET  X, 7
+b2:     PIN  sdo, OUT
+        IN   sdi
+        PIN  sck, DRV1 [1]
+        PIN  sck, DRV0
+        JMP  X--, b2
+        PUSH                    ; i2
+        PIN  rclk, DRV1 [1]     ; the 595s show the new 24 bits
+        PIN  rclk, DRV0
+        JMP  next

@@ -1,0 +1,165 @@
+; Quad SPI controller (SPI mode 0), for serial flash in 1-1-1, 1-1-4, 1-4-4 or 4-4-4 (QPI), D87.
+; Pins (relative to pin base): SCK = 0, CS# = 1, IO0 = 2 (MOSI in single mode), IO1 = 3 (MISO),
+;   IO2 = 4 (WP#), IO3 = 5 (HOLD#). IO0-IO3 need pull-ups (10-100 kohm): released lines read
+;   high, and WP#/HOLD# stay inactive in the single-line phases.
+; Engine settings: SHIFT = 0x03 (OUT and IN MSB first), CRC off, TIMEOUT 0, LINE_CFG 0x40,
+;   CLKDIV 0 (the fastest) or more; all timing scales with CLKDIV + 1.
+; One instruction drives or samples one pin, then an instruction moves SCK: a quad nibble is
+;   4 OUTs or 4 INs and a clock edge. Inputs pass two synchronizer stages: an IN must come at
+;   least 3 clocks after the falling SCK edge that launched the data, and before the next one.
+; SCK at CLKDIV 0 (48 MHz), measured in tb_qspi:
+;   single write 16 MHz (3 clocks per bit: high 1, low 2); single read 9.6 MHz (5 clocks per
+;   bit; each byte's last bit 7: the PUSH, the loop's PAGE prefix (this loop crosses into
+;   page 1) and its jump); quad write 8 MHz (6 clocks per nibble, 4 MB/s); quad read 6 MHz
+;   within a byte (8 clocks per nibble), 2 nibbles in 17 clocks with the PUSH and the loop
+;   (2.8 MB/s); dummy clocks 12 MHz (4 clocks). 125 words (the assembler adds 6 PAGEs).
+;   At CLKDIV n >= 1 every figure is divided by (n + 1), but a taken jump costs no extra clock.
+;   The quad read rate is far above what the host port can read (one byte per 64 clocks at
+;   SCK = 48 MHz / 8): long reads run in bursts of 16 bytes and SCK pauses (low, which mode 0
+;   allows) while the RX FIFO is full. No data is lost.
+;
+; Host protocol: records in the TX FIFO. CS# goes low with the first record of a transaction
+;   and stays low until [0x00].
+;   [0x00]                   end: SCK low, IO0-IO3 released, CS# high
+;   [0x01] [n-1] [n bytes]   single write on IO0 (command, address, data), n = 1..256
+;   [0x02] [n-1]             single read of n bytes on IO1 (IO0 keeps its last level)
+;   [0x03] [n-1] [n bytes]   quad write on IO0-IO3 (high nibble first: IO3 = bit 7, IO0 = bit 4)
+;   [0x04] [n-1]             quad read of n bytes on IO0-IO3 (released first)
+;   [0x05] [n-1]             n dummy clocks with IO0-IO3 released (the turnaround)
+;   RX FIFO: the bytes read, in order.
+; Examples: Fast Read Quad Output 0x6B (1-1-4): [01][03][6B][A2][A1][A0] [05][07] [04][n-1] [00].
+;   Fast Read Quad I/O 0xEB (1-4-4): [01][00][EB] [03][03][A2][A1][A0][M] [05][03] [04][n-1] [00]
+;   (M = 0x00: no continuous read; 4 dummy clocks, as e.g. W25Q's default).
+;   JEDEC ID: [01][00][9F] [02][02] [00].
+.equ sck 0
+.equ cs  1
+.equ io0 2
+.equ io1 3
+.equ io2 4
+.equ io3 5
+
+        PIN  sck, DRV0
+        PIN  cs, DRV1
+cmd:    PULL
+        MOV  X, OSR
+        JMP  X--, c1
+; [0x00] end of the transaction
+        PIN  sck, DRV0
+        PIN  io0, REL
+        PIN  io1, REL
+        PIN  io2, REL
+        PIN  io3, REL
+        PIN  cs, DRV1 [1]
+        JMP  cmd
+c1:     PIN  cs, DRV0               ; every phase selects the flash (X = type - 1)
+        PULL                        ; n - 1
+        JMP  X--, c2
+; [0x01] single write on IO0, 3 clocks per bit
+        MOV  X, OSR
+sw:     PULL
+        PIN  io0, OUT
+        PIN  sck, DRV1              ; the flash samples IO0 as SCK rises
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        JMP  X--, sw
+        JMP  cmd
+c2:     JMP  X--, c3
+; [0x02] single read on IO1: the flash shifts a bit out after each falling edge
+        MOV  X, OSR
+sr:     IN   io1                    ; 3 clocks or more after the falling edge
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]
+        IN   io1
+        PIN  sck, DRV1
+        PIN  sck, DRV0              ; (the PUSH and the jump are the 3 clocks)
+        PUSH
+        JMP  X--, sr
+        JMP  cmd
+c3:     JMP  X--, c4
+; [0x03] quad write: 4 OUTs, then a clock
+        MOV  X, OSR
+qw:     PULL
+        PIN  io3, OUT
+        PIN  io2, OUT
+        PIN  io1, OUT
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        PIN  io3, OUT
+        PIN  io2, OUT
+        PIN  io1, OUT
+        PIN  io0, OUT
+        PIN  sck, DRV1
+        PIN  sck, DRV0
+        JMP  X--, qw
+        JMP  cmd
+c4:     JMP  X--, c5
+; [0x04] quad read: 4 INs, then a clock
+        MOV  X, OSR
+        PIN  io0, REL
+        PIN  io1, REL
+        PIN  io2, REL
+        PIN  io3, REL
+qr:     IN   io3                    ; bit 7
+        IN   io2
+        IN   io1
+        IN   io0
+        PIN  sck, DRV1
+        PIN  sck, DRV0 [2]          ; the next nibble: 3 clocks to the first IN
+        IN   io3                    ; bit 3
+        IN   io2
+        IN   io1
+        IN   io0
+        PIN  sck, DRV1
+        PIN  sck, DRV0              ; (the PUSH and the jump are the 3 clocks)
+        PUSH                        ; waits while the RX FIFO is full, SCK low
+        JMP  X--, qr
+        JMP  cmd
+; [0x05] dummy clocks, IO0-IO3 released
+c5:     MOV  X, OSR
+        PIN  io0, REL
+        PIN  io1, REL
+        PIN  io2, REL
+        PIN  io3, REL
+dm:     PIN  sck, DRV1
+        PIN  sck, DRV0
+        JMP  X--, dm
+        JMP  cmd

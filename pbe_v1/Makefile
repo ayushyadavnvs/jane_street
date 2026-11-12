@@ -12,6 +12,8 @@ IHP_LIB ?= ../ihp_lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
 # the debug-port target models (D75, D76)
 DEBUG_MODELS := jtag_tap.sv swd_dp.sv
+# the device models of the D84-D88 protocols
+PROTO2_MODELS := ps2_dev.sv hc_chain.sv qspi_flash_model.sv hdlc_model.sv
 
 .PHONY: test test-proto test-usb test-can test-debug test-gl test-ff synth timing clean
 
@@ -59,15 +61,30 @@ test/can_image.hex: programs/can_node.pbe tools/pbe_asm.py
 test/debug_image.hex: programs/jtag.pbe programs/swd.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/jtag.pbe@0:0 programs/swd.pbe@1:192
 
+test/ps2_image.hex: programs/ps2_host.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/ps2_host.pbe@0:0
+
+test/gpio_image.hex: programs/gpio_expander.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/gpio_expander.pbe@0:0
+
+test/la_image.hex: programs/la_capture.pbe programs/wavegen.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/la_capture.pbe@0:0 programs/wavegen.pbe@1:0
+
+test/qspi_image.hex: programs/qspi_flash.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/qspi_flash.pbe@0:0
+
+test/hdlc_image.hex: programs/hdlc_tx.pbe programs/hdlc_rx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/hdlc_tx.pbe@0:0 programs/hdlc_rx.pbe@1:0
+
 test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
-IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop
+IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug; do \
-	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
+LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc; do \
+	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
 
@@ -101,6 +118,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(TOP) && vvp -n sim.vvp
 	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(TOP) && vvp -n can.vvp
 	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp
+	$(MAKE) test-proto2
 	$(MAKE) test-ff
 	$(PYTHON) $(V)/spec_boundaries/check_spec_boundaries.py
 	$(MAKE) test-model
@@ -151,6 +169,25 @@ test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_ima
 test-usb: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
+
+# The protocols of D84-D88, each against its own model written from the specification.
+.PHONY: test-proto2 test-ps2 test-gpio test-la test-qspi test-hdlc
+test-proto2: test-ps2 test-gpio test-la test-qspi test-hdlc
+
+test-hdlc: test/hdlc_image.hex
+	cd test && iverilog -g2012 -o hdlc.vvp tb_hdlc.sv hdlc_model.sv $(TOP) && vvp -n hdlc.vvp
+
+test-qspi: test/qspi_image.hex
+	cd test && iverilog -g2012 -o qspi.vvp tb_qspi.sv qspi_flash_model.sv $(TOP) && vvp -n qspi.vvp
+
+test-la: test/la_image.hex
+	cd test && iverilog -g2012 -o la.vvp tb_la.sv $(TOP) && vvp -n la.vvp
+
+test-gpio: test/gpio_image.hex
+	cd test && iverilog -g2012 -o gpio.vvp tb_gpio.sv hc_chain.sv $(TOP) && vvp -n gpio.vvp
+
+test-ps2: test/ps2_image.hex
+	cd test && iverilog -g2012 -o ps2.vvp tb_ps2.sv ps2_dev.sv $(TOP) && vvp -n ps2.vvp
 
 # only CAN (tb_can); ONLY=rates|arb|ack|inject|biterr|busoff|two runs one scenario
 test-can: $(IMAGES:%=test/%_image.hex)
@@ -261,6 +298,12 @@ sigrok-can:
 .PHONY: sigrok-debug
 sigrok-debug:
 	$(PYTHON) $(GM)/sigrok/debug_verify.py --sigrok-cli "$(SIGROK_CLI)"
+
+# sigrok's stock decoders on the pins of the D84-D88 protocols (ps2, spi for the 74HC chain and
+# the single-line phase of QSPI); PROTO2=ps2|gpio|qspi runs one
+.PHONY: sigrok-proto2
+sigrok-proto2:
+	$(PYTHON) $(GM)/sigrok/proto2_verify.py --sigrok-cli "$(SIGROK_CLI)" $(PROTO2)
 
 # A strict comparison: libsigrokdecode 0.5.3 intentionally returns nonzero here.
 sigrok-full:

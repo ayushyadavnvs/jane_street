@@ -14,10 +14,10 @@ Entry for the Jane Street protocol emulator ASIC competition (Tiny Tapeout, IHP 
 | `macros/` | The program memory's SRAM macro (D62, D82): IHP's views and simulation model; the flow steps are in `docs/SRAM_8x4_FLOW_STEPS.md` |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
-## Protocols: 13 implemented and tested
+## Protocols: 18 implemented and tested
 
-Every protocol is a program loaded at run time into the engines' program memory (64 words
-per engine window); none is a fixed hardware block. Each has an end-to-end testbench in
+Every protocol is a program loaded at run time into the engines' program memory (up to 256
+words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-end testbench in
 `pbe_v1/test`, run by `make test`.
 
 | # | Protocol | Program (words) | What is tested |
@@ -35,6 +35,11 @@ per engine window); none is a fixed hardware block. Each has an end-to-end testb
 | 11 | CAN 2.0A node (2.0B tolerant) | `can_node` (61) | Against reference CAN nodes: 125k-1 Mbit/s, arbitration, ACK, error frames, error-passive and bus-off, extended frames, two engines as two nodes |
 | 12 | JTAG controller | `jtag` (42) | Against an IEEE 1149.1 TAP model: IDCODE, BYPASS, DR scans, a chain of two TAPs |
 | 13 | ARM SWD host | `swd` (64) | Against an ADIv5 SW-DP model: DPIDR, DP/AP access, WAIT, FAULT, parity errors |
+| 14 | PS/2 host (keyboard, mouse) | `ps2_host` (74) | Against a keyboard model: scan codes, 0xED LEDs with 0xFA ACKs, reset, ID, parity and framing errors, no ACK, timeout |
+| 15 | 24-bit GPIO expander (74HC595 / 74HC165) | `gpio_expander` (33) | Against 74HC595 and 74HC165 models chained 3 deep: random exchanges at 6.9 and 2 MHz, input snapshot, latched outputs, setup and hold |
+| 16 | Logic analyser and waveform generator | `la_capture` (30), `wavegen` (16) | 4 channels with level/edge triggers against an independent stimulus, bursts to 4 MS/s, sustained 1 MS/s with the host reading, overflow reported; the generator's edges timestamped on their grid at up to 6 MS/s |
+| 17 | Quad SPI controller (flash) | `qspi_flash` (125) | Against a quad SPI NOR flash model: JEDEC ID, 0x03, 0x0B, 0x6B (1-1-4), 0xEB (1-4-4), quad page program, at 16/6 MHz SCK (single/quad) |
+| 18 | HDLC / SDLC (NRZ) | `hdlc_tx` (41), `hdlc_rx` (38) | Against an ISO 13239 model: flags, zero-bit insertion/deletion, CRC-16/X.25, back-to-back frames, CRC error, aborts; 1-2 Mbit/s both ways, 4 Mbit/s transmit |
 
 Two protocols can run at once, one per engine (e.g. JTAG and SWD, or I2C and 1-Wire), and
 both engines can be CAN nodes.
@@ -45,10 +50,10 @@ The design is checked by several independent layers; details in [`verify/README.
 
 | Layer | What it shows |
 |---|---|
-| Directed testbenches (`pbe_v1/test`, 11 benches) | Every protocol end to end against a model of the device on the other side of the wire |
+| Directed testbenches (`pbe_v1/test`, 16 benches) | Every protocol end to end against a model of the device on the other side of the wire |
 | Gate level | The full testbenches on the routed netlist from the Tiny Tapeout flow (`gl_regression`), and the cocotb test in `gl_test` |
 | Golden model + random differential testing | A Python model written from the specification, compared every clock with the RTL on random programs and host traffic |
-| Independent decoders and bus models | sigrok's stock decoders (UART, SPI, I2C, 1-Wire, Modbus, WS2812, USB, CAN, JTAG, SWD) and third-party cocotb bus models agree with the testbenches |
+| Independent decoders and bus models | sigrok's stock decoders (UART, SPI, I2C, 1-Wire, Modbus, WS2812, USB, CAN, JTAG, SWD, PS/2) and third-party cocotb bus models agree with the testbenches |
 | Formal (SymbiYosys) | Full proofs for the FIFO and the host SPI port; bounded checks for the line coder, the engine and CAN mode; every expected result matches (113 tasks) |
 | Mutation testing | 24 deliberately injected RTL bugs, all caught by the test suite |
 | Reference vectors | 22 CRC configurations from the reveng catalogue; USB and Modbus packets from independent libraries |

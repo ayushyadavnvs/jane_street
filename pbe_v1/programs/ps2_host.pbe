@@ -1,0 +1,108 @@
+; PS/2 host (keyboard or mouse), D84.
+; Pins (relative to pin base): CLK = 0, DATA = 1, both open-drain: the engine only pulls them
+;   low (DRV0, OUTOD) or releases them (REL). Each needs an external pull-up (PS/2: 1-10 kohm to
+;   the device's supply; through a level shifter or a series resistor if the device runs at 5 V,
+;   the chip's pins are 3.3 V).
+; Engine settings: CLKDIV = 239 (a tick is 5 us at 48 MHz; anything from 3.2 us to 10 us works),
+;   SHIFT = 0x00 (LSB first), JMP_PIN = 1 (DATA), LINE_CFG = 0x81 (odd parity, timeout vector at
+;   word 1), CRC_CFG = 0x00 and CRC_GOOD = 0xFFFF (so status bit 1, "CRC ok", reads 0),
+;   TIMEOUT = 4000 (20 ms at a 5 us tick: a device that stops clocking mid-frame, or none at all).
+; The device drives the clock (10-16.7 kHz, low and high 30-50 us). The engine reads a bit one
+;   tick after it sees CLK low (the device changes DATA while CLK is high), and changes DATA one
+;   tick after CLK goes low when sending; a tick of at most 10 us keeps both inside the low phase.
+;
+; Host protocol.
+;   TX FIFO: one byte per command to send to the device (e.g. 0xED then the LED byte; 0xFF reset).
+;     The engine computes the odd parity bit itself.
+;   RX FIFO: two-byte records.
+;     [byte] [status]   a byte from the device. status 0x00 = good; bit 0 = parity error;
+;                       0x80 = framing error (stop bit 0; the parity is not reported then);
+;                       bit 3 = RX overflow (a PUSH found the FIFO full: data was lost earlier)
+;     [cmd]  [0x20]     a command was sent and the device acknowledged it (ACK bit 0)
+;     [cmd]  [0xA0]     a command was sent and the device did not acknowledge it (ACK bit 1)
+;     [0x00] [0x04]     timeout: the device stopped clocking mid-frame, or never started
+;                       after a request to send (TIMEOUT ticks); both lines are released
+;   The device's answer to a command (0xFA ACK, 0xFE resend, data) arrives as a byte record.
+; A device byte that starts while the host has a command queued is received first: the engine
+;   only starts a command from idle (both lines high, no frame in progress).
+.equ clk 0
+.equ dat 1
+
+        JMP  start
+; timeout vector (word 1): a WAIT gave up. Release both lines and report.
+tmo:    PIN  clk, REL
+        PIN  dat, REL
+        STAT                    ; clears "timeout happened"
+        SET  OSR, 0x04
+        MOV  ISR, 0
+        PUSH                    ; [0x00]
+        MOV  ISR, OSR
+        PUSH                    ; [status]
+start:  PIN  clk, REL
+        PIN  dat, REL
+idle:   JMP  PIN_LO, rx         ; DATA low with no request of ours: the device's start bit
+        JMP  TX_READY, tx       ; a command from the host
+        JMP  idle
+
+; ---- device to host: start, 8 data LSB first, odd parity, stop ----
+rx:     WAIT clk, LOW           ; the start bit's clock (level: the poll may see DATA late)
+        STAT                    ; clear the receive parity (ISR is overwritten by the data)
+        SET  X, 7
+rbit:   WAIT clk, HIGH
+        WAIT clk, LOW
+        IN   dat                ; one tick after the falling edge
+        JMP  X--, rbit
+        MOV  X, ISR             ; the data byte
+        WAIT clk, HIGH
+        WAIT clk, LOW
+        IN   dat                ; parity: the 9 bits must have odd parity
+        STAT                    ; ISR bit 0: parity error
+        WAIT clk, HIGH
+        WAIT clk, LOW           ; the stop bit
+        JMP  PIN_HI, rok
+        SET  OSR, 0x80          ; framing error
+        MOV  ISR, OSR
+rok:    MOV  OSR, ISR
+        MOV  ISR, X
+        PUSH                    ; [byte]
+        MOV  ISR, OSR
+        PUSH                    ; [status]
+        WAIT clk, HIGH          ; the end of the stop bit
+        WAIT dat, HIGH          ; (after a framing error the device may still hold DATA low)
+        JMP  idle
+
+; ---- host to device: inhibit, request to send, the device clocks 8 data, parity, stop, ACK ----
+tx:     PULL                    ; the command
+        STAT                    ; clear the parity (it is computed from the wire, below)
+        PIN  clk, DRV0 [15]     ; inhibit: CLK low for 32 ticks (160 us at 5 us; >= 100 us)
+        NOP  [15]
+        PIN  dat, DRV0          ; request to send: DATA low (the start bit)
+        PIN  clk, REL           ; the device starts clocking within 15 ms
+        SET  X, 7
+tbit:   WAIT clk, HIGH
+        WAIT clk, LOW
+        PIN  dat, OUTOD         ; the bit, while CLK is low; the device samples it as CLK rises
+        IN   dat                ; read it back from the wire: the parity is computed from it
+        JMP  X--, tbit
+        MOV  X, ISR             ; the command as it went out (for the record)
+        STAT                    ; ISR bit 0: the odd parity bit (with odd parity set, STAT's
+        MOV  OSR, ISR           ;   "parity error" of the 8 bits is exactly the bit to send)
+        WAIT clk, HIGH
+        WAIT clk, LOW
+        PIN  dat, OUTOD         ; parity
+        WAIT clk, HIGH
+        WAIT clk, LOW
+        PIN  dat, REL           ; stop bit: DATA released (high)
+        WAIT clk, HIGH
+        WAIT clk, LOW           ; the ACK clock: the device holds DATA low
+        SET  OSR, 0x40
+        MOV  ISR, OSR
+        IN   dat                ; ISR = 0x20 (ACK) or 0xA0 (no ACK)
+        WAIT clk, HIGH
+        WAIT dat, HIGH          ; the device releases DATA
+        MOV  OSR, ISR
+        MOV  ISR, X
+        PUSH                    ; [cmd]
+        MOV  ISR, OSR
+        PUSH                    ; [0x20 or 0xA0]
+        JMP  idle

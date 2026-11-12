@@ -1,0 +1,63 @@
+; Logic analyser: 4 channels captured into the RX FIFO at a programmable rate, with a trigger, D86.
+; Pins (relative to pin base): channels 0..3 = pin base + 0..3 (inputs only; nothing is driven).
+;   The trigger pin is JMP_PIN (any of the 8 pins, relative to pin base).
+; Engine settings: SHIFT = 0x00 (IN LSB first), CRC off, TIMEOUT 0, LINE_CFG 0x40.
+;   CLKDIV >= 1: one sample of the 4 channels every 6 ticks, 6 (CLKDIV + 1) clocks: 4 MS/s at
+;   CLKDIV 1 (48 MHz), 48 MHz / (6 (CLKDIV + 1)) in general, down to 122 S/s. (At CLKDIV 0 the
+;   loop's taken jump adds a clock to every second sample: 6 and 7 clocks, not uniform.)
+; Each IN reads one pin, so channel k is read k ticks after channel 0: the 4 channels are four
+;   interleaved captures at the same rate with fixed offsets of 0, 1, 2, 3 ticks (a "sample" is
+;   not one instant). Pins pass two synchronizer stages: an input is seen 2-3 clocks late.
+;
+; Host protocol.
+;   TX FIFO: [mode] [n-1]   capture n bytes (2n samples, n = 1..256) after the trigger:
+;            mode 0 now, 1 while JMP_PIN is high (level), 2 low (level), 3 rising edge,
+;            4 falling edge. The pin is polled every tick (it reaches the engine 2-3 clocks
+;            after it changes); the first sample (channel 0) is taken 3 ticks after the tick
+;            that saw the trigger.
+;   RX FIFO: n bytes. Bits 3..0 = sample 2k (channels 3..0), bits 7..4 = sample 2k + 1.
+;   Then the engine waits for the next record (a new capture re-arms the trigger).
+; Rates: the RX FIFO holds 16 bytes = 32 samples. A capture of more than 16 bytes needs the host
+;   to read as fast as the engine pushes, one byte per 12 (CLKDIV + 1) clocks; the host port
+;   moves at most one byte per 8 SCK cycles at SCK <= 48 MHz / 8 (64 clocks per byte with burst
+;   reads, plus the reads of RX_COUNT). Measured (tb_la, burst reads at SCK = 6 MHz): a
+;   sustained capture works at CLKDIV >= 6 (1.14 MS/s); at CLKDIV 5 (1.33 MS/s) the FIFO fills.
+;   Faster captures are bursts of 16 bytes (32 samples). If the FIFO is full the PUSH waits:
+;   the capture pauses (a gap in time), and STATUS bit 3 (RX overflow) reports it: discard the
+;   capture or the bytes after the gap.
+.equ ch0 0
+.equ ch1 1
+.equ ch2 2
+.equ ch3 3
+
+cmd:    PULL                    ; mode
+        MOV  X, OSR
+        PULL                    ; n - 1
+        JMP  X--, t1
+        JMP  go                 ; mode 0: now
+t1:     JMP  X--, t2
+hi:     JMP  PIN_LO, hi         ; mode 1: wait while low
+        JMP  go
+t2:     JMP  X--, t3
+lo:     JMP  PIN_HI, lo         ; mode 2: wait while high
+        JMP  go
+t3:     JMP  X--, fall
+r1:     JMP  PIN_HI, r1         ; mode 3: low first, then high
+r2:     JMP  PIN_LO, r2
+        JMP  go
+fall:
+f1:     JMP  PIN_LO, f1         ; mode 4 (and above): high first, then low
+f2:     JMP  PIN_HI, f2
+        JMP  go                 ; (the same latency as the other modes)
+go:     MOV  X, OSR             ; bytes to capture - 1
+cap:    IN   ch0                ; sample 2k: bits 0..3
+        IN   ch1
+        IN   ch2
+        IN   ch3 [2]
+        IN   ch0                ; sample 2k + 1: bits 4..7, 6 ticks later
+        IN   ch1
+        IN   ch2
+        IN   ch3
+        PUSH
+        JMP  X--, cap           ; 6 ticks after the PUSH's sample started: uniform
+        JMP  cmd

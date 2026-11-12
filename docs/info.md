@@ -92,5 +92,16 @@ None needed for the loopback test. Depending on the protocol loaded:
   pull-up on SWDIO (ADIv5: 10–100 kΩ) and a pull-down on SWCLK. The pull-downs keep the clock
   low while an engine restarts (its pins are released for a few clocks). The target's I/O
   voltage must match the chip's pads (3.3 V), or use a level shifter;
+- for a PS/2 keyboard or mouse: CLK on the engine's pin base, DATA on pin base + 1, a pull-up
+  (1–10 kΩ) on each; PS/2 devices run at 5 V, so use a bidirectional open-drain level shifter
+  (e.g. a BSS138 pair) between them and the 3.3 V pads;
+- for the 24-bit GPIO expander: three 74HC595 and three 74HC165 (74HC at 3.3 V), SCK, SDO,
+  SDI, RCLK and SH/LD# on pin base + 0..4; 595 SRCLR# high and OE# low, 165 CLK INH low;
+  each 595's QH' to the next one's SER, each 165's QH to the SER of the one nearer the chip;
+- for a quad SPI flash: SCK, CS#, IO0, IO1, IO2, IO3 on pin base + 0..5, pull-ups (10–100 kΩ)
+  on CS# and IO0–IO3 (IO2/IO3 are WP#/HOLD# in single-line commands), a 3.3 V flash;
+- for the logic analyser and generator: nothing (inputs and outputs at 3.3 V levels);
+- for HDLC/SDLC (NRZ): TXD on one engine's pin base and RXD on the other's, through a line
+  driver for the physical layer (e.g. RS-422/RS-485 transceivers);
 - for USB low speed: a 1.5 kΩ pull-up on D− (`uio[0]`) and a USB connector. The electrical
   levels are still to be checked against the I/O pads.

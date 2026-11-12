@@ -3050,3 +3050,186 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Test:** the `regression` workflow's lint step (`verilator --lint-only -Wall`, both builds):
   before, `%Warning-UNUSEDSIGNAL: pbe_engine.sv:472:15: Bits of signal are not used:
   'cur_off'[5:0]` and exit 1; after, no warnings, exit 0.
+
+## BUG-115 — The PS/2 device model took its own clock edges for a request to send (test)
+
+- **Where:** `pbe_v1/test/ps2_dev.sv`, written for D84.
+- **Cause:** the model recognised a request to send as "a rising CLK edge with DATA low while
+  the device is not clocking", using a `dev_clocking` flag. Clearing the flag at the device's
+  last clock edge (to allow the host to inhibit right after a frame, which PS/2 allows) made the
+  device's own last rising edge, with DATA still low from the ACK, look like a request: the
+  model clocked a phantom byte, the host read `0xFF`.
+- **Before:**
+  ```systemverilog
+  always @(negedge clk_line) if (!dev_clocking) clk_fell = $realtime;
+  always @(posedge clk_line)
+    if (!dev_clocking) begin
+      inhibit = $realtime - clk_fell;
+      if (!dat_line) ... rts = 1;
+  ```
+- **After:** a falling edge the device did not make itself (`clk_low` = 0) is the host's; only
+  the rising edge that ends it can be a request to send.
+  ```systemverilog
+  always @(negedge clk_line)
+    if (!clk_low) begin
+      host_low = 1;
+      clk_fell = $realtime;
+    end
+  always @(posedge clk_line)
+    if (host_low) begin
+      host_low = 0;
+      inhibit = $realtime - clk_fell;
+      if (!dat_line) ... rts = 1;
+  ```
+- **Test:** `tb_ps2`: before, `expected fa 00, got ff 00` in scenarios 2-6 (`passed: 1 of 8`);
+  after, `PASS: PS/2 host`.
+
+## BUG-116 — tb_ps2 queued a command before the device's byte had started (test)
+
+- **Where:** `pbe_v1/test/tb_ps2.sv`, scenario 8 (a command queued while the device sends).
+- **Cause:** the bench waited for `u_dev.dev_clocking` to queue the command during a device
+  byte. The record of the previous byte is pushed during its stop bit, before the device's last
+  clock pulse, so the flag was still 1 from that byte: the command went out first.
+- **Before:** `wait (u_dev.dev_clocking);`
+- **After:** `wait (!u_dev.dev_clocking); wait (u_dev.dev_clocking);`
+- **Test:** `tb_ps2` scenario 8: before, `expected 5a 00, got ed 20`; after, `PASS`.
+
+## BUG-117 — The PS/2 timeout record carried a meaningless parity bit (design)
+
+- **Where:** `pbe_v1/programs/ps2_host.pbe`, the timeout vector (D84).
+- **Cause:** the vector reported `STAT` as the status. With odd parity set, `STAT` bit 0 is 1
+  when no bit has been read since the last `STAT` (a request to send never clocked), so the
+  record read `[0x00][0x05]` instead of the documented timeout `[0x00][0x04]`.
+- **Before:**
+  ```
+          STAT
+          MOV  OSR, ISR
+          MOV  ISR, 0
+  ```
+- **After:** `STAT` only clears "timeout happened"; the status is the constant 0x04.
+  ```
+          STAT
+          SET  OSR, 0x04
+          MOV  ISR, 0
+  ```
+- **Test:** `tb_ps2` scenario 7: before, `FAIL: no clock after a request to send: timeout (00 04)`;
+  after, `PASS`.
+
+## BUG-118 — tb_ps2 waited for a device byte it never queued (test)
+
+- **Where:** `pbe_v1/test/tb_ps2.sv`, scenario 5 (a device byte with a 0 stop bit, then a good
+  byte to show the framing is back).
+- **Cause:** the scenario expected the space key (`0x29`) after the bad byte but only queued the
+  bad byte in the device model. The host program waited, timed out after 20 ms and reported
+  `[0x00][0x05]`. While looking for it, the program was first suspected (a framing error leaves
+  DATA low after the last clock edge); running the old program against the corrected bench
+  passes, so the program was right. The `WAIT dat, HIGH` added at the end of its receive path
+  stays as a guard (D84), not as a fix.
+- **Before:**
+  ```systemverilog
+  u_dev.bad_stop_next = 1;
+  u_dev.tx_q.push_back(8'h3C);
+  rx_rec(b, s);
+  ```
+- **After:**
+  ```systemverilog
+  u_dev.bad_stop_next = 1;
+  u_dev.tx_q.push_back(8'h3C);
+  u_dev.tx_q.push_back(8'h29);
+  rx_rec(b, s);
+  ```
+- **Test:** `tb_ps2` scenario 5: before, `expected 29 00, got 00 05`; after, `PASS` (with and
+  without the program's `WAIT dat, HIGH`).
+
+## BUG-119 — tb_la's counter check failed when the stimulus was phase-locked to the sampling (test)
+
+- **Where:** `pbe_v1/test/tb_la.sv`, the check of a free-running capture (D86).
+- **Cause:** the stimulus counter advanced every 3 sample periods exactly, so every transition
+  fell at the same point of the sampling: between the reads of channel 0 and channel 1. A
+  0 → 1 change then read as the old value (only channel 0 changes, and it was read first), so
+  runs came out 4, 2, 4, 2 samples long; the check allowed 2-4 but expected the boundary
+  sample to differ from the old value. The capture was right.
+- **Before:** `la_free(16'd1, 16, 3, ...)` (a whole number of samples per value) and
+  `if (runs > 0 && (run + 1 < per - 1 || run > per + 1))`.
+- **After:** non-integer steps (`3.4`, `3.3`, `5.2` samples), so the transitions sweep every
+  phase, and runs between `per - 2` and `per + 1` (a boundary sample may read entirely as the
+  old value): `if (runs > 0 && (run + 2 < per || run > per + 1))`.
+- **Test:** `tb_la` burst at `CLKDIV` 1: before, `FAIL: ... sample 1: 0 after 1` (samples
+  `1000113222335444...`, each 0 → 1 boundary read as 0); after, `PASS ... 10 values`.
+
+## BUG-120 — tb_la's generator grid used the nominal clock period, not the simulated one (test)
+
+- **Where:** `pbe_v1/test/tb_la.sv`, the generator's edge-grid check (D86).
+- **Cause:** the bench's clock is `#(20.8333 / 2)`, which the 1 ps time precision rounds to
+  10.417 ns: the simulated period is 20.834 ns. The grid was computed from 20.8333 ns, so after
+  1,600 clocks the expected edge times were 1.1 ns early and the 1 ns tolerance failed.
+- **Before:** `tick = (div + 1) * CLK_NS;`
+- **After:** `localparam real CLK_SIM = 20.834;` and `tick = (div + 1) * CLK_SIM;`
+- **Test:** `tb_la`, 64 bytes streamed at `CLKDIV` 4: before, `A edge 34 at sample 80.00: off the
+  grid` (80.003); after, `PASS`.
+
+## BUG-121 — tb_la expected rates the host port cannot carry (test)
+
+- **Where:** `pbe_v1/test/tb_la.sv`, first version.
+- **Cause:** two scenarios asked for more than the host port moves (one byte per 64 clocks at
+  SCK = clk / 8): a 24-byte capture at `CLKDIV` 3 (one byte per 48 clocks, so the FIFO filled
+  and the engine correctly reported an overflow), and generator records written byte by byte
+  with `fifo_send` (a status read and a write per byte, about 300 clocks) while the generator
+  played one byte per 32 clocks, so it ran dry and held samples (correctly, but off the grid).
+- **Before:** `la_free(16'd3, 24, 5, "CLKDIV 3 (2 MS/s)")`; the generator started as soon as
+  its first byte arrived.
+- **After:** the `CLKDIV` 3 capture is a 16-byte burst; the generator's count and first 15 bytes
+  are queued with the engine stopped, then it runs and the rest follows in one burst write. The
+  real limits were then measured and documented (D86).
+- **Test:** `tb_la`: before, `FAIL: CLKDIV 3 (2 MS/s): 48 samples ... RX overflow reported` and
+  `FAIL: generator 8 bytes queued, CLKDIV 1`; after, `PASS: logic analyser and generator`.
+
+## BUG-122 — tb_qspi pushed 32-bit random values into a byte queue (test)
+
+- **Where:** `pbe_v1/test/tb_qspi.sv`, the quad page program scenario (D87).
+- **Cause:** `wq` is a queue of bytes; `wq.push_back($urandom)` pushes a 32-bit value. Icarus
+  does not truncate it: `vvp` stopped with `Assertion 'value.size() == wid' failed` in the
+  middle of the run (the earlier scenarios' output was lost in the stdout buffer, which made it
+  look like a crash at time 0).
+- **Before:** `for (int i = 0; i < 24; i++) wq.push_back($urandom);`
+- **After:** `for (int i = 0; i < 24; i++) wq.push_back(8'($urandom));`
+- **Test:** `tb_qspi`: before, the simulator aborts after scenario 5; after, `PASS: QSPI`
+  (12/12).
+
+## BUG-123 — The HDLC transmitter's own receiver saw a frame after the last flag (design)
+
+- **Where:** `pbe_v1/programs/hdlc_tx.pbe`, the end of the last frame (D88).
+- **Cause:** after the last frame the program sent the flag's final 0 as a coder frame of one
+  bit, then `END`. The coder lets go of the line at the end of that bit; its receiver (idle in
+  a transmit-only engine, but still on) sees the pin through the 2-clock synchronizer, so for 2
+  clocks after the release it still saw the 0, took it for a frame start and then overran on
+  the idle 1s it was never asked for: `STATUS` bit 4 (line error, documented as "underrun")
+  was set after every burst of frames, although the frames were good.
+- **Before:**
+  ```
+          SET  OSR, 0x00
+          PIN  tx, OUT, NOCRC     ; no frame: the flag's last 0 alone, then mark idle
+          PIN  tx, END
+  ```
+- **After:** the flag's last 0 and then a 1 (idle mark), so the coder lets go of a high line:
+  ```
+          SET  OSR, 0x02
+          PIN  tx, OUT, NOCRC
+          PIN  tx, OUT, NOCRC
+          PIN  tx, END
+  ```
+- **Test:** `tb_hdlc` transmit phases: before, `the transmitter reported a line error
+  (underrun)` and `FAIL: TX, CLKDIV 47` (and 23, 11); after, `PASS`. A probe on the coder's
+  `err` showed it in the receive state (`rs` = 1) at the idle `PULL`.
+
+## BUG-124 — The HDLC model's transmitter never woke for its second batch (test)
+
+- **Where:** `pbe_v1/test/hdlc_model.sv`, the transmitter loop (D88).
+- **Cause:** the loop waited with `wait (q_len.size() > 0)`. Icarus does not re-evaluate a
+  `wait` on a queue's size when the queue grows; the first batch worked only because frames
+  were queued before the first wait ended. The second receive phase timed out with every frame
+  "not received" (the model had sent 8 frames and held 5 more).
+- **Before:** `wait (q_len.size() > 0);`
+- **After:** `while (q_len.size() == 0) #(100);   // (Icarus does not wake a wait on a queue's size)`
+- **Test:** `tb_hdlc` phase `RX, CLKDIV 23` after the 1 Mbit/s phases: before, `frame 0: not
+  received` ... `FAIL`; after, `PASS` (and the phase passed alone before the fix).

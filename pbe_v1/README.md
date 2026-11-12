@@ -17,11 +17,16 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 512-word hex image (engine 0's 256 words, then engine 1's), `prog.pbe@engine:word`; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`) |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
 | `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
 | `test/tb_debug.sv` | JTAG and SWD against `jtag_tap.sv` (IEEE 1149.1 TAP) and `swd_dp.sv` (ADIv5 SW-DP), alone and at once, fastest and slowest clock |
+| `test/tb_ps2.sv` | PS/2 host against `ps2_dev.sv` (a keyboard written from the protocol description) (D84) |
+| `test/tb_gpio.sv` | 24-bit GPIO expander against `hc_chain.sv` (74HC595 and 74HC165 models, 3 deep) (D85) |
+| `test/tb_la.sv` | Logic analyser and waveform generator against an independent stimulus and timestamps (D86) |
+| `test/tb_qspi.sv` | Quad SPI controller against `qspi_flash_model.sv` (a NOR flash: 9F, 03, 0B, 6B, EB, 06, 05, 32) (D87) |
+| `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ) (D88) |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
@@ -37,6 +42,7 @@ make test                                  # Icarus Verilog, all testbenches
 make test-proto                            # only tb_proto (WS2812, SPI peripheral, I2C target)
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
+make test-proto2                           # only the D84-D88 protocols (PS/2, GPIO expander, logic analyser, QSPI, HDLC)
 make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
 make test-verilator                        # tb_line and 5 more under Verilator and Icarus: both pass, identical logs (D80)
 make synth                                 # area of the standard cells, IHP library in ../ihp_lib; the SRAM macros
@@ -336,6 +342,93 @@ ends the frame (3.5 characters in all), a start bit makes the frame invalid.
   discard the frame and clear FLAG3.
 - FLAG0 is used inside the program.
 
+## PS/2 host protocol (`programs/ps2_host.pbe`)
+
+PS/2 keyboard or mouse host in 74 words (D84). CLK = pin base, DATA = + 1, both open-drain
+with external pull-ups (1-10 kΩ; a level shifter for a 5 V device). Settings: `CLKDIV` = 239
+(5 µs tick), LSB first, `JMP_PIN` = 1, `LINE_CFG` = 0x81 (odd parity, timeout vector at word 1),
+`CRC_CFG` = 0, `CRC_GOOD` = 0xFFFF, `TIMEOUT` = 4000 (20 ms). The device drives the clock
+(10-16.7 kHz); each clock phase must last 3 ticks.
+
+- TX FIFO: one byte per command; the engine inhibits (CLK low 160 µs), requests to send, sends
+  8 bits, the odd parity bit (computed from the bits read back from the wire) and the stop bit,
+  and reads the device's ACK.
+- RX FIFO, two-byte records: `[byte][status]` from the device (0x00 good, bit 0 parity error,
+  0x80 stop bit 0, bit 3 RX overflow); `[cmd][0x20]` sent and ACKed, `[cmd][0xA0]` not ACKed;
+  `[0x00][0x04]` timeout (the device stopped clocking or never answered a request to send).
+- A device byte that has started is received before a queued command is sent.
+
+Tested by `tb_ps2` against a keyboard model (`ps2_dev.sv`) and by sigrok's `ps2` decoder
+(`make sigrok-proto2 PROTO2=ps2`).
+
+## GPIO expander host protocol (`programs/gpio_expander.pbe`)
+
+24 outputs (three 74HC595) and 24 inputs (three 74HC165) in 33 words (D85). Pins: SCK = pin
+base (595 SRCLK and 165 CLK), SDO = + 1 (595 SER), SDI = + 2 (165 QH), RCLK = + 3, LD# = + 4
+(165 SH/LD#). `SHIFT` = 0x03, `CLKDIV` 0 (SCK 6.86 MHz) or n ≥ 1 (SCK = 48 MHz / (6 (n + 1))).
+
+- One exchange per record: TX `[o0] [o1] [o2]`, RX `[i0] [i1] [i2]`. o0 ends in the last 595
+  of the chain, o2 in the first; i0 is the first 165 (whose QH is SDI), i2 the last; bit 7 is
+  QH / input H.
+- Inputs are sampled when the exchange starts (LD# low); all 24 outputs change together when it
+  ends (RCLK rises). To read only, send the current outputs again.
+
+Tested by `tb_gpio` against 74HC595/74HC165 models with datasheet timing checks, and by
+sigrok's `spi` decoder (`make sigrok-proto2 PROTO2=gpio`).
+
+## Logic analyser and generator host protocols (`programs/la_capture.pbe`, `programs/wavegen.pbe`)
+
+Two programs, one per engine (D86). `CLKDIV` ≥ 1 (uniform sample clocks), LSB first.
+
+- **Capture** (30 words): channels 0..3 = pin base + 0..3; trigger pin = `JMP_PIN`. TX
+  `[mode][n-1]`: mode 0 now, 1 high, 2 low, 3 rising edge, 4 falling edge; then n bytes in the
+  RX FIFO, two samples each (bits 3..0, then 7..4). One sample every 6 (CLKDIV + 1) clocks
+  (4 MS/s at `CLKDIV` 1); channel k is read k ticks after channel 0. The first sample is 3 ticks
+  after the trigger is seen. Bursts of 16 bytes at any rate; sustained with burst reads at
+  `CLKDIV` ≥ 6 (1.14 MS/s). A full FIFO pauses the capture and sets `STATUS` bit 3.
+- **Generator** (16 words): A = pin base, B = + 1. TX `[n-1][n bytes]`, 4 samples per byte
+  (bits 1..0 first: A = even bit, B = odd bit), one every 4 (CLKDIV + 1) clocks (6 MS/s at
+  `CLKDIV` 1); B changes one tick after A. Sustained at `CLKDIV` ≥ 3 with 15 bytes queued
+  first; an empty FIFO holds the current sample. The last sample is held after a record.
+
+Tested by `tb_la` (D86).
+
+## Quad SPI host protocol (`programs/qspi_flash.pbe`)
+
+SPI mode 0 controller for 1-1-1, 1-1-4, 1-4-4 and 4-4-4 commands, 125 words (D87). Pins: SCK =
+pin base, CS# = + 1, IO0..IO3 = + 2..5 (pull-ups on IO0-IO3). `SHIFT` = 0x03, `CLKDIV` 0.
+
+- TX records, one per phase; CS# falls with the first and rises with `[0x00]`:
+  `[0x01][n-1][bytes]` single write (IO0), `[0x02][n-1]` single read (IO1), `[0x03][n-1][bytes]`
+  quad write, `[0x04][n-1]` quad read, `[0x05][n-1]` dummy clocks (IOs released), `[0x00]` end.
+  RX: the bytes read.
+- 0x6B (1-1-4): `[01][03][6B][A2][A1][A0] [05][07] [04][n-1] [00]`;
+  0xEB (1-4-4): `[01][00][EB] [03][03][A2][A1][A0][00] [05][03] [04][n-1] [00]`.
+- SCK at `CLKDIV` 0: 16 MHz single write, 9.6 MHz single read, 8 MHz quad write, 6 MHz quad
+  read (2.8 MB/s with the loop); long reads pause SCK while the RX FIFO is full.
+
+Tested by `tb_qspi` against a flash model, and by sigrok's `spi` decoder on the single-line
+phase (`make sigrok-proto2 PROTO2=qspi`).
+
+## HDLC host protocol (`programs/hdlc_tx.pbe`, `programs/hdlc_rx.pbe`)
+
+HDLC/SDLC framing in NRZ (D88): flags, zero-bit insertion and deletion (the line coder's
+"after 5 ones" stuffing), CRC-16/X.25, aborts. Transmit on one engine, receive on the other.
+Both: `CLKDIV` = bit time − 1, `LINE` = 0x09, `SYNC` = 0, LSB first, `CRC_POLY` = 0x1021,
+`LINE_CFG` = 0x40.
+
+- **Transmit** (`CRC_CFG` 0x7F; TXD = pin base): TX `[n-1][n bytes]` per frame; the engine adds
+  the FCS and the flags (shared between back-to-back frames; mark idle after). Up to 4 Mbit/s.
+- **Receive** (`CRC_CFG` 0x9F, `CRC_GOOD` 0xD0F9, `JMP_PIN` 0; RXD = pin base): first write one
+  byte d = ceil((bit time in clocks / 2 + 4) / 10) to this engine's TX FIFO (the abort check).
+  RX: each frame's bytes (FCS included; 0x7E doubled), then `[0x7E][status]`: 0x02 good, other
+  values ≤ 0x1F CRC error / overflow / line error, 0x40 abort, 0x80 not whole bytes. Up to
+  2 Mbit/s.
+- NRZI is not possible without hardware (D88: a pbe_line `LINECTL STUFFOFF/STUFFON` and a
+  "violation ends the frame at either level" option).
+
+Tested by `tb_hdlc` against an HDLC model (no stock sigrok decoder exists).
+
 ## Status
 
 - Simulation (`make test`, exits non-zero on any failure), all through the chip's pins:
@@ -445,6 +538,7 @@ These targets run behavioral simulation only and invoke no physical-design flow.
 ```sh
 make sigrok                       # stock waveform decoders; needs sigrok-cli
 make sigrok-debug                 # stock jtag and swd decoders on tb_debug (D77)
+make sigrok-proto2                # stock ps2 and spi decoders on the D84-D88 benches; PROTO2=ps2|gpio|qspi
 make sigrok-full                  # strict full-USB request checks (known decoder failures)
 make test-buses CASES=3 BUS_SEED=20261029 # requires ../verify/golden-model/bus_models/requirements.txt
 ```
