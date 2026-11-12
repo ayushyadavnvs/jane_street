@@ -471,6 +471,7 @@ module pbe_engine #(
   logic [1:0] pg_num;
   wire  [7:0] cur_off = pc - 8'd1 - start_pc;
   wire  [1:0] j_page  = pg_set ? pg_num : cur_off[7:6];
+  wire        _unused_cur_off = &{cur_off[5:0], 1'b0};  // only the page bits are used (BUG-114)
   wire  [7:0] jump_pc = start_pc + {j_page, arg[5:0]};
 
   always_ff @(posedge clk or negedge rst_n) begin

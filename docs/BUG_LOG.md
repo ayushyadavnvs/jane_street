@@ -3026,3 +3026,27 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   ```
 - **Test:** `tb_page` against the fault: before the change, `PASS`; after it, `FAIL: (a) ... byte
   5 is 13, expected 15`. On the RTL as it is, `PASS` both times.
+
+## BUG-114 — Verilator -Wall lint failed on the unused low bits of `cur_off` (tool)
+
+- **Where:** `src/pbe_engine.sv`, the PAGE jump-page logic (D83), commit `fc0c7fe`. The
+  `regression` workflow failed on `feature/sram-8x4` from that commit on; its later steps
+  (`make test`, the two-simulator check) were skipped. Reviews ran `make test` and
+  `make test-verilator` but not the `-Wall` lint, so it was not seen before push.
+- **Cause:** `cur_off` is the full 8-bit offset `pc - 1 - start_pc`, but only its page bits [7:6]
+  are used. Verilator `-Wall` reports `UNUSEDSIGNAL` for bits [5:0], and the lint step treats any
+  warning as an error. No functional effect.
+- **Before:**
+  ```
+  wire  [7:0] cur_off = pc - 8'd1 - start_pc;
+  wire  [1:0] j_page  = pg_set ? pg_num : cur_off[7:6];
+  ```
+- **After:** the low bits are marked unused, as elsewhere in the RTL (`_unused`):
+  ```
+  wire  [7:0] cur_off = pc - 8'd1 - start_pc;
+  wire  [1:0] j_page  = pg_set ? pg_num : cur_off[7:6];
+  wire        _unused_cur_off = &{cur_off[5:0], 1'b0};  // only the page bits are used (BUG-114)
+  ```
+- **Test:** the `regression` workflow's lint step (`verilator --lint-only -Wall`, both builds):
+  before, `%Warning-UNUSEDSIGNAL: pbe_engine.sv:472:15: Bits of signal are not used:
+  'cur_off'[5:0]` and exit 1; after, no warnings, exit 0.
