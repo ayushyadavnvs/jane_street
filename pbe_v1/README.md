@@ -31,7 +31,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
-| `test/tb_line.sv` | Unit test: the line coder in USB, CAN and HDLC styles against reference models |
+| `test/tb_line.sv` | Unit test: the line coder in USB, CAN, HDLC and Manchester (10BASE-T) styles against reference models |
 | `test/tb_page.sv` | `PAGE` (D83): a 202-word program over four pages, the timeout vector, stop and restart, host writes, cross-page timing |
 | `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up; separate memories, pointer carries, `START_PC` 252 wrapping, the refetch cost, the reset refetch (D82) |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
@@ -137,9 +137,17 @@ that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
 
 **Line coder** (second register page, 0x30 for engine 0, 0x40 for engine 1: +0 `LINE`, +1 `SYNC`,
 +2/+3 `CRC_GOOD`):
-- **`LINE` fields:** [1:0] mode (0 off, 1 NRZ, 2 NRZI); [3:2] stuffing (0 none, 1 after 6 ones,
-  2 after 5 ones, 3 after 5 equal bits); [4] pair (pin base + 1 is the complement, both low =
-  SE0 ends a frame); [5] byte transfers.
+- **`LINE` fields:** [1:0] mode (0 off, 1 NRZ, 2 NRZI, 3 Manchester); [3:2] stuffing (0 none,
+  1 after 6 ones, 2 after 5 ones, 3 after 5 equal bits; none in Manchester); [4] pair (pin
+  base + 1 is the complement, both low = SE0 ends a frame, except in Manchester); [5] byte
+  transfers; [7] Manchester polarity (0: IEEE 802.3, a 1 is low then high).
+- **Manchester (D90):** half a bit of the complement, then half a bit of the value. After `END`
+  the line is held high for 3 bit times, then released (10BASE-T's TP_IDL, DALI's stop). The
+  receiver recovers the clock from the mid-bit transitions (sampling the pin on both clock
+  edges), starts a frame at the first transition after idle, hunts for `SYNC` (Ethernet:
+  0xD5, the SFD), and ends it when there has been no mid-bit transition for 2 bit times
+  (frame end only for a frame whose `SYNC` was found, so link pulses are ignored). At least
+  4 clocks per bit (6 for 10 Mbit/s at 60 MHz).
 - **Timing:** when it is on, `CLKDIV` is the bit time − 1, and instructions run every clock.
 - **Instructions:**
   - `OUT`/`OUTOD` hand it a byte (or a bit) and wait while it is busy; `PIN p, END` ends the

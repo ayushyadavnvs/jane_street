@@ -2867,3 +2867,76 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   SPI, I2C, 1-Wire, Modbus, SMBus). Every existing bench passes unchanged in single mode.
 - **Register map:** `HOSTCFG` 0x50 is the first register above the second pages; unmapped reads
   still return 0, so the golden model (which never writes 0x50) still matches.
+
+## D90. Manchester line coding (LINE mode 3), clock recovery on both clock edges
+
+- **Asked by the owner** for 10BASE-T (and generally DALI, RC5, MIL-STD-1553 style links).
+- **Chosen: mode 3 of `LINE[1:0]`**, the one reserved code (D39), in `pbe_line`. Every other
+  mode, and every existing configuration, is unchanged; the formal default-equivalence and
+  the golden model never select mode 3.
+- **Convention:** IEEE 802.3 clause 7.3.1.1 (to which 10BASE-T, clause 14, refers): "during the
+  first half of the bit-symbol, the encoded signal is the logical complement of the bit value
+  being encoded; during the second half, the uncomplemented value". So a 1 is low then high,
+  with a transition in the middle of every bit. `LINE[7]` swaps the halves (a 1 is high then
+  low: G.E. Thomas, MIL-STD-1553's Manchester II). Byte and bit transfers, LSB/MSB first, SYNC
+  and pair mode work as in the other modes; stuffing is off (LINE[3:2] ignored).
+- **Transmit:** the first half is floor(period_m1 / 2) + 1 clocks (3 of 6 at 10 Mbit/s and
+  60 MHz), the second the rest. After `END` the line is held at the high level (in pair mode:
+  pin a high, pin b low, a positive differential) for **3 bit times**, then let go (the pin
+  unit's level, idle). That is 10BASE-T's TP_IDL (clause 14.3.1.2.1, Figure 14-10: a positive
+  level after the last bit before idle) and DALI's 2 stop bits. A secondary source (a TI application note) gives TP_IDL as a 300 ns or 350 ns pulse depending
+  on the last bit; holding 3 bit times after the last bit cell gives 300 ns from a boundary
+  transition (last bit 0) and 350 ns from a mid-bit one (last bit 1), the same two numbers.
+  The minimum (about 250 ns, "at least 2 bit times" in the owner's brief) and the return to
+  zero are left to the external driver's network and are for the verifier to check against
+  the template (`docs/ETHERNET_VERIFICATION_TODO.md`). A transmit underrun holds the level (no
+  transitions: the far end sees the carrier end) and pulses the line error, as in other modes.
+- **Receive, clock recovery:** a bit timer holds the expected mid-bit point; a transition at
+  least 3/4 of a bit (+ 1/4 clock) after it is the next mid-bit transition, and the level after
+  it is the bit; earlier transitions (bit boundaries, only between equal bits) are skipped.
+  - **The first transition** after idle starts a frame and is the reference; its bit is not
+    delivered (it is a preamble or start bit). With the 10BASE-T receiver idling low (the
+    comparator, `docs/info.md`) the first transition of a preamble (a 1: low then high) is a
+    mid-bit transition, so lock is immediate; a wrong first lock corrects itself at the first
+    0/1 pair, and `SYNC` (the SFD 0xD5) finds the byte alignment.
+  - **End of carrier:** no mid-bit transition for 2 bit times (TP_IDL is 3). `frame_end`
+    pulses only for a frame whose `SYNC` was found (or with `SYNC` = 0): link pulses (one
+    positive pulse), a lone edge at the end of TP_IDL and noise end silently.
+  - **Jitter.** First version: the reference was each accepted edge itself. `tb_line` M7 (per
+    edge uniform jitter, 20 frames per step) decoded up to ±0.5 clock (±8.3 ns at 60 MHz):
+    the interval between two edges carries both edges' jitter plus a clock of quantization.
+    The commonly quoted 10BASE-T receive jitter is ±13.5 ns (802.3 clause 14.3.1.3, for the
+    verifier to confirm), so that was not enough. Two changes, measured one at a time:
+    1. **A first-order loop:** each mid-bit transition moves the reference by a quarter of its
+       error (1/8-clock resolution), so the reference averages the edges. Alone: no gain
+       (still ±0.5 clock), because the quantization of the edge itself was then the limit.
+    2. **Both clock edges** (the owner's suggestion): the top level samples the pins at the
+       falling clock edge too (`pins_n0` on the falling edge, then two rising-edge stages: a
+       3-flop synchronizer whose first stage has half a clock to settle), and the engine passes
+       the receive pin's falling-edge sample to the coder (`a_early`). An edge already present
+       at the falling edge happened in the first half of the clock, so edges are timed to half
+       a clock. With the loop: ±0.6 clock. With the threshold moved by the mean detection
+       delay (a quarter clock): **±0.8 clock, ±13.3 ns at 60 MHz, error-free**; failures start
+       at ±0.9 clock (2 of 40 frames at ±18 ns on a 20 ns bench clock). Loop gain 1/2: ±0.6;
+       1/8: ±0.5 (slower tracking); thresholds ±1/8 clock either side: ±0.6-0.7.
+  - **Clock offset:** 802.3 allows ±0.01 % (100 ppm); M4 decodes at ±100 ppm with ±0.6 clock
+    of jitter and at ±1 % (100x the limit) with ±0.4 clock. The loop's steady-state lag at
+    an offset f is about 4 f bit times (0.04 clock at 1 %).
+- **Who else benefits:** both-edge sampling is per pin and general (the logic analyser or any
+  future receiver could use it); Manchester itself serves DALI (1200 bit/s, idle high, 2 stop
+  bits), RC5 infrared, MIL-STD-1553 data words (its sync is a code violation the coder does
+  not generate: a program would bit-bang it) and 10BASE-T.
+- **Alternatives:**
+  - *A PLL-style decoder in the program* (bit mode, IN per half bit): 3 clocks per half bit
+    leave no instruction time.
+  - *Oversampling at 8 per bit* (an 80 MHz clock): the owner's clock is 60 MHz.
+  - *Edge-relative decoding without a loop* (the first version): simpler, ±8.3 ns.
+  - *A new LINE bit for Manchester:* mode 3 was free and has no other sensible meaning.
+- **Cost:** per engine, a 24-bit signed bit timer, one registered 24-bit threshold (6 x
+  `CLKDIV`, off the compare path like `sp_q`, D65; the other two limits, a bit and two bits in
+  eighths, are shifted copies of `CLKDIV`), the second-half register; 24 flip-flops for the
+  falling-edge pin samples in the top level. Measured with `make synth` in D92.
+- **Tests:** `tb_line` M1-M7 (`tb_line_manch.svh`, an encoder written from 802.3 and checks of
+  every clock): transmit in both polarities with the TP_IDL tail and release, an underrun,
+  receive at 0/±100 ppm/±1 % with jitter, link pulses and a stray edge ignored, a coder-to-coder
+  loopback, the jitter sweep. Also under Verilator (`make test-verilator`), identical logs.

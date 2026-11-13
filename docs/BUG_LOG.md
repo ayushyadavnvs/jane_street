@@ -84,6 +84,8 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-125 | Testbench | `tb_pbe` checked the Modbus IRQ pin inside the tick between `FLAG 2, SET` and `IRQ`; only a fast (quad) host landed there | `tb_pbe +QUAD` (D89) | Fixed (bounded wait for the pin) |
 | BUG-126 | Testbench | `host_quad_on`'s dummy transaction wrote `HOSTCFG` = 0 just after switching to quad | `tb_quad` (b) | Fixed (a read) |
 | BUG-127 | Tooling | Icarus 12: `return` in tasks, queue arguments and bit selects of queue elements, real arrays in automatic tasks | `tb_quad`, `tb_line` M | Worked around |
+| BUG-128 | RTL (line coder) | The Manchester bit timer moved its reference 3/4 of each edge's error instead of 1/4 | `tb_line` M7 (D90) | Fixed before commit |
+| BUG-129 | RTL (line coder) | The Manchester bit timer lost half a clock after an edge seen at the falling clock edge | `tb_line` M4, M6 (D90) | Fixed before commit |
 
 ---
 
@@ -3298,3 +3300,29 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   reals. The same constructs are avoided in the rest of the new benches.
 - **Test:** `tb_quad` and `tb_line` (M1-M7) run to `PASS` under Icarus; `tb_line` also under
   Verilator (`make test-verilator`, identical logs).
+
+## BUG-128 — The Manchester bit timer moved its reference 3/4 of the error, not 1/4 (design)
+
+- **Where:** `src/pbe_line.sv`, Manchester receive (D90), found before the first commit.
+- **Cause:** `mcnt` holds the time since the reference. After a mid-bit edge that came e late,
+  the reference should move e/4 (towards the edge), so the edge is then e - e/4 after it. The
+  code stored e/4, the time after a reference moved 3e/4: a loop of gain 3/4, which follows each
+  jittered edge almost fully.
+- **Before:** `else if (m_mid) mcnt <= m_err >>> 2;`
+- **After:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);`
+  (the last term is BUG-129).
+- **Test:** `tb_line` M7, frame errors out of 40 at ±0.6 / ±0.7 clock of jitter: 15 / 24 before
+  (the same as no loop at all, which gave the clue), 8 / 17 after. A trace of a failing frame
+  showed a mid-bit edge rejected 0.25 clock after a late one had pulled the reference.
+
+## BUG-129 — The Manchester bit timer lost half a clock after an early edge (design)
+
+- **Where:** `src/pbe_line.sv`, Manchester receive with both clock edges (D90), before commit.
+- **Cause:** an edge seen in the first half of a clock (`a_early` differs) is timed 4 eighths
+  earlier (`m_tau`). The counter after it must hold the time since the new reference *at this
+  clock*, which is half a clock after that edge; the update left the 4 eighths out, so every
+  early edge moved the timer half a clock early.
+- **Before:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2);`
+- **After:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);`
+- **Test:** `tb_line` M4 and M6: before, frames lost a byte (`63 bytes`, `62 bytes`) even at
+  ±0.3 clock and the loopback failed; after, all pass and M7 reaches ±0.8 clock.

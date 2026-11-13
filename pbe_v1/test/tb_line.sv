@@ -18,6 +18,9 @@
 //     (every bit exactly P clocks), the tail with an ACK, arbitration lost to a lower ID
 //     (stops driving at once, keeps receiving), the error flag in the bit after a stuff error,
 //     a bit error and LINECTL "error now", the four sample points with falling-edge-only resync.
+//  M  Manchester (D90): transmit against IEEE 802.3's encoding and TP_IDL, both polarities,
+//     an underrun; receive with preamble/SFD lock at +-100 ppm and +-2 % with jitter, link
+//     pulses ignored, a coder-to-coder loopback, a jitter sweep (tb_line_manch.svh).
 module tb_line;
   localparam int P = 32;  // clocks per bit (USB low speed at 48 MHz)
   logic clk = 0, rst_n = 0;
@@ -44,7 +47,7 @@ module tb_line;
   pbe_line u (
       .clk, .rst_n, .clear(1'b0), .cfg(cfg_u), .cfg2(cfg2_u), .sync(sync_u), .period_m1(16'(P - 1)),
       .out_msb_first(1'b0), .in_msb_first(1'b0),
-      .a_in(use_loop ? line_v : a_in), .b_in(use_loop ? 1'b0 : b_in),
+      .a_in(use_loop ? line_v : a_in), .a_early(use_loop ? line_v : a_in), .b_in(use_loop ? 1'b0 : b_in),
       .drive(drive_u), .a_out(ao_u), .b_out(bo_u),
       .tx_put(put_u), .tx_end(end_u), .tx_data(data_u), .tx_ready(ready_u),
       .rx_valid(rv_u), .rx_data(rd_u), .rx_take(take_u), .frame_end(fe_u), .err(err_u)
@@ -52,7 +55,7 @@ module tb_line;
   pbe_line v (
       .clk, .rst_n, .clear(1'b0), .cfg(cfg_v), .cfg2(8'h00), .sync(sync_v), .period_m1(16'(P - 1)),
       .out_msb_first(1'b0), .in_msb_first(1'b0),
-      .a_in(1'b1), .b_in(1'b0),
+      .a_in(1'b1), .a_early(1'b1), .b_in(1'b0),
       .drive(drive_v), .a_out(ao_v), .b_out(bo_v),
       .tx_put(put_v), .tx_end(end_v), .tx_data(data_v), .tx_ready(ready_v),
       .rx_valid(rv_v), .rx_data(rd_v), .rx_take(take_v), .frame_end(fe_v), .err(err_v)
@@ -273,6 +276,7 @@ module tb_line;
 
     run_line2_tests();
     run_bsync_tests();
+    run_manch_tests();
     if (errors == 0) begin
       $display("PASS: line coder");
       $finish;
@@ -280,6 +284,7 @@ module tb_line;
   end
 
   `include "tb_line_can.svh"
+  `include "tb_line_manch.svh"
 
   initial begin
     #80ms;

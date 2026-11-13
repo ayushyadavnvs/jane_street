@@ -76,7 +76,7 @@
 // "CRC ok" means the register equals crc_good (0 for CRCs sent plain; the residual, e.g. USB's
 // 0x800d, for CRCs sent inverted).
 //
-// Line coder (coder_cfg[1:0] != 0, see pbe_line): it drives pin_base (and pin_base + 1 in pair
+// Line coder (coder_cfg[1:0] != 0: NRZ, NRZI or Manchester, see pbe_line): it drives pin_base (and pin_base + 1 in pair
 // mode) and sets the bit timing: clkdiv is then the bit time minus 1, and instructions run
 // every clock. OUT/OUTOD hand the coder a byte (or one bit) and wait while it is busy; END ends
 // the frame; IN takes a received byte (or bit) and waits for one, or for the end of the frame
@@ -185,6 +185,7 @@ module pbe_engine #(
     input  logic        pm_wr,        // the host is writing the program memory (any word)
     // pins
     input  logic [7:0]  pins_in,  // synchronized
+    input  logic [7:0]  pins_in_n, // the same pins sampled half a clock earlier (falling edge, D90)
     output logic [7:0]  pins_out,
     output logic [7:0]  pins_oe,  // (the line coder's pins are merged in combinationally)
     // TX FIFO (host to engine)
@@ -259,6 +260,7 @@ module pbe_engine #(
   wire       coder_pair = coder_cfg[4] && !bsm;
   wire [2:0] base1 = pin_base + 3'd1;
   wire       rx_pin = coder_cfg2[4] ? pins_in[base1] : pins_in[pin_base];  // LINE2[4]: split pins
+  wire       rx_pin_e = coder_cfg2[4] ? pins_in_n[base1] : pins_in_n[pin_base];
   wire       is_txop = coder_on && op == OP_PIN && (pin_act == 3'd4 || pin_act == 3'd5 || pin_act == 3'd7);
   logic       l_drive, l_a, l_b, l_ready, l_rxv, l_end, l_err;
   logic [7:0] l_rxd;
@@ -354,6 +356,7 @@ module pbe_engine #(
       .out_msb_first,
       .in_msb_first,
       .a_in         (rx_pin),
+      .a_early      (rx_pin_e),
       .b_in         (pins_in[base1]),
       .drive        (p_drive),
       .a_out        (p_a),

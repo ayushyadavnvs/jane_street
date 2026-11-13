@@ -73,8 +73,10 @@
 //                       [6] = 1 clears "frame sent"
 //      +6 FIFO data: W pushes the TX FIFO, R pops the RX FIFO (each FIFO holds 16 bytes)
 //   0x30+0x10*e   engine e, second page:
-//      +0 LINE       line coder, see pbe_line: [1:0] mode (0 off, 1 NRZ, 2 NRZI), [3:2] stuffing
-//                    (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5 equal), [4] pair, [5] bytes
+//      +0 LINE       line coder, see pbe_line: [1:0] mode (0 off, 1 NRZ, 2 NRZI, 3 Manchester,
+//                    D90), [3:2] stuffing (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5
+//                    equal; none in Manchester), [4] pair, [5] bytes, [7] Manchester polarity
+//                    (0 IEEE 802.3: a 1 is low then high; 1 the other)
 //      +1 SYNC       frame start pattern (0 = none)
 //      +2 CRC_GOOD_L, +3 CRC_GOOD_H   the CRC value that means "ok" (0 unless the CRC is sent inverted)
 //      +4 LINE2      line coder (D65): [2:0] sample point (0 default, 1 62.5 %, 2 75 %, 3 87.5 %),
@@ -104,8 +106,8 @@
 // FIFO acceptance and flush ordering are in pbe_fifo. An empty FIFO read returns its
 // unqualified head storage (possibly stale/unknown); only a nonempty pop changes count.
 // Unmapped register reads return 0 and unmapped writes do nothing. Only the documented
-// low-width configuration bits are stored/read; other readback bits are 0. LINE[7:6]
-// are stored but reserved; unsupported mode 3 has no architectural guarantee. The CAN counters survive a restart; only reset (or bus-off recovery)
+// low-width configuration bits are stored/read; other readback bits are 0. LINE[6]
+// is stored but reserved; LINE[7] is reserved outside Manchester mode (3, D90). The CAN counters survive a restart; only reset (or bus-off recovery)
 // clears them.
 module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the name
     input  wire [7:0] ui_in,
@@ -133,6 +135,23 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       pins_s2 <= pins_s1;
     end
   end
+
+  // The protocol pins sampled on the falling clock edge too (D90): pins_n0 at the falling edge,
+  // then two rising-edge stages, so pins_n2 is the pin half a clock before pins_s2 (a 3-flop
+  // synchronizer whose first stage has half a clock to settle). Only the Manchester receiver
+  // reads it, to time edges to half a clock.
+  logic [7:0] pins_n0, pins_n1, pins_n2;
+  always_ff @(negedge clk or negedge rst_n)
+    if (!rst_n) pins_n0 <= '0;
+    else pins_n0 <= uio_in;
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) begin
+      pins_n1 <= '0;
+      pins_n2 <= '0;
+    end else begin
+      pins_n1 <= pins_n0;
+      pins_n2 <= pins_n1;
+    end
 
   // ---- host register port ----
   logic [6:0] addr, wr_addr, rd_addr;
@@ -484,6 +503,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .instr        (instr[e*16+:16]),
         .pm_wr        (eng_pm_wr[e]),
         .pins_in      (pins_s2),
+        .pins_in_n    (pins_n2),
         .pins_out     (e_out[e*8+:8]),
         .pins_oe      (e_oe[e*8+:8]),
         .tx_data      (tx_data[e*8+:8]),

@@ -3,10 +3,13 @@
 // It owns the bit timing (one bit every period_m1 + 1 clocks), because bits it inserts or
 // removes (stuffing) must not cost the program anything (v2 lesson, docs/USB_NOTES.md).
 //
-//   cfg[1:0]  mode       0 off, 1 NRZ (the bit is the level), 2 NRZI (0 = change level, 1 = keep)
+//   cfg[1:0]  mode       0 off, 1 NRZ (the bit is the level), 2 NRZI (0 = change level, 1 = keep),
+//                        3 Manchester (D90, see below)
 //   cfg[3:2]  stuffing   0 none, 1 after 6 ones (USB), 2 after 5 ones (HDLC), 3 after 5 equal (CAN)
 //   cfg[4]    pair       pin a carries the line, pin b its complement; both low (SE0) ends a frame
 //   cfg[5]    bytes      the engine transfers whole bytes (else single bits)
+//   cfg[7]    Manchester only: the other polarity (a 1 is high then low, as G.E. Thomas and
+//             MIL-STD-1553); 0 is IEEE 802.3's (a 1 is low then high). Reserved otherwise.
 //   cfg2      LINE2 (D65), every bit 0 = the behaviour described below:
 //     [2:0]   sample point: 0 the default, floor(period_m1/2)+1; 1, 2, 3 add N/8, N/4, 3N/8
 //             (N = period_m1 + 1, shifted copies, no multiplier): 62.5 %, 75 %, 87.5 % of the
@@ -29,6 +32,28 @@
 // The frame ends on SE0 followed by the idle level (pair mode); otherwise after 8 bit times at
 // the idle level, or when a run at the idle level breaks the stuffing rule. frame_end pulses, and
 // a byte of that frame the engine has not taken is dropped.
+//
+// Manchester (cfg[1:0] = 3, D90). Each bit is two halves, the second the bit's value and the
+// first its complement (IEEE 802.3 clause 7.3.1.1: "during the first half of the bit-symbol
+// the encoded signal is the logical complement of the bit value"; so a 1 is low then high and
+// there is a transition in the middle of every bit). cfg[7] swaps the halves. No stuffing
+// (cfg[3:2] is ignored); SYNC, bytes/bits, pair and the bit order work as in the other modes.
+//   Transmit: the first half is floor(period_m1/2) + 1 clocks, the second the rest of the bit
+//   (3 + 3 at 6 clocks per bit). After END, the line is held at the high level for 3 bit times
+//   (a and b complementary in pair mode), then let go: 10BASE-T's TP_IDL (clause 14.3.1.2.1)
+//   and DALI's stop condition. A transmit underrun holds the level (no transitions).
+//   Receive: clock recovery from the edges. A bit timer holds the expected mid-bit point; a
+//   transition at least 3/4 of a bit (3N/2 half clocks, N = period_m1 + 1) after it is the next
+//   mid-bit transition, and the level after it is the bit (inverted with cfg[7]); earlier
+//   transitions are bit boundaries and are skipped. Each mid-bit transition moves the timer by
+//   a quarter of its error (1/8-clock resolution), so the reference averages the edges. Edges
+//   are timed to half a clock: a_early is the pin sampled on the falling clock edge (the top
+//   level's negedge synchronizer), so the receiver samples on both clock edges. The first transition after idle starts a frame and is
+//   taken as the mid-bit transition of a bit that is not delivered (a preamble or start bit).
+//   No transition for 2N clocks ends the carrier: frame_end pulses, but only for a frame whose
+//   SYNC was found (or SYNC = 0), so link pulses and stray edges end silently. Overrun, sync
+//   and delivery are as in the other modes. LINE2's sample point, resync and idle wait do not
+//   apply.
 //
 // Cycle contract clarified by the round-2 model audit (existing behavior):
 // - clear/reset empties queues/state, releases drive, sets a_out/b_out=1/0 and previous
@@ -72,6 +97,7 @@ module pbe_line (
     input  logic        in_msb_first,
     // line pins
     input  logic        a_in,        // synchronized levels
+    input  logic        a_early,     // a_in's pin sampled half a clock earlier (Manchester, D90)
     input  logic        b_in,
     output logic        drive,       // the coder owns the line pin(s)
     output logic        a_out,
@@ -89,11 +115,13 @@ module pbe_line (
     output logic        err          // pulse: stuff error, receive overrun or transmit underrun
 );
   wire       nrzi  = cfg[1:0] == 2'd2;
-  wire       _unused = &{cfg[7:6], cfg2[7], cfg2[5:4], 1'b0};  // reserved; [5:4] are the engine's
+  wire       manch = cfg[1:0] == 2'd3;                 // Manchester (D90)
+  wire       minv  = cfg[7];                           // Manchester polarity
+  wire       _unused = &{cfg[6], cfg2[7], cfg2[5:4], 1'b0};  // reserved; [5:4] are the engine's
   wire [2:0] sp_sel = cfg2[2:0];
   wire       fall_only = cfg2[3];
   wire       idle_wait = cfg2[6];
-  wire [1:0] st    = cfg[3:2];
+  wire [1:0] st    = manch ? 2'd0 : cfg[3:2];
   wire       pair  = cfg[4];
   wire       bytes = cfg[5];
   wire       ones  = st != 2'd3;                    // stuff after ones, else after equal bits
@@ -112,9 +140,11 @@ module pbe_line (
   logic        level;                // line level, 1 = idle (USB J)
   logic [2:0]  trun;
   logic        tlast, tstuff;        // stuff bit due in the next slot
+  logic        mhalf;                // Manchester: the level of the current bit's second half
 
   assign tx_ready = !q_valid;
   wire boundary = tcnt == period_m1;
+  wire tmid     = tcnt == {1'b0, period_m1[15:1]};  // Manchester: the end of a first half
 
   // what the next bit slot sends
   wire        n_load = !tstuff && tbits == 4'd0 && q_valid && !q_end;
@@ -152,7 +182,7 @@ module pbe_line (
   logic [7:0]  win, rsh;
   logic [3:0]  rbits;
 
-  wire        se0    = pair && !a_in && !b_in;
+  wire        se0    = pair && !manch && !a_in && !b_in;
   // sample point (LINE2[2:0]); 0 is the original floor(period_m1/2)+1
   wire [15:0] n_per  = period_m1 + 16'd1;
   wire        _unused_nper = &{n_per[1:0], 1'b0};
@@ -181,6 +211,31 @@ module pbe_line (
       sp_q  <= sp_base + sp_add;
       sp_ok <= 1'b1;
     end
+  // Manchester receive (D90). mcnt is the time since the bit timer's reference (the expected
+  // mid-bit point) in 1/8 clocks, minus one clock: an edge seen now is mcnt + 8 after it.
+  // An edge at least 3/4 of a bit (6N eighths, + 2) after the reference is the next mid-bit
+  // transition; the reference then moves a quarter of the way from where it expected the edge
+  // towards where it came (a first-order loop: one jittered edge moves it by a quarter of its
+  // jitter, and its position has 1/8-clock resolution). No such edge for 2 bit times ends the
+  // carrier. In eighths: a bit is 8N = 8 (period_m1 + 1); with the 8-eighth offset of mcnt,
+  // "an edge exactly on time" is 8 period_m1 and "2 bits without an edge" 16 period_m1 + 8,
+  // both shifted copies of CLKDIV (no logic). The acceptance threshold, 6N - 6 = 6 period_m1
+  // (3/4 of a bit plus a quarter clock: edges are seen on average a quarter clock late with both
+  // clock edges sampled; measured best in tb_line M7), takes an adder and is registered (like
+  // sp_q): off the compare path, one clock late after a CLKDIV change.
+  logic signed [23:0] mcnt;
+  logic        [23:0] m_thr;
+  wire         [23:0] m_end = {4'b0, period_m1, 4'b1000};  // 16N - 8
+  wire         [23:0] m_2n  = {5'b0, period_m1, 3'b000};   // 8N - 8
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) m_thr <= '0;
+    else m_thr <= {6'b0, period_m1, 2'b0} + {7'b0, period_m1, 1'b0};  // 6 period_m1
+  wire               m_edge = a_in != a_d;
+  wire               m_early = a_early != a_d;               // the edge came in the first half
+  wire signed [23:0] m_tau  = mcnt - (m_early ? 24'sd4 : 24'sd0);
+  wire               m_mid  = m_edge && m_tau >= $signed(m_thr);
+  wire               m_lost = mcnt >= $signed(m_end);
+  wire signed [23:0] m_err  = m_tau - $signed(m_2n);         // how late the edge is (1/8 clock)
   wire        sp_dflt = sp_sel == 3'd0 || sp_sel[2];
   wire        sample = rcnt == (sp_dflt ? sp_base : sp_q) && (sp_dflt || sp_ok);
   // LINE2[6]: idle bit times seen at the sample point (saturating at 11), and whether the
@@ -198,6 +253,9 @@ module pbe_line (
   end
   wire [7:0] win_n = in_msb_first ? {win[6:0], r_bit} : {r_bit, win[7:1]};
   wire [7:0] rsh_n = in_msb_first ? {rsh[6:0], r_bit} : {r_bit, rsh[7:1]};
+  wire       m_bit = a_in ^ minv;                         // Manchester: the level after mid-bit
+  wire [7:0] m_win = in_msb_first ? {win[6:0], m_bit} : {m_bit, win[7:1]};
+  wire [7:0] m_rsh = in_msb_first ? {rsh[6:0], m_bit} : {m_bit, rsh[7:1]};
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -208,7 +266,7 @@ module pbe_line (
       rs <= R_IDLE; rcnt <= '0; a_d <= 1'b1; rprev <= 1'b1; rlast <= 1'b1; rstuff <= 1'b0;
       hunting <= 1'b0; rrun <= '0; ridle <= '0; win <= '0; rsh <= '0; rbits <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0;
-      icnt <= '0; after_end <= 1'b0;
+      icnt <= '0; after_end <= 1'b0; mhalf <= 1'b1; mcnt <= '0;
     end else if (clear) begin
       ts <= T_IDLE; tcnt <= '0; gap2 <= 1'b0; kick <= 1'b0;
       q_valid <= 1'b0; q_end <= 1'b0; q_data <= '0; tsh <= '0; tbits <= '0;
@@ -217,7 +275,7 @@ module pbe_line (
       rs <= R_IDLE; rcnt <= '0; a_d <= 1'b1; rprev <= 1'b1; rlast <= 1'b1; rstuff <= 1'b0;
       hunting <= 1'b0; rrun <= '0; ridle <= '0; win <= '0; rsh <= '0; rbits <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0;
-      icnt <= '0; after_end <= 1'b0;
+      icnt <= '0; after_end <= 1'b0; mhalf <= 1'b1; mcnt <= '0;
     end else begin
       frame_end <= 1'b0;
       err       <= 1'b0;
@@ -257,8 +315,9 @@ module pbe_line (
           if (boundary || kick) begin
             if (n_have) begin
               level  <= n_level;
-              a_out  <= n_level;
-              b_out  <= !n_level;
+              a_out  <= manch ? !(n_bit ^ minv) : n_level;  // Manchester: the first half
+              b_out  <= manch ? (n_bit ^ minv) : !n_level;
+              mhalf  <= n_bit ^ minv;
               drive  <= 1'b1;
               trun   <= n_run;
               tlast  <= n_last;
@@ -270,7 +329,12 @@ module pbe_line (
               if (n_load) q_valid <= 1'b0;
             end else if (n_end) begin
               q_valid <= 1'b0;
-              if (pair) begin
+              if (manch) begin              // TP_IDL: high for 3 bit times (SE0A, SE0B, J)
+                ts    <= T_SE0A;
+                a_out <= 1'b1;
+                b_out <= 1'b0;
+                drive <= 1'b1;
+              end else if (pair) begin
                 ts    <= T_SE0A;
                 a_out <= 1'b0;
                 b_out <= 1'b0;
@@ -279,6 +343,9 @@ module pbe_line (
                 drive <= 1'b0;
               end
             end else err <= 1'b1;       // underrun: the line keeps its level
+          end else if (manch && tmid && drive) begin  // Manchester: the second half
+            a_out <= mhalf;
+            b_out <= !mhalf;              // (an underrun keeps mhalf: the level holds)
           end
         T_SE0A: if (boundary) ts <= T_SE0B;
         T_SE0B:
@@ -299,6 +366,12 @@ module pbe_line (
       a_d <= a_in;
       if (rx_take) rx_valid <= 1'b0;
       rcnt <= ((fall_only ? (a_d && !a_in) : (a_in != a_d)) || rcnt == period_m1) ? 16'd0 : rcnt + 16'd1;
+      // Manchester: the bit timer (half clocks); the first edge of a frame is the reference
+      if (rs != R_RUN || !manch) mcnt <= '0;
+      // a mid-bit edge e late: the reference moves e/4, so the edge is now e - e/4 after it
+      // (and this clock is half a clock after an early edge)
+      else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);
+      else if (!m_lost) mcnt <= mcnt + 24'sd8;
       if (sample) begin
         if (!a_in || ts != T_IDLE || rs != R_IDLE) icnt <= 4'd0;
         else if (icnt != 4'd11) icnt <= icnt + 4'd1;
@@ -306,7 +379,33 @@ module pbe_line (
       if (frame_end) after_end <= 1'b1;
       else if (sample && !a_in) after_end <= 1'b0;
       if (ts != T_IDLE) rs <= R_IDLE;
-      else case (rs)
+      else if (manch) begin
+        if (rs != R_RUN) begin
+          if (m_edge) begin             // carrier: a frame starts (this bit is not delivered)
+            rs      <= R_RUN;
+            hunting <= sync != 8'd0;
+            win     <= '0;
+            rbits   <= '0;
+          end
+        end else if (m_mid) begin       // a mid-bit transition: the bit is the level
+          if (hunting) begin
+            win <= m_win;
+            if (m_win == sync) hunting <= 1'b0;
+          end else if (rbits == width - 4'd1) begin
+            rx_data  <= bytes ? m_rsh : {7'b0, a_in ^ minv};
+            if (rx_valid && !rx_take) err <= 1'b1;  // the engine missed one
+            rx_valid <= 1'b1;
+            rbits    <= '0;
+            rsh      <= m_rsh;
+          end else begin
+            rbits <= rbits + 4'd1;
+            rsh   <= m_rsh;
+          end
+        end else if (m_lost) begin      // no transition for 2 bit times: the carrier ended
+          rs        <= R_IDLE;
+          frame_end <= !hunting;
+        end
+      end else case (rs)
         R_IDLE:
           if (se0) rs <= R_SE0;
           else if (!a_in) begin         // the line left the idle level: a frame starts
