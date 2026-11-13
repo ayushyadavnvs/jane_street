@@ -7,15 +7,17 @@
 ; One instruction drives or samples one pin, then an instruction moves SCK: a quad nibble is
 ;   4 OUTs or 4 INs and a clock edge. Inputs pass two synchronizer stages: an IN must come at
 ;   least 3 clocks after the falling SCK edge that launched the data, and before the next one.
-; SCK at CLKDIV 0 (48 MHz), measured in tb_qspi:
-;   single write 16 MHz (3 clocks per bit: high 1, low 2); single read 9.6 MHz (5 clocks per
+; SCK at CLKDIV 0 (60 MHz), measured in tb_qspi:
+;   single write 20 MHz (3 clocks per bit: high 1, low 2); single read 12 MHz (5 clocks per
 ;   bit; each byte's last bit 7: the PUSH, the loop's PAGE prefix (this loop crosses into
-;   page 1) and its jump); quad write 8 MHz (6 clocks per nibble, 4 MB/s); quad read 6 MHz
+;   page 1) and its jump); quad write 10 MHz (6 clocks per nibble, 5 MB/s); quad read 7.5 MHz
 ;   within a byte (8 clocks per nibble), 2 nibbles in 17 clocks with the PUSH and the loop
-;   (2.8 MB/s); dummy clocks 12 MHz (4 clocks). 125 words (the assembler adds 6 PAGEs).
+;   (3.5 MB/s); dummy clocks 15 MHz (4 clocks). (At 48 MHz: 16, 9.6, 8, 6 and 12 MHz.)
+;   125 words (the assembler adds 6 PAGEs).
 ;   At CLKDIV n >= 1 every figure is divided by (n + 1), but a taken jump costs no extra clock.
 ;   The quad read rate is far above what the host port can read (one byte per 64 clocks at
-;   SCK = 48 MHz / 8): long reads run in bursts of 16 bytes and SCK pauses (low, which mode 0
+;   SCK = clk / 8; 4x that with the quad host port, D89): long reads run in bursts of 16
+;   bytes and SCK pauses (low, which mode 0
 ;   allows) while the RX FIFO is full. No data is lost.
 ;
 ; Host protocol: records in the TX FIFO. CS# goes low with the first record of a transaction

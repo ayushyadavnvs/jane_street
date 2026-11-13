@@ -3,7 +3,7 @@
 ;   low (DRV0, OUTOD) or releases them (REL). Each needs an external pull-up (PS/2: 1-10 kohm to
 ;   the device's supply; through a level shifter or a series resistor if the device runs at 5 V,
 ;   the chip's pins are 3.3 V).
-; Engine settings: CLKDIV = 239 (a tick is 5 us at 48 MHz; anything from 3.2 us to 10 us works),
+; Engine settings: CLKDIV = 299 (a tick is 5 us at 60 MHz, 239 at 48 MHz; anything from 3.2 us to 10 us works),
 ;   SHIFT = 0x00 (LSB first), JMP_PIN = 1 (DATA), LINE_CFG = 0x81 (odd parity, timeout vector at
 ;   word 1), CRC_CFG = 0x00 and CRC_GOOD = 0xFFFF (so status bit 1, "CRC ok", reads 0),
 ;   TIMEOUT = 4000 (20 ms at a 5 us tick: a device that stops clocking mid-frame, or none at all).

@@ -11,8 +11,8 @@
 ;   synchronizer stages and the engine's register): each IN of a target bit is placed so that
 ;   it sees SWDIO after the falling edge (D76). One SWCLK cycle is 5 ticks: high 2, low 3
 ;   (the 3 ACK cycles: low 4). CLKDIV = 0 adds a taken jump's fetch clock to a loop's low phase:
-;   6 clocks, SWCLK = 8 MHz at 48 MHz, the maximum. CLKDIV >= 1:
-;   SWCLK = 48 MHz / (5 * (CLKDIV + 1)). SWCLK stops low between records, as SWD allows.
+;   6 clocks, SWCLK = 10 MHz at 60 MHz, the maximum. CLKDIV >= 1:
+;   SWCLK = 60 MHz / (5 * (CLKDIV + 1)). SWCLK stops low between records, as SWD allows.
 ;
 ; Host protocol: records in the TX FIFO.
 ;   [0x00] [b]          8 SWCLK cycles with SWDIO driven to b, LSB first: line reset = seven

@@ -264,7 +264,11 @@ mark the old one **Changed** instead of deleting it.
 - **Chosen:** Protocol pins on `uio[7:0]` (the only pins with output enables), host SPI on
   `ui_in[2:0]` / `uo_out[0]`, IRQ and status on `uo_out[7:1]`.
 
-## D18. Clock frequency: 48 MHz — **Changed (USB)**
+## D18. Clock frequency: 48 MHz — **Changed (USB); Changed again (10BASE-T: 60 MHz, D92)**
+
+**Changed (10BASE-T, D92):** the clock is 60 MHz: a 10 Mbit/s Manchester half bit is exactly 3
+clocks, and USB low speed is still a whole number of clocks per bit (40).
+
 
 - **Chosen:** Plan for 48 MHz. The competition sets no frequency; Tiny Tapeout's clock pad is
   specified to about 66 MHz.
@@ -541,7 +545,10 @@ mark the old one **Changed** instead of deleting it.
 - **Alternatives:** drop the byte and keep going (keeps timing, loses data silently); deeper
   FIFOs (area; v2 needed 16 bytes for USB and paid ~32,800 µm²).
 
-## D34. WS2812 (NeoPixel) LED driver: a program, timed by delays
+## D34. WS2812 (NeoPixel) LED driver: a program, timed by delays — **Changed (60 MHz for 10BASE-T, D92)**
+
+**Changed (D92):** at 60 MHz the tick is 33.3 ns (`CLKDIV` 1) and the delays are [11] [11] [11].
+
 
 - **Chosen:** `programs/ws2812.pbe`, 8 words, tick = 2 clocks (41.7 ns at 48 MHz). Each bit is
   three pin instructions: `DRV1 [9]` (0.42 µs), `OUT [9]` (a 1 stays high for another 0.42 µs, a
@@ -872,7 +879,11 @@ clean (0 design violations).
   - The physical-design flow is paused (`gds` and `gl_regression` by hand only, D46) until the
     RTL is final.
 
-## D46. Tiny Tapeout packaging
+## D46. Tiny Tapeout packaging — **Changed (10BASE-T: 60 MHz, D92)**
+
+**Changed (D92):** `clock_hz` 60000000 and `CLOCK_PERIOD` 16.667 ns; the cocotb test runs at
+16,668 ps.
+
 
 - **Chosen:** the repository root is the Tiny Tapeout project, built from the IHP template
   (`ttihp-verilog-template`, actions `ttihp27a`, PDK `ihp-sg13cmos5l`):
@@ -2990,3 +3001,66 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   frames of 60, 514 and 1514 random bytes: the unit's FCS equals a byte-wise reflected CRC-32
   (poly 0xEDB88320) written in the bench, the residue after the FCS is 0xC704DD7B, a flipped bit
   is caught; (c) bit-identity above. End to end with `OSRCRC B0..B3` in `tb_eth` (D93).
+
+## D92. 60 MHz: 6 clocks per 10BASE-T bit (3 per half bit)
+
+- **Asked by the owner:** the clock goes from 48 to 60 MHz, so a 10 Mbit/s Manchester half bit is
+  exactly 3 clocks (D90). `info.yaml` `clock_hz` 60000000 and `src/config.json` `CLOCK_PERIOD`
+  16.667 (those two keys only; the comment in `config.json` that still says 48 MHz is the
+  owner's to change).
+- **What depended on 48 MHz:**
+  - **USB low speed** (1.5 Mbit/s): 40 clocks per bit (`CLKDIV` 39), was 32. The line coder
+    needs a whole number of clocks per bit; 60 / 1.5 = 40 is one. `tb_usb`: turnaround 3.01 to
+    3.15 bit times (2 to 7.5 allowed).
+  - **WS2812** (`ws2812.pbe`): its pulses are delays in ticks of `CLKDIV` + 1 clocks. At 48 MHz
+    a 2-clock tick was 41.7 ns; at 60 MHz 41.7 ns is 2.5 clocks. With a 33.3 ns tick (`CLKDIV` 1)
+    and delays [11] [11] [11] (was [9] [9] [8]): 0 = 0.40 us high, 0.83 us low; 1 = 0.80 /
+    0.43 us; byte boundaries 3 ticks longer (0.93 / 0.53 us): all inside the datasheet's
+    ±150 ns. `tb_proto` checks every pulse.
+  - **I2C target** (`i2c_target.pbe`): the 300 ns data hold after SCL falls was `[12]` plus the
+    synchronizer at 48 MHz; at 60 MHz `[15]` (317 ns measured). The setup before releasing SCL,
+    `[15]`, is 267 ns (333 at 48 MHz); the standard-mode minimum is 250 ns.
+  - **I2C controller:** fast mode `CLKDIV` 21 (390 kHz; low 1.47 us >= 1.3), standard mode 85
+    (was 17 and 68).
+  - **CAN** (bit time = `CLKDIV` + 1): 479 / 239 / 119 / 59 for 125k / 250k / 500k / 1M (was 383 /
+    191 / 95 / 47); `tb_can` computes them from the clock and passes.
+  - **PS/2:** a 5 us tick is `CLKDIV` 299 (was 239).
+  - **Host port:** SCK at most clk / 8 = 7.5 MHz: 0.94 MB/s single lane, 3.75 MB/s quad (D89).
+  - Everything timed by `CLKDIV` alone scales by 1.25 (JTAG/SWD clocks up to 10 MHz, quad SPI
+    20 MHz single write, logic analyser 5 MS/s at `CLKDIV` 1): the program headers, the README
+    and `docs/info.md` give the 60 MHz figures.
+- **Benches:** `CLK_NS` = 16.6672 in every top-level bench: `#(CLK_NS / 2)` rounds the half
+  period to 8.334 ns, a 16.668 ns period, 0.01 % slow, as the 48 MHz benches were (20.834 ns);
+  a period rounding fast made the 1-Wire 60 us slot 1.2 ns short (BUG-132). The cocotb test
+  (`test/test.py`) runs at 16,668 ps (it needs an even number). Benches with 48 MHz numbers
+  were fixed (BUG-132). All 13 top-level benches pass at 60 MHz, unchanged otherwise.
+- **Timing** (`make timing`, logic only, IHP slow corner, no wires; the routed report is the
+  real figure, D45):
+
+  | | Worst logic path | Start |
+  |---|---|---|
+  | Before this work (D88) | 3.61 ns | |
+  | Quad host port (D89) | 3.64 ns | |
+  | Manchester, both-edge sampling (D90) | 4.80 ns | `pin_base` -> receive-pin mux -> the Manchester edge compare |
+  | CRC-32 (D91) | 4.55 ns | `pin_base` (the same class; ABC's result moves by ~0.2 ns run to run) |
+
+  The last routed run had 6.81 ns of setup slack at 48 MHz (20.83 ns), a worst path of about
+  14.0 ns. At 60 MHz (16.67 ns) that path leaves about 2.6 ns; the logic estimate grew by
+  about 1.2 ns since, so the expected slack is about 1.4 ns, to be confirmed by the next
+  routed (`gds`) run, which this work did not run (the owner's instruction).
+- **Area** (`make synth`, IHP typical, standard cells only; the SRAM macros are extra):
+
+  | | Area | Change |
+  |---|---|---|
+  | Before this work | 199,555 µm² | |
+  | + quad host port (D89) | 201,711 µm² | +2,156 |
+  | + Manchester and both-edge sampling (D90) | 220,700 µm² | +18,989 |
+  | + CRC-32 (D91) | 234,907 µm² | +14,207 |
+
+  In all +35,352 µm² (+17.7 %). 60 MHz itself adds nothing to the RTL (the programs and benches
+  changed). If the routed slack comes out short, the new worst path can be cut by registering
+  the receive pin's selection (`rx_pin`, `rx_pin_e`): one clock more latency for every coder,
+  which tolerates it (the synchronizers already add two).
+- **Alternatives:** 50 MHz (5 clocks a bit, a 2.5-clock half bit: no) or 80 MHz (8 clocks a bit:
+  more receive margin, but about 12.5 ns, under the routed worst path).
+

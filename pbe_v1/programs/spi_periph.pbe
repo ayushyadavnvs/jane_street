@@ -1,11 +1,11 @@
 ; SPI peripheral (device), mode 0 (CPOL 0, CPHA 0), MSB first.
 ; Config: CLKDIV = 0, OUT and IN MSB first, JMP_PIN = cs (3), LINE_CFG = 1 (timeout routine is
-;   word 1), TIMEOUT = a few SCLK periods with no clock, e.g. 480 ticks (10 us at 48 MHz).
+;   word 1), TIMEOUT = a few SCLK periods with no clock, e.g. 600 ticks (10 us at 60 MHz).
 ; Pins: sclk = pin base, mosi = +1, miso = +2, cs = +3 (active low).
 ; Host protocol: queue reply bytes before the controller clocks them out (a byte must be in the
 ;   TX FIFO when its first bit is due); with nothing queued the reply is 0xFF. Every byte the
 ;   controller sends arrives in the RX FIFO. MISO is released while CS is high.
-; Speed: SCLK up to about 2 MHz at 48 MHz (the engine needs ~10 clocks after the 8th rising edge).
+; Speed: SCLK up to about 2.5 MHz at 60 MHz (2 MHz at 48 MHz; tested at 2 MHz) (the engine needs ~10 clocks after the 8th rising edge).
 .equ sclk 0
 .equ mosi 1
 .equ miso 2

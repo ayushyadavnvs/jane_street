@@ -2,7 +2,7 @@
 ; Pins (relative to pin base): A = 0, B = 1, driven (push-pull). Both start low.
 ; Engine settings: SHIFT = 0x00 (OUT LSB first), CRC off, TIMEOUT 0, LINE_CFG 0x40.
 ;   CLKDIV >= 1: a new sample every 4 ticks, 4 (CLKDIV + 1) clocks: 6 MS/s at CLKDIV 1,
-;   48 MHz / (4 (CLKDIV + 1)) in general. (At CLKDIV 0 every fourth sample is one clock longer:
+;   60 MHz / (4 (CLKDIV + 1)) in general. (At CLKDIV 0 every fourth sample is one clock longer:
 ;   4, 4, 4, 5 clocks.) Each OUT drives one pin, so B changes one tick after A in every sample.
 ;
 ; Host protocol.
@@ -13,7 +13,7 @@
 ;   Nothing is returned in the RX FIFO.
 ; Rates: one byte per 16 (CLKDIV + 1) clocks. A record longer than the 16-byte FIFO needs the
 ;   host to write fast enough; the host port takes at most one byte per 8 SCK cycles at
-;   SCK <= 48 MHz / 8 (64 clocks per byte with a burst write). Measured (tb_la, SCK = 6 MHz,
+;   SCK <= clk / 8 (64 clocks per byte with a burst write). Measured (tb_la, SCK = 6 MHz,
 ;   the first 15 bytes queued before the start): a sustained stream works at CLKDIV >= 3
 ;   (3 MS/s, one byte per 64 clocks, exactly the port's rate). If the FIFO runs empty the current sample is held (stretched)
 ;   until a byte arrives: the waveform pauses, it is not corrupted. Records of up to 16 bytes

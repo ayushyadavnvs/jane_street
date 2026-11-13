@@ -75,7 +75,7 @@ Example, a UART loopback (what the Tiny Tapeout test does):
    engine e, word bit 7 = 0) and 0 to `0x06` (`PM_ADDR`), then stream that engine's 256 words
    (high byte first) into `0x07` (`PM_DATA`).
 2. Engine 0 (UART TX on pin 0):
-   - `0x10` CLKDIV = 49 (tick = half a bit at 480 kbaud and 48 MHz);
+   - `0x10` CLKDIV = 49 (tick = half a bit at 600 kbaud and 60 MHz);
    - `0x12` = 0 (pin base);
    - `0x14` = 0 (LSB first);
    - `0x15` = 0 (start at word 0).

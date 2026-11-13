@@ -2,7 +2,8 @@
 ; Config: OUT and IN MSB first; sda = pin base + 0, scl = pin base + 1 (both need pull-ups).
 ; SMBus PEC: set the CRC unit to CRC-8 poly 0x07 (CRC_CFG 0x87); data bits feed it, ACK bits do not.
 ; Tick = 1/7 of the SCL period: SCL is low 4 ticks, high 3 (I2C needs low longer than high).
-; Fast mode (400 kHz) at 48 MHz: CLKDIV = 17. Standard mode (100 kHz): CLKDIV = 68.
+; Fast mode (400 kHz) at 60 MHz: CLKDIV = 21. Standard mode (100 kHz): CLKDIV = 85.
+; (At 48 MHz: 17 and 68.)
 ;
 ; Host protocol
 ;   Each I2C byte is 2 TX bytes: [data] [ack]

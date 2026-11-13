@@ -1,7 +1,7 @@
 ; HDLC / SDLC transmitter, NRZ, with 0x7E flags, zero-bit insertion and CRC-16/X.25, D88.
 ; Pin (relative to pin base): TXD = 0, driven. The line coder sends the frames and inserts a 0
 ;   after five 1s; the flags are made around it (below).
-; Engine settings: CLKDIV = bit time - 1 in clocks (>= 11: 4 Mbit/s at 48 MHz; 47 = 1 Mbit/s),
+; Engine settings: CLKDIV = bit time - 1 in clocks (>= 11: 5 Mbit/s at 60 MHz; 59 = 1 Mbit/s),
 ;   LINE = 0x09 (NRZ, stuffing after 5 ones, bit transfers), SYNC = 0, LINE2 = 0,
 ;   SHIFT = 0x00 (LSB first), CRC_POLY = 0x1021, CRC_CFG = 0x7F (16 bits, init 0xFFFF,
 ;   reflected output, fed by OUT), LINE_CFG = 0x40, TIMEOUT 0.

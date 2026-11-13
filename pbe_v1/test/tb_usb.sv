@@ -16,9 +16,10 @@
 //    token with a bad CRC5, and keep-alive EOPs. Then a lost ACK (the device must resend the
 //    same DATA1 packet) and a 10 ms bus reset (the device must answer at address 0 again).
 module tb_usb;
-  localparam real CLK_NS = 20.8333;  // 48 MHz: a USB low-speed bit is 32 clocks
+  localparam real CLK_NS = 16.6672;  // 60 MHz: a USB low-speed bit is 40 clocks
   localparam int HOST_HALF = 8;
   localparam real BIT_NS = 1.0e9 / 1.5e6;
+  localparam int  USB_CLK = 40;  // clocks per low-speed bit at 60 MHz (32 at 48 MHz, D92)
 
   logic clk = 0, rst_n = 0;
   always #(CLK_NS / 2) clk = ~clk;
@@ -126,7 +127,7 @@ module tb_usb;
   endtask
 
   // ---------------- USB host model: receive ----------------
-  // Waits up to 16 bit times for the device; decodes with the chip's clock (32 clocks a bit),
+  // Waits up to 16 bit times for the device; decodes with the chip's clock (USB_CLK a bit),
   // re-centring on every D- edge. r_pkt gets the bytes (PID first), r_ok says a packet came.
   logic [7:0] r_pkt[$];
   bit r_ok;
@@ -140,7 +141,7 @@ module tb_usb;
     r_pkt.delete();
     r_ok = 0;
     wait_clk = 0;
-    while (!(bus[1] && !bus[0]) && wait_clk < 16 * 32) begin  // K starts the SYNC
+    while (!(bus[1] && !bus[0]) && wait_clk < 16 * USB_CLK) begin  // K starts the SYNC
       @(posedge clk);
       wait_clk++;
     end
@@ -161,7 +162,7 @@ module tb_usb;
         last = bus[0];
         phase = 0;
       end else phase++;
-      if (phase % 32 == 16) begin
+      if (phase % USB_CLK == USB_CLK / 2) begin
         if (!bus[0] && !bus[1]) se0 = 1;
         else begin
           b = (bus[0] == prev);
@@ -187,12 +188,13 @@ module tb_usb;
       end
     end
     // EOP: SE0 for 2 bits (we saw it at mid-bit), then J
-    wait_clk = 16;
+    wait_clk = USB_CLK / 2;
     while (!bus[0] && !bus[1]) begin
       @(posedge clk);
       wait_clk++;
     end
-    check(wait_clk >= 60 && wait_clk <= 68, $sformatf("USB host: device EOP SE0 lasted %0d clocks", wait_clk));
+    check(wait_clk >= 2 * USB_CLK - 4 && wait_clk <= 2 * USB_CLK + 4,
+          $sformatf("USB host: device EOP SE0 lasted %0d clocks", wait_clk));
     check(bus[0] && !bus[1], "USB host: no J after the device's SE0");
     check(nbits % 8 == 0, $sformatf("USB host: device packet of %0d bits", nbits));
     repeat (40) @(posedge clk);
@@ -600,7 +602,7 @@ module tb_usb;
     $display("Test 11: USB low-speed device (engine 0, D- pin 0, D+ pin 1) enumerated by a host model");
     load_program("usb_image.hex");
     reg_write(7'h03, 8'h00);
-    reg_write(7'h10, 31);               // bit time 32 clocks
+    reg_write(7'h10, USB_CLK - 1);      // bit time 40 clocks
     reg_write(7'h11, 0);
     reg_write(7'h12, 0);
     reg_write(7'h14, 2'b00);            // LSB first

@@ -88,6 +88,7 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-129 | RTL (line coder) | The Manchester bit timer lost half a clock after an edge seen at the falling clock edge | `tb_line` M4, M6 (D90) | Fixed before commit |
 | BUG-130 | Testbench | `tb_crc` (c) compared the CRC units with 32-bit state left over from (b) | `tb_crc` (D91) | Fixed (reset first) |
 | BUG-131 | Testbench, Tooling | The engine unit benches left `crc_wide` unconnected (unknown CRC width); Icarus misreported `$isunknown` on a concatenation | The gate before pushing D91 | Fixed |
+| BUG-132 | Testbench | Benches with 48 MHz constants (USB 32 clocks a bit, a 146 ns SCK check, I2C `CLKDIV` 17, a simulated period rounding fast) failed at 60 MHz | Running every bench at 60 MHz (D92) | Fixed |
 
 ---
 
@@ -3367,3 +3368,30 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Test:** `tb_engine_known_reset`: before, the `FATAL` at 6 ns; after, `PASS` over all 192
   coder configurations; `tb_engine_ops` and `tb_engine_restart` pass; `make test-verilator`
   passes (its `tb_engine_*` logs identical under both simulators).
+
+## BUG-132 — Benches with 48 MHz constants failed at 60 MHz (test)
+
+- **Where:** `pbe_v1/test/tb_usb.sv`, `tb_gpio.sv`, `tb_pbe.sv`, `tb_ps2.sv`, `tb_la.sv`, and the
+  simulated clock of every top-level bench (D92).
+- **Cause:** once `CLK_NS` was 60 MHz, the benches that derived nothing from it failed, each on
+  a number written for 48 MHz:
+  1. `tb_usb`: the host model decoded the device at 32 clocks a bit (`phase % 32 == 16`), set
+     `CLKDIV` 31, and checked the device's EOP SE0 as 60..68 clocks: `FAIL: USB host: device EOP
+     SE0 lasted 76 clocks` (94 failures);
+  2. `tb_gpio`: `check(sck_per > 145.0 && sck_per < 147.0, "SCK period at CLKDIV 0 is not 7
+     clocks")`, 7 clocks in nanoseconds at 48 MHz; it measured 116.7 ns, 7 clocks at 60 MHz;
+  3. `tb_pbe`: the I2C controller at `CLKDIV` 17 ran at 476 kHz: `FAIL: I2C: SCL period 2100 ns,
+     over 400 kHz` and `SCL low 1200 ns`;
+  4. `tb_pbe`: `FAIL: 1-Wire: controller low pulse of 59998 ns` (69 times): the 1 us tick is 60
+     clocks, and `#(CLK_NS / 2)` with `CLK_NS` = 16.6667 rounds the half period to 8.333 ns, a
+     period of 16.666 ns, a hair fast, so 60 us came out 1.2 ns short of the 60 us minimum. (At
+     48 MHz, 20.8333 / 2 rounded up, to a hair slow.)
+  5. `tb_ps2` set `CLKDIV` 239 (a 5 us tick at 48 MHz, 4 us at 60) and `tb_la` printed the
+     48 MHz sample rates; both still passed, but no longer tested or said what they claimed.
+- **After:** `tb_usb`: `localparam int USB_CLK = 40` used for the decoder, `CLKDIV` and the EOP
+  check (`2 * USB_CLK +- 4`); `tb_gpio`: `7 * CLK_NS +- 1.0`; `tb_pbe`: `CLKDIV` 21 (390 kHz);
+  every bench: `CLK_NS = 16.6672` (the half period rounds to 8.334 ns: a 16.668 ns period,
+  slow by 0.01 %, as the 48 MHz benches were with 20.834 ns), `CLK_SIM` 16.668 in `tb_la` and
+  `tb_hdlc`; `tb_ps2`: `CLKDIV` 299; `tb_la`: the 60 MHz rates.
+- **Test:** each bench at 60 MHz: before, the failures above; after, all pass.
+

@@ -9,8 +9,8 @@
 // reported; good frames must come through exactly. Rates: 1 Mbit/s (CLKDIV 47) and 2 Mbit/s
 // (CLKDIV 23) both ways, 4 Mbit/s (CLKDIV 11) transmit only.
 module tb_hdlc;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
-  localparam real CLK_SIM = 20.834;  // the simulated period (the half period rounds to 1 ps)
+  localparam real CLK_NS = 16.6672;  // 60 MHz
+  localparam real CLK_SIM = 16.668;  // the simulated period (the half period rounds to 1 ps)
   localparam int HOST_HALF = 4;      // host SCK = clk / 8
 
   logic clk = 0, rst_n = 0;

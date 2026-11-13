@@ -9,7 +9,7 @@
 //      while the host writes engine 0's memory; a write between a PAGE and its jump must not
 //      lose the PAGE (the toggles must alternate).
 module tb_page;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 8;
 
   logic clk = 0, rst_n = 0;

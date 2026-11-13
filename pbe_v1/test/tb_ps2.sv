@@ -7,7 +7,7 @@
 // from the device, a command the device does not acknowledge, a device that never answers a
 // request to send (timeout, then recovery), and a command queued while the device is sending.
 module tb_ps2;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 8;
 
   logic clk = 0, rst_n = 0;
@@ -88,8 +88,8 @@ module tb_ps2;
     repeat (5) @(posedge clk);
     load_program("ps2_image.hex");
     reg_write(7'h00, 8'b0100_0000);   // stop, flush
-    reg_write(7'h10, 8'd239);         // CLKDIV 239: a 5 us tick
-    reg_write(7'h11, 8'd0);
+    reg_write(7'h10, 8'h2B);          // CLKDIV 299: a 5 us tick at 60 MHz (239 at 48 MHz)
+    reg_write(7'h11, 8'h01);
     reg_write(7'h12, 8'd0);           // pin base 0
     reg_write(7'h13, 8'd1);           // JMP_PIN = DATA
     reg_write(7'h14, 8'h00);          // LSB first

@@ -22,7 +22,7 @@
 //     an underrun; receive with preamble/SFD lock at +-100 ppm and +-2 % with jitter, link
 //     pulses ignored, a coder-to-coder loopback, a jitter sweep (tb_line_manch.svh).
 module tb_line;
-  localparam int P = 32;  // clocks per bit (USB low speed at 48 MHz)
+  localparam int P = 32;  // clocks per bit (USB low speed at 48 MHz; the period only scales time)
   logic clk = 0, rst_n = 0;
   always #10 clk = ~clk;  // 20 ns clock (the period only scales time here)
   int errors = 0;

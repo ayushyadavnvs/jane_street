@@ -10,7 +10,7 @@
 //       recovery, also harmless in single mode); a chip reset;
 //   (f) the burst rate at SCK = clk / 8 in both modes, both directions.
 module tb_quad;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 4;      // host SCK = clk / 8, the port's maximum
   logic clk = 0, rst_n = 0;
   always #(CLK_NS / 2) clk = ~clk;

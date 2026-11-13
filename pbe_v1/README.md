@@ -204,8 +204,8 @@ Each I2C byte is two TX FIFO bytes, `[data] [ack]`, and returns two RX FIFO byte
 Set `FLAG0` for a START or repeated START (it happens when the next byte is queued) and `FLAG1`
 for a STOP (it happens right away; the engine clears the flag when done). Only set either while
 the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tick / 7, low for
-4 ticks and high for 3. At 48 MHz: `CLKDIV` = 17 for fast mode (381 kHz), 68 for standard mode
-(99 kHz).
+4 ticks and high for 3. At 60 MHz: `CLKDIV` = 21 for fast mode (390 kHz), 85 for standard mode
+(100 kHz) (17 and 68 at 48 MHz, D92).
 
 **SMBus PEC:** set the engine's CRC unit to CRC-8: `CRC_POLY` = 0x07, `CRC_CFG` = 0x87 (8 bits,
 init 0, fed by `IN` bits, which see every byte on the bus; ACK bits are `NOCRC`). Restart the
@@ -237,13 +237,13 @@ Mode 0, MSB first. Pins: sclk = pin base, mosi = +1, miso = +2, cs = +3 (active 
 `CLKDIV` 0, `JMP_PIN` = 3, `LINE_CFG` = 0x01 (timeout routine at word 1), `TIMEOUT` a little
 longer than the longest SCLK high phase (64 clocks in the test). Queue reply bytes before they
 are due (before the previous byte's last rising edge); with nothing queued the reply is 0xFF.
-Every byte the controller sends arrives in the RX FIFO. SCLK up to 2 MHz at 48 MHz. The first
+Every byte the controller sends arrives in the RX FIFO. SCLK up to 2.5 MHz at 60 MHz. The first
 SCLK edge must come ≥ 250 ns after CS falls. CS must stay high ≥ `TIMEOUT` ticks between
 transactions: that is how the engine sees the end, and when it releases MISO.
 
 ## WS2812 host protocol (`programs/ws2812.pbe`)
 
-`CLKDIV` = 1 at 48 MHz (tick 41.7 ns), OUT MSB first, data = pin base. Queue 3 bytes per LED in
+`CLKDIV` = 1 at 60 MHz (tick 33.3 ns; the delays were retuned for it, D92), OUT MSB first, data = pin base. Queue 3 bytes per LED in
 the order the LEDs expect (G, R, B), keeping the FIFO from running dry: burst-write the FIFO
 register and pause while the TX-full pin (`uo_out[6]` for engine 0) is high. When the host
 stops, the line stays low and the LEDs latch after 50 µs.
@@ -253,11 +253,11 @@ stops, the line stays low and the LEDs latch after 50 µs.
 Endpoint 0 (control transfers), one engine. Pins: D− = pin base (with an external 1.5 kΩ
 pull-up), D+ = pin base + 1.
 
-**Settings at 48 MHz:**
+**Settings at 60 MHz:**
 
 | Register | Value |
 |---|---|
-| `CLKDIV` | 31 |
+| `CLKDIV` | 39 (40 clocks per bit; 31 at 48 MHz) |
 | `SHIFT` | 0 (LSB first) |
 | `CRC_POLY` | 0x8005 |
 | `CRC_CFG` | 0xFF |
@@ -308,8 +308,8 @@ IEEE 1149.1 controller in 42 words. TCK = pin base, TMS = + 1, TDI = + 2, TDO = 
 (`SHIFT` = 0). Records `[cmd] [n − 1] [bits]`, n = 1..8: `0` clocks TMS = bits (TDI kept), `1`
 shifts n TDI bits with TMS = 0, `2` the same with TMS = 1 on the last bit. Each shift record
 returns a byte with the n TDO bits in its top bits (RX >> (8 − n)); longer scans are several
-records. TDI/TMS change one tick after TCK falls; TDO is read while TCK is high. TCK = 8 MHz at
-CLKDIV = 0, else 48 MHz / (5 (CLKDIV + 1)). Board: pull-up on TDO, pull-down on TCK (D75).
+records. TDI/TMS change one tick after TCK falls; TDO is read while TCK is high. TCK = 10 MHz at
+CLKDIV = 0, else 60 MHz / (5 (CLKDIV + 1)). Board: pull-up on TDO, pull-down on TCK (D75).
 
 ## SWD host protocol (`programs/swd.pbe`)
 
@@ -319,8 +319,8 @@ on SWCLK); LSB first, `LINE_CFG` = 0 (even parity). Records: `[0x00] [b]` 8 host
 `[0x01] [req]` read; `[0x02] [req] [d0..d3] [p]` write (`req` = the 8-bit request with its
 parity, `p` bit 0 = the data parity). RX: `[ack]` (0x20 OK, 0x40 WAIT, 0x80 FAULT, 0xE0 no
 response), and for an OK read `[d0..d3] [status]` (bit 0 = parity error, checked by the
-engine). WAIT/FAULT: no data phase, a write's data bytes are dropped. SWCLK = 8 MHz at
-CLKDIV = 0, else 48 MHz / (5 (CLKDIV + 1)) (D76).
+engine). WAIT/FAULT: no data phase, a write's data bytes are dropped. SWCLK = 10 MHz at
+CLKDIV = 0, else 60 MHz / (5 (CLKDIV + 1)) (D76).
 
 Both are tested by `tb_debug` against target models written from the standards, at CLKDIV 0
 and 0xFFFF and both at once, and by sigrok's `jtag` and `swd` decoders (`make sigrok-debug`,
@@ -388,7 +388,7 @@ Tested by `tb_ps2` against a keyboard model (`ps2_dev.sv`) and by sigrok's `ps2`
 
 24 outputs (three 74HC595) and 24 inputs (three 74HC165) in 33 words (D85). Pins: SCK = pin
 base (595 SRCLK and 165 CLK), SDO = + 1 (595 SER), SDI = + 2 (165 QH), RCLK = + 3, LD# = + 4
-(165 SH/LD#). `SHIFT` = 0x03, `CLKDIV` 0 (SCK 6.86 MHz) or n ≥ 1 (SCK = 48 MHz / (6 (n + 1))).
+(165 SH/LD#). `SHIFT` = 0x03, `CLKDIV` 0 (SCK 8.57 MHz) or n ≥ 1 (SCK = 60 MHz / (6 (n + 1))).
 
 - One exchange per record: TX `[o0] [o1] [o2]`, RX `[i0] [i1] [i2]`. o0 ends in the last 595
   of the chain, o2 in the first; i0 is the first 165 (whose QH is SDI), i2 the last; bit 7 is
@@ -427,8 +427,8 @@ pin base, CS# = + 1, IO0..IO3 = + 2..5 (pull-ups on IO0-IO3). `SHIFT` = 0x03, `C
   RX: the bytes read.
 - 0x6B (1-1-4): `[01][03][6B][A2][A1][A0] [05][07] [04][n-1] [00]`;
   0xEB (1-4-4): `[01][00][EB] [03][03][A2][A1][A0][00] [05][03] [04][n-1] [00]`.
-- SCK at `CLKDIV` 0: 16 MHz single write, 9.6 MHz single read, 8 MHz quad write, 6 MHz quad
-  read (2.8 MB/s with the loop); long reads pause SCK while the RX FIFO is full.
+- SCK at `CLKDIV` 0 (60 MHz): 20 MHz single write, 12 MHz single read, 10 MHz quad write,
+  7.5 MHz quad read (3.5 MB/s with the loop); long reads pause SCK while the RX FIFO is full.
 
 Tested by `tb_qspi` against a flash model, and by sigrok's `spi` decoder on the single-line
 phase (`make sigrok-proto2 PROTO2=qspi`).
@@ -503,7 +503,7 @@ Tested by `tb_hdlc` against an HDLC model (no stock sigrok decoder exists).
      The host model checks the device's CRCs and stuffing itself. Every reply starts 2–7.5 bit
      times after the host's EOP (measured 2.97–3.05), and host and device never drive the bus
      together.
-  - The testbenches run at 48 MHz, the planned clock.
+  - The testbenches run at 60 MHz, the planned clock (48 MHz until D92).
   - Unit tests:
     - a restart in the same cycle as an instruction cancels its side effects;
     - `JEQ`/`JNE`/`MOV`, the inverted CRC and the CRC good value (USB CRC16 `dd 94`, residual

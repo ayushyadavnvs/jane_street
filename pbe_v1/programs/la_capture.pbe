@@ -3,7 +3,7 @@
 ;   The trigger pin is JMP_PIN (any of the 8 pins, relative to pin base).
 ; Engine settings: SHIFT = 0x00 (IN LSB first), CRC off, TIMEOUT 0, LINE_CFG 0x40.
 ;   CLKDIV >= 1: one sample of the 4 channels every 6 ticks, 6 (CLKDIV + 1) clocks: 4 MS/s at
-;   CLKDIV 1 (48 MHz), 48 MHz / (6 (CLKDIV + 1)) in general, down to 122 S/s. (At CLKDIV 0 the
+;   CLKDIV 1 (5 MS/s at 60 MHz), 60 MHz / (6 (CLKDIV + 1)) in general, down to 153 S/s. (At CLKDIV 0 the
 ;   loop's taken jump adds a clock to every second sample: 6 and 7 clocks, not uniform.)
 ; Each IN reads one pin, so channel k is read k ticks after channel 0: the 4 channels are four
 ;   interleaved captures at the same rate with fixed offsets of 0, 1, 2, 3 ticks (a "sample" is
@@ -19,7 +19,7 @@
 ;   Then the engine waits for the next record (a new capture re-arms the trigger).
 ; Rates: the RX FIFO holds 16 bytes = 32 samples. A capture of more than 16 bytes needs the host
 ;   to read as fast as the engine pushes, one byte per 12 (CLKDIV + 1) clocks; the host port
-;   moves at most one byte per 8 SCK cycles at SCK <= 48 MHz / 8 (64 clocks per byte with burst
+;   moves at most one byte per 8 SCK cycles at SCK <= clk / 8 (64 clocks per byte with burst
 ;   reads, plus the reads of RX_COUNT). Measured (tb_la, burst reads at SCK = 6 MHz): a
 ;   sustained capture works at CLKDIV >= 6 (1.14 MS/s); at CLKDIV 5 (1.33 MS/s) the FIFO fills.
 ;   Faster captures are bursts of 16 bytes (32 samples). If the FIFO is full the PUSH waits:

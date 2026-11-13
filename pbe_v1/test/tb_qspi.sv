@@ -8,7 +8,7 @@
 // the engine runs; Fast Read Quad I/O 0xEB; Write Enable + Quad Page Program 0x32 + read back.
 // The flash and the chip must never drive an IO line at once; SCK is measured in each phase.
 module tb_qspi;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 4;      // host SCK = clk / 8
 
   logic clk = 0, rst_n = 0;
