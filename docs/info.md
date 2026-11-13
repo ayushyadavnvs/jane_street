@@ -18,7 +18,7 @@ Each engine has:
 - a 16-bit instruction set with 8 opcodes: pin drive/read, wait for a pin or flag, jumps,
   shift registers, FIFO access, flags and compare/CRC operations; every instruction carries
   a delay of 0–15 ticks;
-- a CRC unit (any polynomial up to 16 bits), a parity bit and a wait timeout;
+- a CRC unit (any polynomial up to 32 bits: CRC-32 for Ethernet), a parity bit and a wait timeout;
 - an optional line coder: NRZ/NRZI, bit stuffing and a differential pair with SE0, as
   low-speed USB needs; or a bit-synchronous coder for CAN (readback, arbitration, error
   frames and error counters in hardware);

@@ -113,6 +113,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(TOP) && vvp -n fetch.vvp
 	cd test && iverilog -g2012 -o page.vvp tb_page.sv $(TOP) && vvp -n page.vvp
 	cd test && iverilog -g2012 -o line.vvp tb_line.sv $(ENG) && vvp -n line.vvp
+	cd test && iverilog -g2012 -o crc.vvp tb_crc.sv ref_pbe_crc16.sv ../src/pbe_crc.sv && vvp -n crc.vvp
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(TOP) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(TOP) && vvp -n sim.vvp

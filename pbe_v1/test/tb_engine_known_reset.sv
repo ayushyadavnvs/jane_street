@@ -9,7 +9,7 @@ module tb_engine_known_reset;
   wire [8:0] can_tec;
   wire [7:0] can_rec;
   wire [1:0] can_state;
-  wire [15:0] crc_now;
+  wire [31:0] crc_now;
   wire [7:0] pc;
   wire [23:0] pc_copy;
   wire [3:0] flag_set,flag_clr;
@@ -17,17 +17,20 @@ module tb_engine_known_reset;
   always #5 clk=~clk;
   pbe_engine dut(.clk,.rst_n,.run,.restart,.clkdiv(16'd3),
     .pin_base(3'd0),.jmp_pin(3'd0),.out_msb_first(1'b0),.in_msb_first(1'b0),
-    .start_pc(8'd0),.crc_poly(16'h8005),.crc_cfg(8'h3f),.timeout(16'd0),
-    .line_cfg(8'h40),.coder_cfg,.coder_cfg2,.sync(8'h80),.crc_good(16'd0),
+    .start_pc(8'd0),.crc_poly(32'h8005), .crc_wide(1'b0),.crc_cfg(8'h3f),.timeout(16'd0),
+    .line_cfg(8'h40),.coder_cfg,.coder_cfg2,.sync(8'h80),.crc_good(32'd0),
     .host_crc_init(1'b0),.host_tmo_clr(1'b0),.host_ovf_clr(1'b0),.host_lerr_clr(1'b0),
     .host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),
     .status,.can_tec,.can_rec,.can_state,.crc_now,.pc,.pc_copy,.instr,.pm_wr(1'b0),
     .pins_in(8'h01),.pins_out,.pins_oe,.tx_data(8'ha5),.tx_empty(1'b1),
     .tx_pop,.tx_mark(),.tx_rewind(),.rx_data,.rx_full(1'b0),.rx_push,.flags(4'd0),.flag_set,.flag_clr,.irq);
   task automatic known;
-    // two checks: Icarus 12 misreports $isunknown on this concatenation once it is 106 bits wide
-    if ($isunknown({pins_out,pins_oe,flag_set,flag_clr,tx_pop,rx_push,irq,rx_data,status,crc_now,pc,pc_copy})
-        || $isunknown({can_tec,can_rec,can_state}))
+    // one $isunknown per signal: Icarus 12 misreports it on concatenations of these outputs
+    // (at 106 bits; after D91 even on a 51-bit one whose every part is known, BUG-131)
+    if ($isunknown(pins_out) || $isunknown(pins_oe) || $isunknown(flag_set) || $isunknown(flag_clr)
+        || $isunknown(tx_pop) || $isunknown(rx_push) || $isunknown(irq) || $isunknown(rx_data)
+        || $isunknown(status) || $isunknown(pc) || $isunknown(pc_copy) || $isunknown(crc_now)
+        || $isunknown(can_tec) || $isunknown(can_rec) || $isunknown(can_state))
       $fatal(1,"engine reset/restart has an unknown output cfg=%h cfg2=%h",coder_cfg,coder_cfg2);
   endtask
   initial begin

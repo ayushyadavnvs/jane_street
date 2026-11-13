@@ -86,6 +86,8 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-127 | Tooling | Icarus 12: `return` in tasks, queue arguments and bit selects of queue elements, real arrays in automatic tasks | `tb_quad`, `tb_line` M | Worked around |
 | BUG-128 | RTL (line coder) | The Manchester bit timer moved its reference 3/4 of each edge's error instead of 1/4 | `tb_line` M7 (D90) | Fixed before commit |
 | BUG-129 | RTL (line coder) | The Manchester bit timer lost half a clock after an edge seen at the falling clock edge | `tb_line` M4, M6 (D90) | Fixed before commit |
+| BUG-130 | Testbench | `tb_crc` (c) compared the CRC units with 32-bit state left over from (b) | `tb_crc` (D91) | Fixed (reset first) |
+| BUG-131 | Testbench, Tooling | The engine unit benches left `crc_wide` unconnected (unknown CRC width); Icarus misreported `$isunknown` on a concatenation | The gate before pushing D91 | Fixed |
 
 ---
 
@@ -3326,3 +3328,42 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **After:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);`
 - **Test:** `tb_line` M4 and M6: before, frames lost a byte (`63 bytes`, `62 bytes`) even at
   ±0.3 clock and the loopback failed; after, all pass and M7 reaches ±0.8 clock.
+
+## BUG-130 — tb_crc compared the 32-bit and 16-bit CRC units with 32-bit state left over (test)
+
+- **Where:** `pbe_v1/test/tb_crc.sv` (c), D91.
+- **Cause:** (c) checks that the 32-bit unit equals the old 16-bit one for widths up to 16. It
+  ran right after (b), whose CRC-32 runs left upper bits in the 32-bit register; a width change
+  does not clear the register (the documented live-change rule, unchanged), so the first
+  clocks of (c) before an `init` differed: `FAIL: (c) 9 clocks differ from the 16-bit unit`.
+  The claim is for an engine configured at 16 bits or fewer, i.e. from reset.
+- **Before:** (c) started with the state of (b).
+- **After:**
+  ```
+      @(negedge clk) rst_n = 0;
+      @(negedge clk) rst_n = 1;
+  ```
+  before (c), and the decision (D91) states that a switch from CRC-32 to a narrower CRC needs
+  `CRCRST`.
+- **Test:** `tb_crc`: before, 9 differing clocks; after, `PASS` (12,000 clocks identical).
+
+## BUG-131 — The engine unit benches left the new CRC inputs unconnected, and Icarus misreported $isunknown (test, tool)
+
+- **Where:** `pbe_v1/test/tb_engine_known_reset.sv`, `tb_engine_ops.sv`, `tb_engine_restart.sv`
+  (D91).
+- **Cause:** two problems, found by the gate (`make test`, `make test-verilator`) before item 3
+  was pushed:
+  1. the benches connect `pbe_engine` by name with 16-bit `crc_poly`/`crc_good` and no
+     `crc_wide`. The new input floated (z), so the CRC width was unknown: `FATAL: engine
+     reset/restart has an unknown output cfg=00 cfg2=00` in `tb_engine_known_reset` (Icarus and
+     Verilator alike);
+  2. after connecting it, Icarus 12 still reported `$isunknown` true for a 51-bit concatenation
+     of outputs while every one of them was known on its own (the bench already split its check
+     once for the same Icarus fault at 106 bits).
+- **Before:** `.crc_poly(16'h8005), .crc_cfg(8'h3f), ... .crc_good(16'd0)`, `wire [15:0]
+  crc_now;`, and `if ($isunknown({pins_out,pins_oe,flag_set, ..., status,crc_now,pc,pc_copy}) ...`.
+- **After:** `.crc_poly(32'h8005), .crc_wide(1'b0), ... .crc_good(32'd0)`, `wire [31:0]
+  crc_now;`, and one `$isunknown` per output, or-ed.
+- **Test:** `tb_engine_known_reset`: before, the `FATAL` at 6 ns; after, `PASS` over all 192
+  coder configurations; `tb_engine_ops` and `tb_engine_restart` pass; `make test-verilator`
+  passes (its `tb_engine_*` logs identical under both simulators).

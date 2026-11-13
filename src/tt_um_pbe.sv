@@ -57,7 +57,8 @@
 //                         offsets are relative to it, modulo 256; sequential execution is not
 //                         confined to 64 words (a PAGE instruction is reserved for that, D82)
 //      +8 FLAG_BASE[2:0]  first physical flag this engine sees (reset: 0 for E0, 4 for E1)
-//      +9 CRC_POLY_L, +A CRC_POLY_H   W: CRC polynomial (top term implied); R: the CRC's current value
+//      +9 CRC_POLY_L, +A CRC_POLY_H   W: CRC polynomial bits 15..0 (top term implied); R: the CRC's
+//                    current value, bits 15..0 (bits 31..16 at second-page +8, +9, D91)
 //      +B CRC_CFG    [3:0] width - 1, [4] init all ones, [5] reversed output, [6] feed OUT bits,
 //                    [7] feed IN bits (both 0: CRC off)
 //      +C TIMEOUT_L, +D TIMEOUT_H     ticks a blocked WAIT/PULL/PUSH may wait (0 = forever)
@@ -85,6 +86,11 @@
 //                    frame follower (extended frames, D74). Reset 0.
 //      +5 CAN_TEC  R transmit error counter [7:0]; +6 CAN_REC R receive error counter
 //      +7 CAN_STATE R [0] TEC[8], [1] error-passive, [2] bus-off (bit-synchronous mode, D68)
+//      +8 CRC_POLY_2, +9 CRC_POLY_3   W: CRC polynomial bits 23..16, 31..24; R: the CRC's current
+//                    value, bits 23..16, 31..24 (CRCs of 17-32 bits, D91). Reset 0.
+//      +A CRC_GOOD_2, +B CRC_GOOD_3   RW: CRC_GOOD bits 23..16, 31..24. Reset 0.
+//      +C CRC_CFG2   RW [0] CRC width bit 4: width - 1 = {CRC_CFG2[0], CRC_CFG[3:0]} (1-32 bits).
+//                    Reset 0, which leaves every CRC of up to 16 bits as before.
 //
 // Edge/reset contract, clarified by the round-2 model audit (no logic changes):
 // Host pins and protocol pins pass through two clk registers; engines/host SPI consume
@@ -180,15 +186,17 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [7:0]  pin_own;
   logic [7:0]  flags;
   logic [5:0]  flag_base;  // 3 bits per engine
-  logic [31:0] crc_poly, timeout;
+  logic [63:0] crc_poly;   // 32 bits per engine (D91)
+  logic [31:0] timeout;
   logic [15:0] crc_cfg, line_cfg;
   logic [15:0] e_status;   // 8 bits per engine
   logic [15:0] coder_cfg, coder_cfg2, sync;
   logic [17:0] can_tec;    // 9 bits per engine
   logic [15:0] can_rec;
   logic [3:0]  can_state;  // {bus-off, passive} per engine
-  logic [31:0] crc_good;
-  logic [31:0] e_crc;      // each engine's current CRC value
+  logic [63:0] crc_good;   // 32 bits per engine (D91)
+  logic [63:0] e_crc;      // each engine's current CRC value
+  logic [1:0]  crc_wide;   // CRC_CFG2[0] per engine
   logic [31:0] clkdiv;
   logic [5:0]  pin_base, jmp_pin;
   logic [3:0]  shiftcfg;
@@ -240,6 +248,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       coder_cfg2 <= '0;
       sync     <= '0;
       crc_good <= '0;
+      crc_wide <= '0;
       host_quad <= 1'b0;
     end else begin
       if (quad_exit) host_quad <= 1'b0;  // 8 SCK edges with CS_n high (never during a write)
@@ -287,8 +296,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
           4'h4: shiftcfg[3:2] <= wr_data[1:0];
           4'h5: start_pc[15:8] <= wr_data;
           4'h8: flag_base[5:3] <= wr_data[2:0];
-          4'h9: crc_poly[23:16] <= wr_data;
-          4'hA: crc_poly[31:24] <= wr_data;
+          4'h9: crc_poly[39:32] <= wr_data;
+          4'hA: crc_poly[47:40] <= wr_data;
           4'hB: crc_cfg[15:8]   <= wr_data;
           4'hC: timeout[23:16]  <= wr_data;
           4'hD: timeout[31:24]  <= wr_data;
@@ -300,9 +309,14 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         case (wr_reg)
           4'h0: if (wr_p1) coder_cfg[15:8] <= wr_data; else coder_cfg[7:0] <= wr_data;
           4'h1: if (wr_p1) sync[15:8] <= wr_data; else sync[7:0] <= wr_data;
-          4'h2: if (wr_p1) crc_good[23:16] <= wr_data; else crc_good[7:0] <= wr_data;
-          4'h3: if (wr_p1) crc_good[31:24] <= wr_data; else crc_good[15:8] <= wr_data;
+          4'h2: if (wr_p1) crc_good[39:32] <= wr_data; else crc_good[7:0] <= wr_data;
+          4'h3: if (wr_p1) crc_good[47:40] <= wr_data; else crc_good[15:8] <= wr_data;
           4'h4: if (wr_p1) coder_cfg2[15:8] <= wr_data; else coder_cfg2[7:0] <= wr_data;
+          4'h8: if (wr_p1) crc_poly[55:48] <= wr_data; else crc_poly[23:16] <= wr_data;
+          4'h9: if (wr_p1) crc_poly[63:56] <= wr_data; else crc_poly[31:24] <= wr_data;
+          4'hA: if (wr_p1) crc_good[55:48] <= wr_data; else crc_good[23:16] <= wr_data;
+          4'hB: if (wr_p1) crc_good[63:56] <= wr_data; else crc_good[31:24] <= wr_data;
+          4'hC: if (wr_p1) crc_wide[1] <= wr_data[0]; else crc_wide[0] <= wr_data[0];
           default: ;
         endcase
       end
@@ -324,8 +338,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       4'h4:    eng_rd = {6'b0, rd_e1 ? shiftcfg[3:2] : shiftcfg[1:0]};
       4'h5:    eng_rd = rd_e1 ? start_pc[15:8] : start_pc[7:0];
       4'h8:    eng_rd = {5'b0, rd_e1 ? flag_base[5:3] : flag_base[2:0]};
-      4'h9:    eng_rd = rd_e1 ? e_crc[23:16] : e_crc[7:0];   // reads give the CRC value
-      4'hA:    eng_rd = rd_e1 ? e_crc[31:24] : e_crc[15:8];
+      4'h9:    eng_rd = rd_e1 ? e_crc[39:32] : e_crc[7:0];   // reads give the CRC value
+      4'hA:    eng_rd = rd_e1 ? e_crc[47:40] : e_crc[15:8];
       4'hB:    eng_rd = rd_e1 ? crc_cfg[15:8] : crc_cfg[7:0];
       4'hC:    eng_rd = rd_e1 ? timeout[23:16] : timeout[7:0];
       4'hD:    eng_rd = rd_e1 ? timeout[31:24] : timeout[15:8];
@@ -343,12 +357,17 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
     case (rd_reg)
       4'h0:    pg_rd = rd_p1 ? coder_cfg[15:8] : coder_cfg[7:0];
       4'h1:    pg_rd = rd_p1 ? sync[15:8] : sync[7:0];
-      4'h2:    pg_rd = rd_p1 ? crc_good[23:16] : crc_good[7:0];
-      4'h3:    pg_rd = rd_p1 ? crc_good[31:24] : crc_good[15:8];
+      4'h2:    pg_rd = rd_p1 ? crc_good[39:32] : crc_good[7:0];
+      4'h3:    pg_rd = rd_p1 ? crc_good[47:40] : crc_good[15:8];
       4'h4:    pg_rd = rd_p1 ? coder_cfg2[15:8] : coder_cfg2[7:0];
       4'h5:    pg_rd = rd_p1 ? can_tec[16:9] : can_tec[7:0];
       4'h6:    pg_rd = rd_p1 ? can_rec[15:8] : can_rec[7:0];
       4'h7:    pg_rd = {5'b0, rd_p1 ? {can_state[3:2], can_tec[17]} : {can_state[1:0], can_tec[8]}};
+      4'h8:    pg_rd = rd_p1 ? e_crc[55:48] : e_crc[23:16];     // the CRC value, bits 23..16
+      4'h9:    pg_rd = rd_p1 ? e_crc[63:56] : e_crc[31:24];
+      4'hA:    pg_rd = rd_p1 ? crc_good[55:48] : crc_good[23:16];
+      4'hB:    pg_rd = rd_p1 ? crc_good[63:56] : crc_good[31:24];
+      4'hC:    pg_rd = {7'b0, crc_wide[rd_p1]};
       default: pg_rd = 8'h00;
     endcase
   end
@@ -477,14 +496,15 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .out_msb_first(shiftcfg[e*2]),
         .in_msb_first (shiftcfg[e*2+1]),
         .start_pc     (start_pc[e*8+:8]),
-        .crc_poly     (crc_poly[e*16+:16]),
+        .crc_poly     (crc_poly[e*32+:32]),
         .crc_cfg      (crc_cfg[e*8+:8]),
+        .crc_wide     (crc_wide[e]),
         .timeout      (timeout[e*16+:16]),
         .line_cfg     (line_cfg[e*8+:8]),
         .coder_cfg    (coder_cfg[e*8+:8]),
         .coder_cfg2   (coder_cfg2[e*8+:8]),
         .sync         (sync[e*8+:8]),
-        .crc_good     (crc_good[e*16+:16]),
+        .crc_good     (crc_good[e*32+:32]),
         .host_crc_init(wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[0]),
         .host_tmo_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[1]),
         .host_ovf_clr (wr_en && wr_addr == FIFO_ADDR + 7'd9 && wr_data[2]),
@@ -496,7 +516,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
         .can_tec      (can_tec[e*9+:9]),
         .can_rec      (can_rec[e*8+:8]),
         .can_state    (can_state[e*2+:2]),
-        .crc_now      (e_crc[e*16+:16]),
+        .crc_now      (e_crc[e*32+:32]),
         .pc           (pc[e*8+:8]),
         .pc_copy      (pc_copy[e*24+:24]),
         .pc_d         (pc_d[e*8+:8]),

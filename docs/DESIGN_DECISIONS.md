@@ -2940,3 +2940,53 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   every clock): transmit in both polarities with the TP_IDL tail and release, an underrun,
   receive at 0/±100 ppm/±1 % with jitter, link pulses and a stray edge ignored, a coder-to-coder
   loopback, the jitter sweep. Also under Verilator (`make test-verilator`), identical logs.
+
+## D91. CRC unit up to 32 bits: CRC-32 for Ethernet, zip, PNG, MPEG-2
+
+- **Asked by the owner:** CRC-32 (Ethernet FCS) with every existing configuration unchanged.
+- **Chosen:** `pbe_crc` is widened to 32 bits (register, polynomial, good value, value out); the
+  width is 5 bits. Everything else is the same algorithm: a shift-left register fed in wire
+  order, reversed output for LSB-first CRCs, init all ones, "ok" when the register equals the
+  good value.
+  - **Ethernet:** poly 0x04C11DB7, 32 bits, init all ones, reversed output, fed `OUT` (transmit)
+    or `IN` (receive) bits; the FCS is the value inverted, bytes 0..3 low byte first
+    (`OSRCRC B0..B3, INV`), which puts x^31 first on the wire as 802.3 clause 3.2.9 requires. A
+    receiver feeds the FCS too and checks the residue: the register ends at 0xC704DD7B, which
+    is 0xDEBB20E3 (the residue usually quoted, of the reflected algorithm) bit-reversed. The
+    good value compares the raw register, as for USB's 0x800d (D41).
+  - **Registers (no existing address moves):** in each engine's second page, +8/+9
+    `CRC_POLY_2/3` (write: polynomial bits 23..16 and 31..24; read: the CRC value's bits 23..16
+    and 31..24, as +9/+A read bits 15..0), +A/+B `CRC_GOOD_2/3`, +C `CRC_CFG2` [0] = width bit
+    4. These offsets read 0 before. All reset 0.
+  - **OSRCRC:** the byte is {param[3], param[0]}: `LO`/`HI` (param[3] = 0) are bytes 0 and 1 as
+    before, `B2`/`B3` bytes 2 and 3. `LEFT` (left-justify to 16 bits, CAN, D71) applies to CRCs
+    of up to 16 bits and does nothing for wider ones. param[3] was ignored before, and it still
+    is for a CRC of up to 16 bits: every existing program has it 0 (the images are
+    byte-identical), but the golden model's random programs set every EXT parameter bit, and a
+    param[3] that picked byte 2 (zero) of a 16-bit CRC would change their results (`make diff`).
+    Only a CRC wider than 16 bits, which needs `CRC_CFG2`, sees the new bytes.
+- **Bit-identical for widths up to 16:** with `CRC_CFG2` = 0 and the upper polynomial and good
+  bytes 0 (their reset values) the register's upper half stays 0 (the mask), and every output
+  is what the 16-bit unit gave. `tb_crc` (c) runs 300 random 1-16-bit configurations (random
+  polynomials, good values, init, reversal, init/step sequences) against a copy of the old unit
+  (`test/ref_pbe_crc16.sv`), clock for clock, from reset. (A live width change without `CRCRST`
+  keeps the register's state, as before; after a CRC wider than 16 bits that state can have
+  upper bits, so switching an engine from CRC-32 to a narrower CRC needs a `CRCRST`, which
+  every program does at the start of a packet anyway.)
+- **General:** Ethernet FCS, zip/gzip and PNG (CRC-32), MPEG-2 transport streams
+  (CRC-32/MPEG-2, sent MSB first, not inverted), iSCSI/ext4/SCTP (CRC-32C), POSIX `cksum`,
+  plus every CRC of 17-31 bits (CRC-24 for OpenPGP and Bluetooth LE, CRC-17/21 of CAN FD).
+- **Alternatives:**
+  - *A byte-parallel CRC-32 (8 bits per clock):* the byte-mode feed already takes 8 clocks per
+    byte, far inside the 48 clocks of a 10BASE-T byte; a parallel network would be several
+    times larger and specific to one polynomial.
+  - *A fixed CRC-32 block beside the 16-bit unit:* duplicates the shift register and loses
+    the other 32-bit CRCs.
+  - *Folding the width bit into CRC_CFG:* no free bit (all 8 are used).
+- **Cost:** per engine 16 more bits of register, polynomial and good value, a wider mask,
+  reversal and compare (`make synth` in D92).
+- **Tests:** `tb_crc`: (a) the reveng catalogue check values for "123456789" of CRC-32
+  (0xCBF43926), CRC-32/BZIP2, CRC-32/MPEG-2, CRC-32C and CRC-32/POSIX, all exact; (b) Ethernet
+  frames of 60, 514 and 1514 random bytes: the unit's FCS equals a byte-wise reflected CRC-32
+  (poly 0xEDB88320) written in the bench, the residue after the FCS is 0xC704DD7B, a flipped bit
+  is caught; (c) bit-identity above. End to end with `OSRCRC B0..B3` in `tb_eth` (D93).

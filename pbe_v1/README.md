@@ -31,6 +31,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
+| `test/tb_crc.sv` | Unit test: the CRC unit at 32 bits (reveng check values, Ethernet FCS and residue) and bit-identity with the 16-bit unit (`ref_pbe_crc16.sv`) (D91) |
 | `test/tb_line.sv` | Unit test: the line coder in USB, CAN, HDLC and Manchester (10BASE-T) styles against reference models |
 | `test/tb_page.sv` | `PAGE` (D83): a 202-word program over four pages, the timeout vector, stop and restart, host writes, cross-page timing |
 | `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up; separate memories, pointer carries, `START_PC` 252 wrapping, the refetch cost, the reset refetch (D82) |
@@ -118,7 +119,7 @@ runs from an instruction register and must fetch the jump's target first (D50).
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL [NOWAIT]` / `PUSH` / `MARK` / `REWIND` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full); `NOWAIT`: an empty TX FIFO gives 0xFF; `MARK`/`REWIND` hold the TX FIFO read position and read again from it, for retransmission (D70) |
 | 110 | `FLAG n, SET/CLR/IRQ`, `MOV dst, src` | Shared flags between engines, or interrupt the host. Action 3 is `MOV` between X, OSR and ISR (source `0` = zero); with no destination it does nothing: the assembler's `NOP` (`0xD800`) |
-| 111 | `CRCRST`, `OSRCRC LO/HI [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); `PAGE p` (param[5] = 1, p = param[1:0], D83): the next instruction's jump target is in page p |
+| 111 | `CRCRST`, `OSRCRC LO/HI/B2/B3 [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); `PAGE p` (param[5] = 1, p = param[1:0], D83): the next instruction's jump target is in page p |
 
 **Timeout:** if `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks (engine register
 +C/+D, 0 = never), the engine abandons it and jumps to `TIMEOUT_PC` (`LINE_CFG[5:0]`, +E).
@@ -128,6 +129,12 @@ reversed output, fed by `OUT` bits, fed by `IN` bits. "CRC ok" means the registe
 `CRC_GOOD` (second page, default 0; USB: 0x800d, the residual of its inverted CRC16). The
 host can restart it and read the status through `STATUS` (+F), and **reading +9/+A returns the
 CRC's current value**, which is how the host checks CRCs that are sent inverted.
+**CRCs of 17-32 bits (D91):** second page +8/+9 `CRC_POLY_2/3` (polynomial bits 23..16, 31..24;
+reads give the CRC value's bits 23..16, 31..24), +A/+B `CRC_GOOD_2/3`, +C `CRC_CFG2` [0] = width
+bit 4 (width − 1 = {`CRC_CFG2[0]`, `CRC_CFG[3:0]`}). All reset to 0, so the CRCs of up to 16
+bits are unchanged. `OSRCRC B2`/`B3` load the upper bytes (`LO`/`HI` are `B0`/`B1`). CRC-32
+(Ethernet FCS, zip, PNG): poly 0x04C11DB7, `CRC_CFG2` 1, `CRC_CFG` 0x3F | feed bits (init all
+ones, reversed), sent inverted, `CRC_GOOD` 0xC704DD7B (the residue; 0xDEBB20E3 reflected).
 
 **Parity:** `LINE_CFG[7]` selects odd parity; `LINE_CFG[6]` means no parity: `OUTPAR` then sends 1
 (a second stop bit, for 8N2) and no receive parity error is reported.
