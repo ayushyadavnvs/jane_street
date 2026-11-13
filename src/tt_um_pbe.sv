@@ -3,10 +3,17 @@
 // Pins
 //   ui_in[0]  host SCK        uo_out[0]  host MISO
 //   ui_in[1]  host CS_n       uo_out[1]  IRQ (engine 0 or 1 raised an interrupt)
-//   ui_in[2]  host MOSI       uo_out[2]  engine 0 running    uo_out[3] engine 1 running
+//   ui_in[2]  host MOSI (D0)  uo_out[2]  engine 0 running    uo_out[3] engine 1 running
+//   ui_in[3]  host D1 (quad)
+//   ui_in[4]  host D2 (quad)
+//   ui_in[5]  host D3 (quad)
 //                             uo_out[4]  E0 RX FIFO has data uo_out[5] E1 RX FIFO has data
 //                             uo_out[6]  E0 TX FIFO full     uo_out[7] E1 TX FIFO full
 //   uio[7:0]  protocol pins, driven by the engines
+//   Quad host mode (HOSTCFG[0], D89): while CS_n is low, uo_out[3:1] carry Q3..Q1 of the
+//   host port's read data (uo_out[0] is Q0); while CS_n is high they show IRQ and the running
+//   bits as above. uo_out[7:4] (RX data, TX full) are never borrowed: they are the flow control
+//   of a streaming host. ui_in[6] and ui_in[7] are unused.
 //
 // Register map (7-bit address, see pbe_host_spi for the SPI framing)
 //   0x00 CTRL     W  [0] run E0, [1] run E1, [4] restart E0, [5] restart E1,
@@ -30,6 +37,10 @@
 //   words in all. The host writes through a 10-bit byte pointer {PM_ADDR_H[1:0], PM_ADDR[7:0]}
 //   = {engine, word[7:0], byte}:
 //   0x06 PM_ADDR  RW pointer [7:0]: [7:1] word[6:0], [0] = 0 high byte, 1 low byte
+//   0x50 HOSTCFG  RW [0] quad host mode (D89): takes effect at the next CS_n high, so the
+//                    transaction that writes it ends in the old mode. Back to single mode:
+//                    write 0 (in quad mode), or 8 SCK rising edges while CS_n is high (works
+//                    whatever the mode), or reset. Reset 0: single-lane SPI.
 //   0x0F PM_ADDR_H RW pointer [9:8]: [0] word[7], [1] engine (0 = E0's memory, 1 = E1's);
 //                    [7:2] read 0. Reset 0: engine 0, word 0, high byte
 //   0x07 PM_DATA  W  write the byte at the pointer into the selected engine's memory, then
@@ -75,8 +86,9 @@
 //
 // Edge/reset contract, clarified by the round-2 model audit (no logic changes):
 // Host pins and protocol pins pass through two clk registers; engines/host SPI consume
-// their pre-edge second-stage values. ena and ui_in[7:3] have no functional effect.
-// Reset: host synchronizers=3'b010, protocol synchronizers=0; configuration, run, IRQ,
+// their pre-edge second-stage values. ena and ui_in[7:6] have no functional effect;
+// ui_in[5:3] only in quad host mode (D89).
+// Reset: host synchronizers=6'b000010, protocol synchronizers=0; configuration, run, IRQ,
 // ownership, flags, PM pointer=0 except FLAG_BASE={4,0}. RAM/FIFO storage is not reset;
 // both bytes of an unwritten program word must be loaded before deterministic execution.
 // Register writes/config changes affect engines on the next edge; combinational pin muxes
@@ -106,16 +118,16 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
     input  wire       rst_n
 );
   // ---- input synchronizers ----
-  logic [2:0] host_s1, host_s2;
+  logic [5:0] host_s1, host_s2;  // {D3, D2, D1, MOSI/D0, CS_n, SCK}
   logic [7:0] pins_s1, pins_s2;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      host_s1 <= 3'b010;  // CS_n idles high
-      host_s2 <= 3'b010;
+      host_s1 <= 6'b000010;  // CS_n idles high
+      host_s2 <= 6'b000010;
       pins_s1 <= '0;
       pins_s2 <= '0;
     end else begin
-      host_s1 <= ui_in[2:0];
+      host_s1 <= ui_in[5:0];
       host_s2 <= host_s1;
       pins_s1 <= uio_in;
       pins_s2 <= pins_s1;
@@ -126,6 +138,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [6:0] addr, wr_addr, rd_addr;
   logic [7:0] rd_data, wr_data;
   logic       wr_en, rd_done, miso;
+  logic [2:0] miso_hi;
+  logic       host_quad, quad, quad_exit;  // HOSTCFG[0]; the mode in use; the SCK recovery
 
   pbe_host_spi u_host (
       .clk, .rst_n,
@@ -133,6 +147,11 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       .cs_n(host_s2[1]),
       .mosi(host_s2[2]),
       .miso,
+      .quad_req (host_quad),
+      .mosi_hi  (host_s2[5:3]),
+      .miso_hi,
+      .quad,
+      .quad_exit,
       .addr, .rd_data, .wr_en, .wr_addr, .wr_data, .rd_done, .rd_addr
   );
 
@@ -202,7 +221,9 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       coder_cfg2 <= '0;
       sync     <= '0;
       crc_good <= '0;
+      host_quad <= 1'b0;
     end else begin
+      if (quad_exit) host_quad <= 1'b0;  // 8 SCK edges with CS_n high (never during a write)
       // engine events first, so a host write in the same cycle wins
       flags    <= (flags | p_set[7:0] | p_set[15:8] | host_set) & ~(p_clr[7:0] | p_clr[15:8] | host_clr);
       irq_pend <= irq_pend | e_irq;
@@ -216,6 +237,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
           7'h06: pm_ptr[7:0] <= wr_data;
           7'h0F: pm_ptr[9:8] <= wr_data[1:0];
           7'h07: pm_ptr[8:0] <= pm_ptr[8:0] + 1'b1;  // the engine bit stays
+          7'h50: host_quad <= wr_data[0];
           default: ;
         endcase
       end
@@ -327,6 +349,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       7'h0B:   rd_data = {3'b0, rx_count[9:5]};
       7'h0C:   rd_data = {3'b0, tx_count[4:0]};
       7'h0D:   rd_data = {3'b0, tx_count[9:5]};
+      7'h50:   rd_data = {7'b0, host_quad};
       default: rd_data = rd_eng ? eng_rd : rd_pg ? pg_rd : 8'h00;
     endcase
   end
@@ -482,7 +505,10 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   assign uio_out = (e_out[15:8] & pin_own) | (e_out[7:0] & ~pin_own);
   assign uio_oe  = (e_oe[15:8] & pin_own)  | (e_oe[7:0] & ~pin_own);
 
-  assign uo_out = {tx_full[1], tx_full[0], ~rx_empty[1], ~rx_empty[0], run[1], run[0], |irq_pend, miso};
+  // quad host mode (D89): Q3..Q1 on uo_out[3:1] while CS_n is low
+  wire q_lines = quad && !host_s2[1];
+  assign uo_out = {tx_full[1], tx_full[0], ~rx_empty[1], ~rx_empty[0],
+                   q_lines ? miso_hi : {run[1], run[0], |irq_pend}, miso};
 
-  wire _unused = &{ena, ui_in[7:3], 1'b0};
+  wire _unused = &{ena, ui_in[7:6], 1'b0};
 endmodule

@@ -2795,3 +2795,75 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   by idle and an abort (exactly seven 1s) followed at once by a flag, a 64-byte frame, at 1 and
   2 Mbit/s. 5/5. The model also checks that the chip's transmitter never sends an abort.
 - **sigrok:** libsigrokdecode 0.5.3 has no HDLC decoder; the cross-check is the model.
+
+## D89. Quad host port: 4 bits per SCK in both directions, entered and left explicitly
+
+- **Asked by the owner** for 10BASE-T (D90-D93): a frame is 1.25 MB/s with no gap inside it,
+  and the 16-byte FIFOs cannot hold a frame (up to 1518 bytes), so the host must stream it in
+  real time. The single-lane port moves one byte per 8 SCK, and SCK is at most clk / 8 (the
+  2-flop synchronizers and the read pipeline, below): 64 clocks per byte, 0.94 MB/s at 60 MHz
+  (0.75 at 48), less than one Ethernet stream. The owner chose a faster host port over large
+  frame buffers.
+- **Chosen: a quad mode of the same port** (`pbe_host_spi`, D89 in its header):
+  - **Pins.** Host to chip: D0 = `ui_in[2]` (MOSI), D1..D3 = `ui_in[3..5]`, the spare inputs;
+    SCK and CS_n stay on `ui_in[0..1]`. Chip to host: Q0 = `uo_out[0]` (MISO), Q1..Q3 =
+    `uo_out[1..3]`, borrowed in quad mode only and only while CS_n is low; with CS_n high they
+    are IRQ and the two running bits as before. `uo_out[7:4]` (RX has data, TX full) are never
+    borrowed: they are what a streaming host watches. `ui_in[6..7]` stay unused.
+  - **Framing unchanged:** command byte, data bytes, auto-increment, the streaming registers,
+    the read pipeline. Each SCK rising edge carries a nibble, high nibble first; a byte is 2 SCK
+    cycles. The read data lines are separate outputs, so there is no turnaround cycle and a
+    read burst runs at the write rate.
+  - **Entering:** `HOSTCFG` (0x50, RW, reset 0) bit 0. The mode in use is latched from it only
+    while CS_n is high, so the transaction that writes it finishes in the old mode, and no
+    transaction ever changes mode half-way.
+  - **Leaving (the defined safe way back):** write `HOSTCFG` = 0 in quad mode; or **8 SCK
+    rising edges while CS_n is high**, which clears `HOSTCFG` whatever mode the port is in (a
+    host that lost track of the mode, or restarted, sends it unconditionally; single mode
+    ignores it); or reset.
+- **Synchronizers:** D1..D3 go through the same two clk flops as SCK, CS_n and MOSI (the host
+  synchronizer is now 6 bits). Single mode reads only bits 0..2, exactly as before.
+- **Maximum SCK and bandwidth** (the same limit in both modes, clk / 8: the chip sees an SCK
+  edge 2-3 clocks after it happens, so a falling edge shifts the next read nibble out about 3
+  clocks later, and the host samples it at the next rising edge, 4 clocks after the fall):
+
+  | Clock | SCK max | Single lane | Quad |
+  |---|---|---|---|
+  | 48 MHz | 6 MHz | 0.75 MB/s | 3.0 MB/s |
+  | 60 MHz | 7.5 MHz | 0.94 MB/s | 3.75 MB/s |
+
+  `tb_quad` measures 64 and 16 clocks per byte in 16-byte bursts, both directions. A
+  10BASE-T stream (1.25 MB/s, one byte per 48 clocks at 60 MHz) uses a third of the quad port
+  in either direction, so the host has 3x the line rate; each burst costs one command byte
+  (and, if the host does not watch the TX-full pin, a `TX_COUNT` read: 2 bytes more).
+- **FIFO depth: kept at 16 bytes.** At 60 MHz a byte leaves the TX FIFO (or arrives in the RX
+  FIFO) every 0.8 µs during a frame. A full 16-byte FIFO covers 12.8 µs of host absence; a
+  refill of 15 bytes takes 15 x 16 = 240 clocks (4 µs) plus a command byte, so a host that
+  services the FIFO at least every ~8 µs (or keeps streaming and pauses SCK while the
+  TX-full pin is high) never underruns. A host able to run SCK at 7.5 MHz with 4 lines is a
+  PIO/DMA engine or an FPGA, whose jitter is well below a microsecond. 32 bytes would double the
+  allowance to ~25 µs but cost about +11k µm² per FIFO pair (D45: 690 µm² per byte) and change
+  the FIFO depth assumed by the golden model, formal proofs, coverage and stress (all built on
+  16 bytes), for a host class that cannot run this port anyway. Underruns and overruns are
+  never silent (D93), so a host that is too slow is told.
+- **Alternatives:**
+  - *A dual port* (2 bits): 1.9 MB/s at 60 MHz, only 1.5x Ethernet with no room for bursts and
+    polls.
+  - *A faster SCK* with a source-synchronous sampling scheme (sampling MOSI on the raw SCK, not
+    through the synchronizers): breaks the 2-flop discipline the whole port is built on.
+  - *Entering by a command byte* (e.g. a reserved command like QSPI flashes' 0x38): equivalent,
+    but a register reads back and is in the register map like every other setting.
+  - *Leaving by CS_n held high for N clocks:* the host would have no explicit action; any idle
+    host would leave quad mode.
+- **Generality:** the port is protocol-neutral: every high-rate stream gains (the logic
+  analyser's sustained capture rate, D86, is limited by the port; quad SPI's 2.8 MB/s reads,
+  D87; HDLC and USB at higher rates).
+- **Tests:** `tb_quad` (16 checks: reset mode, entering at CS_n high, register writes and reads,
+  16-byte bursts at 16 clocks per byte against 64, the borrowed pins with CS_n high and low,
+  `uo_out[6]` as TX full in quad mode, a program load and a 64-byte UART loopback in quad
+  mode, leaving by `HOSTCFG` = 0, by 8 SCK pulses (and their harmlessness in single mode), and
+  by reset). `tb_host.svh` has a quad path: with `+QUAD` every bench's host switches at its
+  first transaction; `make test` runs `tb_la` that way and `make test-quad` also `tb_pbe` (UART,
+  SPI, I2C, 1-Wire, Modbus, SMBus). Every existing bench passes unchanged in single mode.
+- **Register map:** `HOSTCFG` 0x50 is the first register above the second pages; unmapped reads
+  still return 0, so the golden model (which never writes 0x50) still matches.

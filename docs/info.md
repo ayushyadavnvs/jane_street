@@ -49,6 +49,18 @@ The full documentation, register map and design decisions are in the repository:
 
 The host talks to the chip over SPI mode 0. Use `ui[0]` SCK (at most clk/8), `ui[1]` CS_n,
 `ui[2]` MOSI and `uo[0]` MISO.
+- **Quad mode (D89)**, for streams such as 10 Mbit Ethernet: write 1 to `0x50` (`HOSTCFG`); from
+  the next CS_n high every SCK carries 4 bits, high nibble first, so a byte is 2 SCK cycles
+  (3.75 MB/s each way at SCK = 7.5 MHz, 60 MHz clock). Pins in quad mode:
+
+  | Signal | Pin |
+  |---|---|
+  | D0..D3 (host to chip) | `ui[2]`, `ui[3]`, `ui[4]`, `ui[5]` |
+  | Q0..Q3 (chip to host) | `uo[0]`, `uo[1]`, `uo[2]`, `uo[3]` (only while CS_n is low; with CS_n high `uo[1..3]` are IRQ and the running bits as usual) |
+  | SCK, CS_n | `ui[0]`, `ui[1]` (unchanged) |
+
+  `uo[4..7]` (RX has data, TX full) keep their meaning in quad mode. Back to single lane: write
+  0 to `0x50`, or send 8 SCK pulses with CS_n high (works in either mode), or reset.
 - **Transaction:** a command byte (bit 7 = write, bits 6..0 = register address), then data bytes.
 - **Burst:** the address auto-increments, except for the program memory and the FIFO data
   registers, which can be streamed.

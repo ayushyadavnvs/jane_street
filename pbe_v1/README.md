@@ -27,6 +27,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_la.sv` | Logic analyser and waveform generator against an independent stimulus and timestamps (D86) |
 | `test/tb_qspi.sv` | Quad SPI controller against `qspi_flash_model.sv` (a NOR flash: 9F, 03, 0B, 6B, EB, 06, 05, 32) (D87) |
 | `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ) (D88) |
+| `test/tb_quad.sv` | The quad host port: modes, pins, recovery, burst rates, a program load and a UART loopback in quad mode (D89) |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
@@ -43,6 +44,7 @@ make test-proto                            # only tb_proto (WS2812, SPI peripher
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-proto2                           # only the D84-D88 protocols (PS/2, GPIO expander, logic analyser, QSPI, HDLC)
+make test-quad                              # the quad host port (tb_quad, tb_la +QUAD) and tb_pbe with its host in quad mode (D89)
 make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
 make test-verilator                        # tb_line and 5 more under Verilator and Icarus: both pass, identical logs (D80)
 make synth                                 # area of the standard cells, IHP library in ../ihp_lib; the SRAM macros
@@ -56,9 +58,15 @@ make timing                                # critical path, slow corner
 | Pin | Use |
 |---|---|
 | `ui_in[0..2]` | host SCK, CS_n, MOSI (host SCK at most clk / 8) |
-| `uo_out[0]` | host MISO |
-| `uo_out[1]` | IRQ |
-| `uo_out[7:2]` | status: running, RX has data, TX full (per engine) |
+| `ui_in[3..5]` | host D1..D3 in quad mode (D89; MOSI is D0) |
+| `uo_out[0]` | host MISO (Q0 in quad mode) |
+| `uo_out[1]` | IRQ (Q1 in quad mode while CS_n is low) |
+| `uo_out[3:2]` | running (Q3, Q2 in quad mode while CS_n is low) |
+| `uo_out[7:4]` | status: RX has data, TX full (per engine), in both modes |
+
+**Quad host mode (D89):** `HOSTCFG` (0x50) bit 0 = 1 switches the port to 4 bits per SCK in both
+directions from the next CS_n high (a byte is 2 SCK cycles, high nibble first): 16 clocks per
+byte instead of 64. Back to single lane: write 0, or 8 SCK pulses with CS_n high, or reset.
 | `uio[7:0]` | protocol pins |
 
 The full register map is in the header comment of `src/tt_um_pbe.sv`.

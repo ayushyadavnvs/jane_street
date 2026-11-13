@@ -929,6 +929,9 @@ module tb_pbe;
       mb_max_gap = 0;
       mb_send;
       mb_receive;
+      // FLAG2 is set one tick before IRQ (modbus_rtu.pbe, `fend`): a fast host (quad mode)
+      // can see the flag inside that tick, so wait up to 2 ticks for the pin (BUG-125)
+      for (int t = 0; t < 2 * (mb_div + 1) && !uo_out[1]; t++) @(negedge clk);
       check(uo_out[1], "Modbus: no IRQ at the end of the response");
       if (mb_resp_at >= 0)
         check(mb_rsp_start - mb_de_off >= mb_resp_at - 1.0 && mb_rsp_start - mb_de_off <= mb_resp_at + 1.0,

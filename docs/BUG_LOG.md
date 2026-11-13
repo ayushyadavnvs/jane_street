@@ -81,6 +81,9 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-111 | RTL (`PBE_PMEM_FF` fallback) | The 64-word fallback took write addresses mod 64, so loading a whole 256-word image overwrote each engine's program with the image's upper (zero) words | `make test-ff` (`tb_usb`) | Fixed (writes to words 64-255 dropped) |
 | BUG-112 | Testbench | `tb_page` (d) declared `int bad = 0;` inside a procedural block: a static variable initialised once (BUG-023's pattern), which `make test`'s lint rejects | Icarus warning on the first run of `tb_page` | Fixed |
 | BUG-113 | Testbench | `tb_page` (a) did not check that a timeout clears a pending `PAGE`: a timeout that kept it passed | Running `tb_page` against that fault (D83) | Fixed (a `PAGE` before the timed-out `WAIT`, a jump first in the vector) |
+| BUG-125 | Testbench | `tb_pbe` checked the Modbus IRQ pin inside the tick between `FLAG 2, SET` and `IRQ`; only a fast (quad) host landed there | `tb_pbe +QUAD` (D89) | Fixed (bounded wait for the pin) |
+| BUG-126 | Testbench | `host_quad_on`'s dummy transaction wrote `HOSTCFG` = 0 just after switching to quad | `tb_quad` (b) | Fixed (a read) |
+| BUG-127 | Tooling | Icarus 12: `return` in tasks, queue arguments and bit selects of queue elements, real arrays in automatic tasks | `tb_quad`, `tb_line` M | Worked around |
 
 ---
 
@@ -3233,3 +3236,65 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **After:** `while (q_len.size() == 0) #(100);   // (Icarus does not wake a wait on a queue's size)`
 - **Test:** `tb_hdlc` phase `RX, CLKDIV 23` after the 1 Mbit/s phases: before, `frame 0: not
   received` ... `FAIL`; after, `PASS` (and the phase passed alone before the fix).
+
+## BUG-125 — tb_pbe checked the Modbus IRQ pin inside the tick between FLAG2 and IRQ (test)
+
+- **Where:** `pbe_v1/test/tb_pbe.sv`, the Modbus rounds (Test 5).
+- **Cause:** `modbus_rtu.pbe` ends a frame with `FLAG 2, SET` and then `FLAG 0, IRQ`, one tick
+  later (at 19200 baud a tick is an eighth of a bit, 6.5 µs: about 310 clocks). The bench reads the flag
+  (`flag_get`), drains the FIFO and then checks the IRQ pin at once. With the single-lane host
+  the reads took longer than the tick, so the pin was always up; with the quad host (D89, 4x
+  faster) the check landed inside the tick: `FAIL: Modbus: no IRQ at the end of the response`
+  in 8 rounds. The chip was right: the program raises IRQ one tick after the flag.
+- **Before:**
+  ```
+      mb_receive;
+      check(uo_out[1], "Modbus: no IRQ at the end of the response");
+  ```
+- **After:** wait up to 2 ticks for the pin:
+  ```
+      mb_receive;
+      for (int t = 0; t < 2 * (mb_div + 1) && !uo_out[1]; t++) @(negedge clk);
+      check(uo_out[1], "Modbus: no IRQ at the end of the response");
+  ```
+- **Test:** `make test-quad` (`tb_pbe` with `+QUAD`): before, 8 errors; after, `PASS`. The
+  single-lane run is unchanged.
+
+## BUG-126 — tb_host's host_quad_on wrote HOSTCFG = 0 right after switching to quad (test)
+
+- **Where:** `pbe_v1/test/tb_host.svh`, `host_quad_on` (D89).
+- **Cause:** `host_quad_on` set `host_want_quad` and then ran a dummy transaction so that `cs()`
+  would switch the port first. The dummy was `reg_write(7'h50, 8'h00)`: after the switch
+  (which writes `HOSTCFG` = 1 in single mode), it wrote `HOSTCFG` = 0 in quad mode, so the chip
+  went back to single mode at that CS_n high while the host stayed in quad. `tb_quad` (b):
+  `FAIL: (b) HOSTCFG reads 1 in quad mode`, and every check after it.
+- **Before:**
+  ```
+    host_want_quad = 1;
+    reg_write(7'h50, 8'h00);  // any transaction: cs() switches first
+  ```
+- **After:** a read, which changes nothing:
+  ```
+    host_want_quad = 1;
+    reg_read(7'h50, d);  // any transaction: cs() switches first
+  ```
+- **Test:** `tb_quad` (b)-(e): before, 6 failures; after, 16/16 `PASS`.
+
+## BUG-127 — Icarus 12 failed on three testbench constructs of tb_quad and tb_line M (tool)
+
+- **Where:** `pbe_v1/test/tb_host.svh` (quad `spi_byte`), `tb_quad.sv`, `tb_line_manch.svh`.
+- **Cause:** limits of Icarus Verilog 12, each found by a failing run, none in the RTL:
+  1. `return` inside a task: `error: Cannot "return" from tasks`;
+  2. a queue passed to an automatic task, and a queue element's bits selected with a variable
+     index (`rx[n*4+:4]` into an output argument, `mt_q[i][2]`): elaboration errors or
+     `vvp: ... Assertion 'running_thread && running_thread->rd_context' failed` at run time;
+  3. a `real` array (or several real locals) inside an automatic task: the same `rd_context`
+     assertion at time 0, before the first test (found by bisecting the include file).
+- **Before:** for example `task automatic run_manch_tests(); ... real ppms[6], jits[6];`, and
+  `rx[n*4+:4] = uo_out[3:0];` in a `for (int n = 1; n >= 0; n--)` loop.
+- **After:** `if/else` instead of `return`; fixed-size module-level arrays and three `int` queues
+  instead of queue arguments and bit selects of queue elements; the nibble loop unrolled
+  (`rx[7:4]`, `rx[3:0]`); `run_manch_tests` and `manch_drive` static tasks with module-level
+  reals. The same constructs are avoided in the rest of the new benches.
+- **Test:** `tb_quad` and `tb_line` (M1-M7) run to `PASS` under Icarus; `tb_line` also under
+  Verilator (`make test-verilator`, identical logs).
