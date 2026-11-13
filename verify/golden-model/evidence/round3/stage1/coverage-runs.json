@@ -1,0 +1,476 @@
+[
+  {
+    "test": "coverage harness negative regressions",
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/.venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "/workspace/work/jane_street/verify/coverage",
+        "-p",
+        "test_harness.py",
+        "-v"
+      ],
+      "returncode": 0,
+      "seconds": 0.885,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/harness-tests.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "passed": true
+  },
+  {
+    "test": "tb_coverage_gaps",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "--output-groups",
+        "0",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_coverage_gaps",
+        "--Mdir",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps",
+        "-o",
+        "sim",
+        "-DFUNCTIONAL",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/test/tb_coverage_gaps.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv",
+        "/workspace/work/jane_street/macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.v",
+        "/workspace/work/jane_street/macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_core_behavioral_bm_bist.v"
+      ],
+      "returncode": 0,
+      "seconds": 77.197,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_coverage_gaps-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_coverage_gaps/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_coverage_gaps.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.389,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_coverage_gaps-run.log",
+      "coverage_bytes": 1018197,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "3805d353e75913af4a95761c10efe314faee205adbdb3c4c3d8be611da42379b"
+  },
+  {
+    "test": "tb_engine_known_reset",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_engine_known_reset/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_engine_known_reset.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.315,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_engine_known_reset-run.log",
+      "coverage_bytes": 1104597,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "bd30957be79fe18a95a0eb64bf238df84144be030863635a3913d775a11a1635"
+  },
+  {
+    "test": "tb_fifo_robustness",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_fifo_robustness/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_fifo_robustness.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.01,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_fifo_robustness-run.log",
+      "coverage_bytes": 82947,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "0837e3523c84ef46c71ef370e49efadb8c4dab90a74bee7681bd47ab3ff3d14b"
+  },
+  {
+    "test": "tb_engine_restart",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_engine_restart/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_engine_restart.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.287,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_engine_restart-run.log",
+      "coverage_bytes": 1029904,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "1c597413ad895d20d49655ca135bc7a55e1c08ad74bf05c7e065e62f25f7e003"
+  },
+  {
+    "test": "tb_engine_ops",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_engine_ops/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_engine_ops.dat"
+      ],
+      "returncode": 0,
+      "seconds": 2.358,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_engine_ops-run.log",
+      "coverage_bytes": 1087931,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "c50ae11ec03b4b7e0629a42f95f0e15f1675d91402c8fabf8a58b340b1f5b414"
+  },
+  {
+    "test": "tb_fetch",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_fetch/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_fetch.dat"
+      ],
+      "returncode": 0,
+      "seconds": 7.126,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_fetch-run.log",
+      "coverage_bytes": 1787403,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "b364e01a615c47e9051cb076385b14296469f746453df6be2ef88a01a03db5ef"
+  },
+  {
+    "test": "tb_page",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_page/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_page.dat"
+      ],
+      "returncode": 0,
+      "seconds": 8.203,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_page-run.log",
+      "coverage_bytes": 1772904,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "f6b91d7d30c2b2918f5c889cc4a256add63ba1d10021f2a437d265e129e48f93"
+  },
+  {
+    "test": "tb_line",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_line/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_line.dat"
+      ],
+      "returncode": 0,
+      "seconds": 5.575,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_line-run.log",
+      "coverage_bytes": 597520,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "0f3d3a0c9579dd80ba0479abbd165dc296e1b3dc43d8a96cd151589d104e7197"
+  },
+  {
+    "test": "tb_usb",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_usb/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_usb.dat"
+      ],
+      "returncode": 0,
+      "seconds": 28.333,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_usb-run.log",
+      "coverage_bytes": 1839539,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "04e4d1b18a95cb3486586086c9d45500b9005677b73e7096d9fa83b4821fba03"
+  },
+  {
+    "test": "tb_proto",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_proto/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_proto.dat"
+      ],
+      "returncode": 0,
+      "seconds": 13.063,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_proto-run.log",
+      "coverage_bytes": 1826574,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "55b935aba38d6c2595639dbc4c0430fea198cc816eb13d914a95f4d90faf943b"
+  },
+  {
+    "test": "tb_pbe",
+    "build": {
+      "command": [
+        "verilator",
+        "--binary",
+        "--timing",
+        "--coverage",
+        "--assert",
+        "-Wno-fatal",
+        "--compiler-include",
+        "verilated_cov.h",
+        "--output-groups",
+        "0",
+        "-j",
+        "2",
+        "--top-module",
+        "tb_pbe",
+        "--Mdir",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_pbe",
+        "-o",
+        "sim",
+        "-DFUNCTIONAL",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/test/tb_pbe.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_bsync.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_crc.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_engine.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_fifo.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_host_spi.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_line.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/pbe_pmem_sram.sv",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src/tt_um_pbe.sv",
+        "/workspace/work/jane_street/macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.v",
+        "/workspace/work/jane_street/macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_core_behavioral_bm_bist.v"
+      ],
+      "returncode": 0,
+      "seconds": 1300.243,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_pbe-build.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_pbe/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_pbe.dat"
+      ],
+      "returncode": 0,
+      "seconds": 235.287,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_pbe-run.log",
+      "coverage_bytes": 2080598,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "64e4e026f7d7e27a71818e4beb0850f21d79474c16cd6eb0792c87f02bf64391"
+  },
+  {
+    "test": "tb_can",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_can/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_can.dat"
+      ],
+      "returncode": 0,
+      "seconds": 24.954,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_can-run.log",
+      "coverage_bytes": 2021770,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "fc82839412f30f1c5721e5864bb9353210ff30fc6ef0b62310655fae8f17232b"
+  },
+  {
+    "test": "tb_debug",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_debug/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_debug.dat"
+      ],
+      "returncode": 0,
+      "seconds": 187.921,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_debug-run.log",
+      "coverage_bytes": 2053884,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "1f23c84e220bf084141ba2d81acafae0aea1899a1b7751c192cebb1cf48f0971"
+  },
+  {
+    "test": "tb_spec_boundaries",
+    "build": {
+      "reused": true,
+      "passed": true
+    },
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+        "+verilator+coverage+file+/workspace/work/jane_street/pbe_v1/build/coverage/tb_spec_boundaries.dat"
+      ],
+      "returncode": 0,
+      "seconds": 0.218,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-run.log",
+      "coverage_bytes": 1031223,
+      "coverage_error": null
+    },
+    "passed": true,
+    "source_signature": "be761dd0eb08b8a7d830928b91e47219e50de55847b9afbb2ee03f5f3431df58",
+    "expected_failures": [
+      {
+        "command": [
+          "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_WINDOW_FENCE"
+        ],
+        "returncode": 1,
+        "seconds": 0.057,
+        "passed": true,
+        "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-EXPECT_WINDOW_FENCE.log",
+        "coverage_bytes": null,
+        "coverage_error": null
+      },
+      {
+        "command": [
+          "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_INSTRUCTION_WINDOW_FENCE"
+        ],
+        "returncode": 1,
+        "seconds": 0.028,
+        "passed": true,
+        "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-EXPECT_INSTRUCTION_WINDOW_FENCE.log",
+        "coverage_bytes": null,
+        "coverage_error": null
+      },
+      {
+        "command": [
+          "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_spec_boundaries/sim",
+          "+EXPECT_WRITE_CANCELLATION"
+        ],
+        "returncode": 1,
+        "seconds": 0.028,
+        "passed": true,
+        "log": "/workspace/work/jane_street/pbe_v1/build/coverage/tb_spec_boundaries-EXPECT_WRITE_CANCELLATION.log",
+        "coverage_bytes": null,
+        "coverage_error": null
+      }
+    ]
+  },
+  {
+    "test": "make diff equivalent --sim verilator",
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/.venv/bin/python",
+        "/workspace/work/jane_street/verify/golden-model/differential/run.py",
+        "--sim",
+        "verilator",
+        "--coverage",
+        "--source-dir",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/src",
+        "--build-dir",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/obj_diff",
+        "--coverage-output",
+        "/workspace/work/jane_street/pbe_v1/build/coverage/diff.dat",
+        "--n",
+        "2",
+        "--cycles",
+        "600",
+        "--seed",
+        "0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 12.6,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/diff.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "passed": true
+  },
+  {
+    "test": "line differential 160 configurations",
+    "run": {
+      "command": [
+        "/workspace/work/jane_street/.venv/bin/python",
+        "/workspace/work/jane_street/verify/coverage/run_line.py"
+      ],
+      "returncode": 0,
+      "seconds": 7.987,
+      "passed": true,
+      "log": "/workspace/work/jane_street/pbe_v1/build/coverage/line_sweep.log",
+      "coverage_bytes": null,
+      "coverage_error": null
+    },
+    "passed": true
+  }
+]

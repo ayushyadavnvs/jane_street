@@ -37,14 +37,14 @@ module line_roundtrip #(parameter MODE=1, STYLE=0, PAIR=0, BYTES=0, MSB=0,
     end
   end
   pbe_line tx (
-    .clk, .rst_n, .clear(1'b0), .cfg(CFG), .cfg2(8'd0), .sync(SYNC), .period_m1(16'(PERIOD)),
-    .out_msb_first(1'(MSB)), .in_msb_first(1'(MSB)), .a_in(1'b1), .b_in(1'b0),
+    .clk, .rst_n, .clear(1'b0), .ctl(1'b0), .ctl_param(5'd0), .cfg(CFG), .cfg2(8'd0), .sync(SYNC), .period_m1(16'(PERIOD)),
+    .out_msb_first(1'(MSB)), .in_msb_first(1'(MSB)), .a_in(1'b1), .a_early(1'b1), .b_in(1'b0),
     .drive, .a_out, .b_out, .tx_put, .tx_end, .tx_data, .tx_ready,
     .rx_valid(), .rx_data(), .rx_take(1'b1), .frame_end(), .err(tx_err)
   );
   pbe_line rx (
-    .clk, .rst_n, .clear(1'b0), .cfg(CFG), .cfg2(8'd0), .sync(SYNC), .period_m1(16'(PERIOD)),
-    .out_msb_first(1'(MSB)), .in_msb_first(1'(MSB)), .a_in(a_wire), .b_in(b_wire),
+    .clk, .rst_n, .clear(1'b0), .ctl(1'b0), .ctl_param(5'd0), .cfg(CFG), .cfg2(8'd0), .sync(SYNC), .period_m1(16'(PERIOD)),
+    .out_msb_first(1'(MSB)), .in_msb_first(1'(MSB)), .a_in(a_wire), .a_early(a_wire), .b_in(b_wire),
     .drive(), .a_out(), .b_out(), .tx_put(1'b0), .tx_end(1'b0), .tx_data(8'd0), .tx_ready(),
     .rx_valid, .rx_data, .rx_take(1'b1), .frame_end, .err(rx_err)
   );

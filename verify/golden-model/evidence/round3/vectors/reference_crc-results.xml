@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794568386" />
+    <testcase name="catalogue_checks" classname="test_catalogue" file="/workspace/work/jane_street/verify/vectors/crc/test_catalogue.py" lineno="55" time="10.954391956329346" sim_time_ns="647916.864" ratio_time="59146.76657389821" />
+  </testsuite>
+</testsuites>

@@ -13,7 +13,7 @@ if __name__ == '__main__':
     build = root / 'build' / 'line_model'
     runner.build(sources=[root / 'src/pbe_line.sv'], hdl_toplevel='pbe_line',
                  build_dir=build, always=True, build_args=['-g2012'], timescale=('1ns', '1ps'))
-    results = runner.test(hdl_toplevel='pbe_line', test_module='test_line_cocotb',
+    results = runner.test(hdl_toplevel='pbe_line', test_module='test_line_ethernet' if os.getenv('PBE_LINE_ETHERNET') == '1' else 'test_line_cocotb',
                 test_dir=here, build_dir=build,
                 extra_env={'PYTHONPATH': str(here) + os.pathsep + os.environ.get('PYTHONPATH', '')})
     tests, failures = get_results(results)

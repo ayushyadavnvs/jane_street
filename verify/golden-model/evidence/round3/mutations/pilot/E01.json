@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-jrfa5bq3/E01/verify/ethernet/run_directed.py"
+  ],
+  "returncode": 1,
+  "seconds": 1.106,
+  "status": "caught",
+  "first_failure": "\"reason\": \"outputs actual=(0, 0, 5), expected=(0, 0, 0)\",",
+  "first_failing_check": null,
+  "log": "E01.log.gz",
+  "id": "E01",
+  "category": "quad nibble order",
+  "file": "src/pbe_host_spi.sv",
+  "before": "{rx_sh[3:0], mosi_hi, mosi}",
+  "after": "{mosi_hi, mosi, rx_sh[3:0]}",
+  "baseline_sha256": "17137c3bfce0c1f84e6d4650c300c2f9a37e2ba32a2dbba30bf34db990991d08",
+  "mutant_sha256": "b83ff23f330676e614ac89ffb2254a7c8744e1ea488a90223acc718f614a7e33"
+}

@@ -9,10 +9,10 @@ module tb_coverage_gaps;
   wire [7:0] status;
   always #5 clk=~clk;
   pbe_engine dut(.clk,.rst_n,.run,.restart,.clkdiv(16'd0),.pin_base(3'd0),.jmp_pin(3'd0),
-    .out_msb_first(1'b0),.in_msb_first(1'b0),.start_pc(8'd0),.crc_poly(16'd0),.crc_cfg(8'd0),
-    .timeout(16'd0),.line_cfg(8'h40),.coder_cfg(8'd0),.coder_cfg2(8'd0),.sync(8'd0),.crc_good(16'd0),
+    .out_msb_first(1'b0),.in_msb_first(1'b0),.start_pc(8'd0),.crc_poly(32'd0),.crc_wide(1'b0),.crc_cfg(8'd0),
+    .timeout(16'd0),.line_cfg(8'h40),.coder_cfg(8'd0),.coder_cfg2(8'd0),.sync(8'd0),.crc_good(32'd0),
     .host_crc_init(1'b0),.host_tmo_clr(1'b0),.host_ovf_clr,.host_lerr_clr(1'b0),.host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),.status,
-    .crc_now(),.can_tec(),.can_rec(),.can_state(),.pc,.pc_copy(),.instr(program_mem[pc]),.pm_wr(1'b0),.pins_in(8'd0),.pins_out,.pins_oe,
+    .crc_now(),.can_tec(),.can_rec(),.can_state(),.pc,.pc_copy(),.instr(program_mem[pc]),.pm_wr(1'b0),.pins_in(8'd0),.pins_in_n(8'd0),.pins_out,.pins_oe,
     .tx_data(8'd0),.tx_empty(1'b1),.tx_pop(),.tx_mark(),.tx_rewind(),.rx_data(),.rx_full,.rx_push(),.flags,.flag_set(),.flag_clr(),.irq());
   task automatic tick; @(posedge clk); #1; endtask
   initial begin

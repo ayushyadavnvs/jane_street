@@ -1,0 +1,11 @@
+{
+  "returncode": 1,
+  "old_revision": "159650f",
+  "source_sha256": {
+    "pbe_engine": "e37c78e1d73f4f5a166efee1d8c211f966cbf2a54b272e051f4821f285cbd6b6",
+    "pbe_line": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+    "pbe_crc": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+    "pbe_bsync": "27c53b2808b6c5b6791929cf2a0cd418fb40c0a3b27f3f3a813c5e0744552ba5"
+  },
+  "scope": "arbitrary live configuration, all LINE2 and PC/PAGE, legacy modes 0..2/LINE6=0 and no new non-bsync LINECTL action, CRC narrow; PC_COPIES=0"
+}

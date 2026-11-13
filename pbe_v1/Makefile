@@ -107,8 +107,9 @@ test/page_loop_image.hex: test/page_loop.pbe tools/pbe_asm.py
 test/fetch_image.hex: test/fetch_timing.pbe test/fetch_stream.pbe test/fetch_host.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0:0 test/fetch_stream.pbe@0:128 test/fetch_host.pbe@1:200
 
-test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
+test: test-manchester-idle $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
 	$(LINT)
+	$(MAKE) test-timeout-boundary test-parity-boundary
 	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
 	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(ENG) && vvp -n known_reset.vvp
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(ENG) && vvp -n restart.vvp
@@ -286,7 +287,7 @@ CYCLES ?= 1200
 .PHONY: diff test-model
 
 diff:
-	$(PYTHON) $(GM)/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES)
+	$(PYTHON) $(GM)/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES) $(if $(filter 1,$(ETHERNET)),--ethernet,)
 
 test-model:
 	cd $(GM) && $(PYTHON) -m unittest discover -s model -p 'test_*.py' -v
@@ -355,7 +356,7 @@ formal:
 # Independent library/catalogue packet checks; install their pinned requirements explicitly.
 .PHONY: test-crc-vectors test-protocol-vectors
 test-crc-vectors:
-	$(PYTHON) $(V)/vectors/crc/run.py
+	$(PYTHON) $(V)/vectors/crc/run.py $(if $(filter 1,$(WIDE)),--wide,)
 
 test-protocol-vectors:
 	$(PYTHON) $(V)/vectors/protocols/run.py
@@ -380,3 +381,33 @@ stress-characterize:
 
 stress-strict:
 	$(PYTHON) $(V)/stress/run.py --seed $(STRESS_SEED)
+
+# Exact timeout deadline: catches the retained M19 >= to > fault.
+.PHONY: test-timeout-boundary
+test-timeout-boundary:
+	mkdir -p build
+	iverilog -g2012 -s tb_timeout_boundary -o build/timeout-boundary.vvp ../verify/ethernet/tb_timeout_boundary.sv $(ENG_SRC)
+	vvp -n build/timeout-boundary.vvp
+
+.PHONY: test-parity-boundary
+test-parity-boundary:
+	mkdir -p build
+	iverilog -g2012 -s tb_parity_boundary -o build/parity-boundary.vvp ../verify/ethernet/tb_parity_boundary.sv $(ENG_SRC)
+	vvp -n build/parity-boundary.vvp
+
+# Round 3: independent Ethernet/HDLC verification (long targets remain opt-in).
+.PHONY: test-manchester-idle test-ethernet-corners test-wire-vectors stress-ethernet coverage-ethernet mutate-ethernet
+test-manchester-idle:
+	mkdir -p build
+	iverilog -g2012 -s tb_manchester_idle_wait -o build/mc_idle.vvp ../verify/ethernet/tb_manchester_idle_wait.sv src/pbe_line.sv
+	vvp build/mc_idle.vvp
+test-ethernet-corners:
+	$(PYTHON) ../verify/ethernet/run_directed.py
+test-wire-vectors:
+	$(PYTHON) ../verify/ethernet/run_wire.py --sim verilator
+stress-ethernet:
+	$(PYTHON) ../verify/ethernet/run_wire.py --sim verilator --stress
+coverage-ethernet:
+	$(PYTHON) ../verify/coverage/run.py --jobs 1 --ethernet
+mutate-ethernet:
+	$(PYTHON) ../verify/mutation/ethernet_mutate.py

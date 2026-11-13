@@ -1,0 +1,1097 @@
+[
+  {
+    "module": "pbe_engine",
+    "name": "opcode_0",
+    "condition": "exec && op == 3'd0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_1",
+    "condition": "exec && op == 3'd1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_2",
+    "condition": "exec && op == 3'd2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_3",
+    "condition": "exec && op == 3'd3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_4",
+    "condition": "exec && op == 3'd4"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_5",
+    "condition": "exec && op == 3'd5"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_6",
+    "condition": "exec && op == 3'd6"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "opcode_7",
+    "condition": "exec && op == 3'd7"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_0",
+    "condition": "exec && op == 3'd0 && pin_act == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_1",
+    "condition": "exec && op == 3'd0 && pin_act == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_2",
+    "condition": "exec && op == 3'd0 && pin_act == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_3",
+    "condition": "exec && op == 3'd0 && pin_act == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_4",
+    "condition": "exec && op == 3'd0 && pin_act == 4"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_5",
+    "condition": "exec && op == 3'd0 && pin_act == 5"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_6",
+    "condition": "exec && op == 3'd0 && pin_act == 6"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_0_7",
+    "condition": "exec && op == 3'd0 && pin_act == 7"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_5_0",
+    "condition": "exec && op == 3'd5 && arg_hi == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_5_1",
+    "condition": "exec && op == 3'd5 && arg_hi == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_6_0",
+    "condition": "exec && op == 3'd6 && flag_act == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_6_1",
+    "condition": "exec && op == 3'd6 && flag_act == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_6_2",
+    "condition": "exec && op == 3'd6 && flag_act == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_6_3",
+    "condition": "exec && op == 3'd6 && flag_act == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_0",
+    "condition": "exec && op == 3'd7 && ext_op == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_1",
+    "condition": "exec && op == 3'd7 && ext_op == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_2",
+    "condition": "exec && op == 3'd7 && ext_op == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_3",
+    "condition": "exec && op == 3'd7 && ext_op == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_4",
+    "condition": "exec && op == 3'd7 && ext_op == 4"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_5",
+    "condition": "exec && op == 3'd7 && ext_op == 5"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_6",
+    "condition": "exec && op == 3'd7 && ext_op == 6"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "sub_7_7",
+    "condition": "exec && op == 3'd7 && ext_op == 7"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_0",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_1",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_2",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_3",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_4",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 4"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_5",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 5"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_6",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 6"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_7",
+    "condition": "exec && op == OP_JMP && jmp_cnd == 7"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_0_0",
+    "condition": "exec && op == OP_WAIT && arg[5] == 0 && wait_cnd == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_0_1",
+    "condition": "exec && op == OP_WAIT && arg[5] == 0 && wait_cnd == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_0_2",
+    "condition": "exec && op == OP_WAIT && arg[5] == 0 && wait_cnd == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_0_3",
+    "condition": "exec && op == OP_WAIT && arg[5] == 0 && wait_cnd == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_1_0",
+    "condition": "exec && op == OP_WAIT && arg[5] == 1 && wait_cnd == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_1_1",
+    "condition": "exec && op == OP_WAIT && arg[5] == 1 && wait_cnd == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_1_2",
+    "condition": "exec && op == OP_WAIT && arg[5] == 1 && wait_cnd == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wait_1_3",
+    "condition": "exec && op == OP_WAIT && arg[5] == 1 && wait_cnd == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "timeout_taken",
+    "condition": "tmo_hit"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "rx_overflow",
+    "condition": "ovf_now"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "d50_refetch",
+    "condition": "run && pm_wr && iv"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "pull_kind_0",
+    "condition": "exec && op == OP_FIFO && !arg_hi && arg[7:6] == 0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "pull_kind_1",
+    "condition": "exec && op == OP_FIFO && !arg_hi && arg[7:6] == 1"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "pull_kind_2",
+    "condition": "exec && op == OP_FIFO && !arg_hi && arg[7:6] == 2"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "pull_kind_3",
+    "condition": "exec && op == OP_FIFO && !arg_hi && arg[7:6] == 3"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "linectl_width",
+    "condition": "lctl && bsm && !arg[4]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "linectl_action",
+    "condition": "lctl && bsm && arg[4]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "line_event_vector",
+    "condition": "lv_hit"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "start_pc_upper_half",
+    "condition": "exec && start_pc[7]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "exec_word_255",
+    "condition": "exec && iv && pc == 8'd0"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "page_executed",
+    "condition": "exec && page_op"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_other_page",
+    "condition": "exec && jump && pg_set && pg_num != cur_off[7:6]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "page_cleared",
+    "condition": "pg_set && (restart || tmo_hit || lv_hit)"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "jump_wraps_256",
+    "condition": "exec && jump && ({1'b0, start_pc} + {3'b0, arg[5:0]}) > 9'd255"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_0_set",
+    "condition": "status[0] && !pbe_cov_previous_status[0]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_0_clear",
+    "condition": "!status[0] && pbe_cov_previous_status[0]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_1_set",
+    "condition": "status[1] && !pbe_cov_previous_status[1]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_1_clear",
+    "condition": "!status[1] && pbe_cov_previous_status[1]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_2_set",
+    "condition": "status[2] && !pbe_cov_previous_status[2]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_2_clear",
+    "condition": "!status[2] && pbe_cov_previous_status[2]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_3_set",
+    "condition": "status[3] && !pbe_cov_previous_status[3]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_3_clear",
+    "condition": "!status[3] && pbe_cov_previous_status[3]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_4_set",
+    "condition": "status[4] && !pbe_cov_previous_status[4]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_4_clear",
+    "condition": "!status[4] && pbe_cov_previous_status[4]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_5_set",
+    "condition": "status[5] && !pbe_cov_previous_status[5]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_5_clear",
+    "condition": "!status[5] && pbe_cov_previous_status[5]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_6_set",
+    "condition": "status[6] && !pbe_cov_previous_status[6]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_6_clear",
+    "condition": "!status[6] && pbe_cov_previous_status[6]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_7_set",
+    "condition": "status[7] && !pbe_cov_previous_status[7]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "status_7_clear",
+    "condition": "!status[7] && pbe_cov_previous_status[7]"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_0_0_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 0 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_0_0_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 0 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_0_1_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 0 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_0_1_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 0 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_1_0_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 1 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_1_0_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 1 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_1_1_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 1 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_1_1_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 1 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_2_0_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 2 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_2_0_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 2 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_2_1_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 2 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_2_1_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 2 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_3_0_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 3 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_3_0_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 3 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_3_1_0",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 3 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_1_3_1_1",
+    "condition": "cfg[1:0] == 1 && cfg[3:2] == 3 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_0_0_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 0 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_0_0_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 0 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_0_1_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 0 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_0_1_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 0 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_1_0_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 1 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_1_0_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 1 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_1_1_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 1 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_1_1_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 1 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_2_0_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 2 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_2_0_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 2 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_2_1_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 2 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_2_1_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 2 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_3_0_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 3 && cfg[4] == 0 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_3_0_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 3 && cfg[4] == 0 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_3_1_0",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 3 && cfg[4] == 1 && cfg[5] == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "line_2_3_1_1",
+    "condition": "cfg[1:0] == 2 && cfg[3:2] == 3 && cfg[4] == 1 && cfg[5] == 1"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_integ",
+    "condition": "cs == 3'd0"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_idle",
+    "condition": "cs == 3'd1"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_frame",
+    "condition": "cs == 3'd2"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_tail",
+    "condition": "cs == 3'd3"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_eflag",
+    "condition": "cs == 3'd4"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_edwait",
+    "condition": "cs == 3'd5"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_edelim",
+    "condition": "cs == 3'd6"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_state_busoff",
+    "condition": "cs == 3'd7"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_own_start",
+    "condition": "own_start"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_foreign_start",
+    "condition": "hard"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_late_join",
+    "condition": "late_join"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_arbitration_lost",
+    "condition": "arb_lost"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_bit_error",
+    "condition": "bit_err"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_frame_sent",
+    "condition": "sent"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_error_detected",
+    "condition": "e_now"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_passive_flag",
+    "condition": "cs == C_EFLAG && flag_on && flag_pas"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_active_flag",
+    "condition": "cs == C_EFLAG && flag_on && !flag_pas"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_stuff_slot",
+    "condition": "sample && slot_stuff"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_ack_given",
+    "condition": "cs == C_TAIL && drv"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_unit_1",
+    "condition": "sample && cs == C_FRAME && width == 1 && rx_valid == 0 && rbits == 0"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_unit_3",
+    "condition": "sample && cs == C_FRAME && width == 3 && rbits == 2"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_unit_4",
+    "condition": "sample && cs == C_FRAME && width == 4 && rbits == 3"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_unit_7",
+    "condition": "sample && cs == C_FRAME && width == 7 && rbits == 6"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_unit_8",
+    "condition": "sample && cs == C_FRAME && width == 8 && rbits == 7"
+  },
+  {
+    "module": "pbe_bsync",
+    "name": "bsync_busoff_recovered",
+    "condition": "cs == C_BUSOFF && sample && rseq == 7'd127 && rrun == 4'd10 && b"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "both_engines",
+    "condition": "run == 2'b11"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "pm_write_engine0",
+    "condition": "pm_wr_e[0]"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "pm_write_engine1",
+    "condition": "pm_wr_e[1]"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "pm_write_other_running",
+    "condition": "(pm_wr_e[0] && run[1]) || (pm_wr_e[1] && run[0])"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "pm_second_refetch",
+    "condition": "pm_wr_q != 2'b00 && pm_wr_e == 2'b00"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_command",
+    "condition": "quad && !cs_n && sck_rise && last_bit && !have_cmd"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_write",
+    "condition": "quad && wr_en"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_read",
+    "condition": "quad && rd_done"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_load",
+    "condition": "quad && load_dly[1] && !cs_n"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_skip_fall",
+    "condition": "quad && sck_fall && bitcnt == 0 && !cs_n"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_mode_request_inside",
+    "condition": "!cs_n && quad_req != quad"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_latch_high",
+    "condition": "cs_n && quad_req != quad"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_partial_abort",
+    "condition": "cs_n && bitcnt == 4"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_exit_seven",
+    "condition": "cs_n && sck_rise && idle_sck == 6"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_exit_eight",
+    "condition": "quad_exit"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_idle_counter_reset",
+    "condition": "!cs_n && idle_sck != 0"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_stream_07",
+    "condition": "quad && !cs_n && no_incr && addr == 7'h07 && (wr_en || rd_done)"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_stream_16",
+    "condition": "quad && !cs_n && no_incr && addr == 7'h16 && (wr_en || rd_done)"
+  },
+  {
+    "module": "pbe_host_spi",
+    "name": "quad_stream_26",
+    "condition": "quad && !cs_n && no_incr && addr == 7'h26 && (wr_en || rd_done)"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_17",
+    "condition": "width_m1 == 5'd16 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_18",
+    "condition": "width_m1 == 5'd17 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_19",
+    "condition": "width_m1 == 5'd18 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_20",
+    "condition": "width_m1 == 5'd19 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_21",
+    "condition": "width_m1 == 5'd20 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_22",
+    "condition": "width_m1 == 5'd21 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_23",
+    "condition": "width_m1 == 5'd22 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_24",
+    "condition": "width_m1 == 5'd23 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_25",
+    "condition": "width_m1 == 5'd24 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_26",
+    "condition": "width_m1 == 5'd25 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_27",
+    "condition": "width_m1 == 5'd26 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_28",
+    "condition": "width_m1 == 5'd27 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_29",
+    "condition": "width_m1 == 5'd28 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_30",
+    "condition": "width_m1 == 5'd29 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_31",
+    "condition": "width_m1 == 5'd30 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_width_32",
+    "condition": "width_m1 == 5'd31 && step && !init"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_wide_reflected",
+    "condition": "width_m1[4] && out_rev && step"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_wide_plain",
+    "condition": "width_m1[4] && !out_rev && step"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_wide_init_zero",
+    "condition": "width_m1[4] && init && !init_ones"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_wide_init_ones",
+    "condition": "width_m1[4] && init && init_ones"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_init_wins_step",
+    "condition": "width_m1[4] && init && step"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_wide_good",
+    "condition": "width_m1[4] && ok"
+  },
+  {
+    "module": "pbe_crc",
+    "name": "crc_wide_bad",
+    "condition": "width_m1[4] && !ok"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wide_osrcrc_b2",
+    "condition": "exec && op == OP_EXT && ext_op == 1 && crc_wide && arg[3:0] == 8"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wide_osrcrc_b3",
+    "condition": "exec && op == OP_EXT && ext_op == 1 && crc_wide && arg[3:0] == 9"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "wide_osrcrc_left_ignored",
+    "condition": "exec && op == OP_EXT && ext_op == 1 && crc_wide && arg[2]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "narrow_osrcrc_param3",
+    "condition": "exec && op == OP_EXT && ext_op == 1 && !crc_wide && arg[3]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "linectl_non_bsync_off",
+    "condition": "lctl && !bsm && arg[0]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "linectl_non_bsync_on",
+    "condition": "lctl && !bsm && arg[1]"
+  },
+  {
+    "module": "pbe_engine",
+    "name": "linectl_non_bsync_both",
+    "condition": "lctl && !bsm && arg[1:0] == 3"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_polarity_0",
+    "condition": "manch && minv == 0 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_polarity_1",
+    "condition": "manch && minv == 1 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_period_3",
+    "condition": "manch && period_m1 == 16'd3 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_period_4",
+    "condition": "manch && period_m1 == 16'd4 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_period_5",
+    "condition": "manch && period_m1 == 16'd5 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_period_6",
+    "condition": "manch && period_m1 == 16'd6 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_period_19",
+    "condition": "manch && period_m1 == 16'd19 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_max_period",
+    "condition": "manch && period_m1 == 16'hffff && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_bit",
+    "condition": "manch && !bytes && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_byte",
+    "condition": "manch && bytes && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_msb",
+    "condition": "manch && out_msb_first && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_lsb",
+    "condition": "manch && !out_msb_first && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_sync_tx",
+    "condition": "manch && sync != 0 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_idle_wait_ignored",
+    "condition": "manch && cfg2[6] && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_flag_ignored",
+    "condition": "manch && cfg[6] && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_stuff_ignored",
+    "condition": "manch && cfg[3:2] != 0 && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_early_edge",
+    "condition": "manch && m_edge && m_early && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_late_edge",
+    "condition": "manch && m_edge && !m_early && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_boundary_skip",
+    "condition": "manch && m_edge && !m_mid && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_short_glitch",
+    "condition": "manch && a_d == a_in && a_early != a_in"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_carrier_sync",
+    "condition": "manch && m_lost && !hunting && sync != 0 && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_carrier_no_sync",
+    "condition": "manch && m_lost && sync == 0 && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_hunt_loss",
+    "condition": "manch && m_lost && hunting && rs == R_RUN"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_rx_overrun",
+    "condition": "manch && rx_valid && !rx_take && m_mid && rbits == 7"
+  },
+  {
+    "module": "pbe_line",
+    "name": "manchester_tail",
+    "condition": "manch && ts == T_SE0A && drive"
+  },
+  {
+    "module": "pbe_line",
+    "name": "stuff_ctl_off",
+    "condition": "ctl && ctl_param[0] && !ctl_param[1]"
+  },
+  {
+    "module": "pbe_line",
+    "name": "stuff_ctl_on_wins",
+    "condition": "ctl && ctl_param[1:0] == 3"
+  },
+  {
+    "module": "pbe_line",
+    "name": "stuff_queued_tag",
+    "condition": "q_valid && q_ns != ns_mode"
+  },
+  {
+    "module": "pbe_line",
+    "name": "stuff_shifter_tag",
+    "condition": "tbits != 0 && tns != ns_mode"
+  },
+  {
+    "module": "pbe_line",
+    "name": "stuff_due_before_no_stuff",
+    "condition": "tstuff && q_valid && q_ns"
+  },
+  {
+    "module": "pbe_line",
+    "name": "flag_low_frame_end",
+    "condition": "flagd && frame_end && !a_in"
+  },
+  {
+    "module": "pbe_line",
+    "name": "flag_run_reset",
+    "condition": "flagd && frame_end && rrun == 0"
+  },
+  {
+    "module": "pbe_line",
+    "name": "flag_continuous_receive",
+    "condition": "flagd && frame_end && rs == R_RUN"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "hostcfg_enabled",
+    "condition": "host_quad"
+  },
+  {
+    "module": "tt_um_pbe",
+    "name": "quad_mux_active",
+    "condition": "quad && !host_s2[1]"
+  }
+]

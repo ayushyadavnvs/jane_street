@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-x54ar89l/P04/verify/ethernet/run_wire.py",
+    "--sim",
+    "verilator",
+    "--test-module",
+    "test_program_corners"
+  ],
+  "returncode": 1,
+  "seconds": 38.693,
+  "status": "inconclusive-nonzero",
+  "first_failure": null,
+  "first_failing_check": null,
+  "log": "P04.log.gz",
+  "id": "P04",
+  "category": "Ethernet RX escape",
+  "file": "pbe_v1/programs/eth_rx.pbe",
+  "before": "        PUSH                 ; a data 0x7E goes to the host twice",
+  "after": "        NOP                  ; a data 0x7E goes to the host twice",
+  "baseline_sha256": "95458863aa14f697e55edb9d4d19d3ca8513781e45ed4566f2d9843045baa3f6",
+  "mutant_sha256": "d0027ffc364b8769fd18290968066997ce41f9991cbd3f56dbfdc7a2bbf8d079"
+}

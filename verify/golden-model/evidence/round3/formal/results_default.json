@@ -1,0 +1,101 @@
+{
+  "results": [
+    {
+      "block": "default",
+      "task": "engine",
+      "tags": [
+        "historical",
+        "original"
+      ],
+      "expected_status": "FAIL",
+      "folder": "default_engine",
+      "status": "FAIL",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 8,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "verify/formal/default_equiv.sv": "2e39bf3ef57a979e15907cf7fc4b5d6f55c12c4e336014ea10286a655682af15",
+        "pbe_v1/build/formal/generated/default_old.sv": "2fb44ea3a9f5cfe5407c40f554201c10820291c20bb164faa902dc199bdb3a1a",
+        "src/pbe_line.sv": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+        "src/pbe_bsync.sv": "27c53b2808b6c5b6791929cf2a0cd418fb40c0a3b27f3f3a813c5e0744552ba5",
+        "src/pbe_crc.sv": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+        "src/pbe_engine.sv": "e37c78e1d73f4f5a166efee1d8c211f966cbf2a54b272e051f4821f285cbd6b6"
+      },
+      "seconds": 0.122,
+      "failed_assertions": [
+        "default_equiv: default_equiv.sv:63.7-63.85 (_witness_.assert_assert_default_equiv_sv_63_81)"
+      ],
+      "covers": [],
+      "workdir": "build/formal/default_engine"
+    },
+    {
+      "block": "default",
+      "task": "engine_page0",
+      "tags": [
+        "pagezero"
+      ],
+      "expected_status": "PASS",
+      "folder": "default_engine_page0",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 8,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "verify/formal/default_equiv.sv": "2e39bf3ef57a979e15907cf7fc4b5d6f55c12c4e336014ea10286a655682af15",
+        "pbe_v1/build/formal/generated/default_old.sv": "2fb44ea3a9f5cfe5407c40f554201c10820291c20bb164faa902dc199bdb3a1a",
+        "src/pbe_line.sv": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+        "src/pbe_bsync.sv": "27c53b2808b6c5b6791929cf2a0cd418fb40c0a3b27f3f3a813c5e0744552ba5",
+        "src/pbe_crc.sv": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+        "src/pbe_engine.sv": "e37c78e1d73f4f5a166efee1d8c211f966cbf2a54b272e051f4821f285cbd6b6"
+      },
+      "seconds": 0.165,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/default_engine_page0"
+    },
+    {
+      "block": "default",
+      "task": "line",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "default_line",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 18,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "verify/formal/default_equiv.sv": "2e39bf3ef57a979e15907cf7fc4b5d6f55c12c4e336014ea10286a655682af15",
+        "pbe_v1/build/formal/generated/default_old.sv": "2fb44ea3a9f5cfe5407c40f554201c10820291c20bb164faa902dc199bdb3a1a",
+        "src/pbe_line.sv": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+        "src/pbe_bsync.sv": "27c53b2808b6c5b6791929cf2a0cd418fb40c0a3b27f3f3a813c5e0744552ba5",
+        "src/pbe_crc.sv": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+        "src/pbe_engine.sv": "e37c78e1d73f4f5a166efee1d8c211f966cbf2a54b272e051f4821f285cbd6b6"
+      },
+      "seconds": 0.171,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/default_line"
+    }
+  ],
+  "total": 3,
+  "matched": 3,
+  "proven": 0,
+  "bounded_pass": 2,
+  "expected_counterexamples": 1,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven."
+}

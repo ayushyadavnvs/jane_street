@@ -1,0 +1,416 @@
+{
+  "coverage_inputs": [
+    "build/coverage/diff.dat",
+    "build/coverage/ethernet_directed.dat",
+    "build/coverage/ethernet_line_sweep.dat",
+    "build/coverage/line_sweep.dat",
+    "build/coverage/tb_can.dat",
+    "build/coverage/tb_coverage_gaps.dat",
+    "build/coverage/tb_crc.dat",
+    "build/coverage/tb_debug.dat",
+    "build/coverage/tb_engine_known_reset.dat",
+    "build/coverage/tb_engine_ops.dat",
+    "build/coverage/tb_engine_restart.dat",
+    "build/coverage/tb_eth.dat",
+    "build/coverage/tb_fetch.dat",
+    "build/coverage/tb_fifo_robustness.dat",
+    "build/coverage/tb_hdlc.dat",
+    "build/coverage/tb_line.dat",
+    "build/coverage/tb_page.dat",
+    "build/coverage/tb_pbe.dat",
+    "build/coverage/tb_proto.dat",
+    "build/coverage/tb_quad.dat",
+    "build/coverage/tb_spec_boundaries.dat",
+    "build/coverage/tb_usb.dat",
+    "build/coverage/wide_crc.dat",
+    "build/coverage/wire_vectors.dat"
+  ],
+  "user_bins": 219,
+  "user_hit": 219,
+  "user_counts": {
+    "opcode_0": 115217,
+    "opcode_1": 26367,
+    "opcode_2": 6113,
+    "opcode_3": 573186,
+    "opcode_4": 8900,
+    "opcode_5": 60755,
+    "opcode_6": 12868,
+    "opcode_7": 37936,
+    "sub_0_0": 11565,
+    "sub_0_1": 4743,
+    "sub_0_2": 7147,
+    "sub_0_3": 19972,
+    "sub_0_4": 65177,
+    "sub_0_5": 6315,
+    "sub_0_6": 155,
+    "sub_0_7": 143,
+    "sub_5_0": 47495,
+    "sub_5_1": 13260,
+    "sub_6_0": 868,
+    "sub_6_1": 766,
+    "sub_6_2": 310,
+    "sub_6_3": 10924,
+    "sub_7_0": 557,
+    "sub_7_1": 720,
+    "sub_7_2": 620,
+    "sub_7_3": 77,
+    "sub_7_4": 823,
+    "sub_7_5": 9422,
+    "sub_7_6": 18124,
+    "sub_7_7": 7593,
+    "jump_0": 193311,
+    "jump_1": 81001,
+    "jump_2": 336,
+    "jump_3": 109913,
+    "jump_4": 312,
+    "jump_5": 39627,
+    "jump_6": 118302,
+    "jump_7": 30384,
+    "wait_0_0": 107,
+    "wait_0_1": 4969,
+    "wait_0_2": 435,
+    "wait_0_3": 558,
+    "wait_1_0": 25,
+    "wait_1_1": 17,
+    "wait_1_2": 1,
+    "wait_1_3": 1,
+    "timeout_taken": 265,
+    "rx_overflow": 45550,
+    "d50_refetch": 66,
+    "pull_kind_0": 45802,
+    "pull_kind_1": 1298,
+    "pull_kind_2": 224,
+    "pull_kind_3": 171,
+    "linectl_width": 752,
+    "linectl_action": 158,
+    "line_event_vector": 205,
+    "start_pc_upper_half": 212336,
+    "exec_word_255": 23,
+    "page_executed": 6619,
+    "jump_other_page": 6611,
+    "page_cleared": 2,
+    "jump_wraps_256": 1353,
+    "status_0_set": 1652,
+    "status_0_clear": 1648,
+    "status_1_set": 399,
+    "status_1_clear": 350,
+    "status_2_set": 40,
+    "status_2_clear": 39,
+    "status_3_set": 5,
+    "status_3_clear": 3,
+    "status_4_set": 81,
+    "status_4_clear": 80,
+    "status_5_set": 2,
+    "status_5_clear": 2,
+    "status_6_set": 33,
+    "status_6_clear": 33,
+    "status_7_set": 35,
+    "status_7_clear": 35,
+    "line_1_0_0_0": 6527,
+    "line_1_0_0_1": 2372,
+    "line_1_0_1_0": 2404,
+    "line_1_0_1_1": 2433,
+    "line_1_1_0_0": 2402,
+    "line_1_1_0_1": 2453,
+    "line_1_1_1_0": 2390,
+    "line_1_1_1_1": 2418,
+    "line_1_2_0_0": 290989,
+    "line_1_2_0_1": 10841,
+    "line_1_2_1_0": 10162,
+    "line_1_2_1_1": 10341,
+    "line_1_3_0_0": 5346,
+    "line_1_3_0_1": 2412,
+    "line_1_3_1_0": 2376,
+    "line_1_3_1_1": 2425,
+    "line_2_0_0_0": 2359,
+    "line_2_0_0_1": 2437,
+    "line_2_0_1_0": 2396,
+    "line_2_0_1_1": 2449,
+    "line_2_1_0_0": 2391,
+    "line_2_1_0_1": 2406,
+    "line_2_1_1_0": 2401,
+    "line_2_1_1_1": 1012255,
+    "line_2_2_0_0": 706539,
+    "line_2_2_0_1": 14489,
+    "line_2_2_1_0": 10236,
+    "line_2_2_1_1": 10377,
+    "line_2_3_0_0": 2392,
+    "line_2_3_0_1": 2403,
+    "line_2_3_1_0": 2400,
+    "line_2_3_1_1": 2424,
+    "bsync_state_integ": 32851,
+    "bsync_state_idle": 453457,
+    "bsync_state_frame": 1303167,
+    "bsync_state_tail": 169052,
+    "bsync_state_eflag": 35160,
+    "bsync_state_edwait": 30019,
+    "bsync_state_edelim": 40992,
+    "bsync_state_busoff": 136335,
+    "bsync_own_start": 94,
+    "bsync_foreign_start": 129,
+    "bsync_late_join": 1,
+    "bsync_arbitration_lost": 5,
+    "bsync_bit_error": 34,
+    "bsync_frame_sent": 36,
+    "bsync_error_detected": 65,
+    "bsync_passive_flag": 10507,
+    "bsync_active_flag": 23229,
+    "bsync_stuff_slot": 682,
+    "bsync_ack_given": 12720,
+    "bsync_unit_1": 172,
+    "bsync_unit_3": 192,
+    "bsync_unit_4": 596,
+    "bsync_unit_7": 161,
+    "bsync_unit_8": 958,
+    "bsync_busoff_recovered": 1,
+    "both_engines": 26422738,
+    "pm_write_engine0": 17841,
+    "pm_write_engine1": 17805,
+    "pm_write_other_running": 13,
+    "pm_second_refetch": 35682,
+    "quad_command": 45191,
+    "quad_write": 49202,
+    "quad_read": 11667,
+    "quad_load": 17513,
+    "quad_skip_fall": 105794,
+    "quad_mode_request_inside": 97,
+    "quad_latch_high": 20,
+    "quad_partial_abort": 1,
+    "quad_exit_seven": 4,
+    "quad_exit_eight": 3,
+    "quad_idle_counter_reset": 5,
+    "quad_stream_07": 6362,
+    "quad_stream_16": 42584,
+    "quad_stream_26": 8228,
+    "crc_width_17": 1811,
+    "crc_width_18": 256,
+    "crc_width_19": 256,
+    "crc_width_20": 256,
+    "crc_width_21": 1311,
+    "crc_width_22": 256,
+    "crc_width_23": 256,
+    "crc_width_24": 11944,
+    "crc_width_25": 256,
+    "crc_width_26": 256,
+    "crc_width_27": 256,
+    "crc_width_28": 256,
+    "crc_width_29": 256,
+    "crc_width_30": 1626,
+    "crc_width_31": 1629,
+    "crc_width_32": 444000,
+    "crc_wide_reflected": 439960,
+    "crc_wide_plain": 25217,
+    "crc_wide_init_zero": 165,
+    "crc_wide_init_ones": 228,
+    "crc_init_wins_step": 296,
+    "crc_wide_good": 15821,
+    "crc_wide_bad": 9128553,
+    "wide_osrcrc_b2": 8,
+    "wide_osrcrc_b3": 8,
+    "wide_osrcrc_left_ignored": 64,
+    "narrow_osrcrc_param3": 33,
+    "linectl_non_bsync_off": 28,
+    "linectl_non_bsync_on": 22,
+    "linectl_non_bsync_both": 2,
+    "manchester_polarity_0": 2135257,
+    "manchester_polarity_1": 56429,
+    "manchester_period_3": 22613,
+    "manchester_period_4": 22630,
+    "manchester_period_5": 2101554,
+    "manchester_period_6": 22761,
+    "manchester_period_19": 22128,
+    "manchester_max_period": 131072,
+    "manchester_bit": 53597,
+    "manchester_byte": 2138089,
+    "manchester_msb": 56366,
+    "manchester_lsb": 2135320,
+    "manchester_sync_tx": 57572,
+    "manchester_idle_wait_ignored": 469,
+    "manchester_flag_ignored": 112667,
+    "manchester_stuff_ignored": 83345,
+    "manchester_early_edge": 95994,
+    "manchester_late_edge": 82006,
+    "manchester_boundary_skip": 56362,
+    "manchester_short_glitch": 1773,
+    "manchester_carrier_sync": 207,
+    "manchester_carrier_no_sync": 61,
+    "manchester_hunt_loss": 239,
+    "manchester_rx_overrun": 494,
+    "manchester_tail": 4487,
+    "stuff_ctl_off": 3885,
+    "stuff_ctl_on_wins": 3849,
+    "stuff_queued_tag": 38493,
+    "stuff_shifter_tag": 32731,
+    "stuff_due_before_no_stuff": 76,
+    "flag_low_frame_end": 233,
+    "flag_run_reset": 395,
+    "flag_continuous_receive": 395,
+    "hostcfg_enabled": 4981365,
+    "quad_mux_active": 2144473
+  },
+  "user_missing": [],
+  "rtl_point_coverage": {
+    "toggle": {
+      "points": 13030,
+      "hit": 8849
+    },
+    "expr": {
+      "points": 2323,
+      "hit": 1942
+    },
+    "line": {
+      "points": 641,
+      "hit": 564
+    },
+    "branch": {
+      "points": 1120,
+      "hit": 949
+    }
+  },
+  "per_file": {
+    "pbe_bsync.sv": {
+      "toggle": {
+        "points": 788,
+        "hit": 671
+      },
+      "expr": {
+        "points": 301,
+        "hit": 262
+      },
+      "line": {
+        "points": 59,
+        "hit": 59
+      },
+      "branch": {
+        "points": 162,
+        "hit": 143
+      }
+    },
+    "pbe_crc.sv": {
+      "toggle": {
+        "points": 476,
+        "hit": 475
+      },
+      "line": {
+        "points": 5,
+        "hit": 5
+      },
+      "expr": {
+        "points": 8,
+        "hit": 8
+      },
+      "branch": {
+        "points": 8,
+        "hit": 8
+      }
+    },
+    "pbe_engine.sv": {
+      "toggle": {
+        "points": 7890,
+        "hit": 4466
+      },
+      "expr": {
+        "points": 1637,
+        "hit": 1300
+      },
+      "branch": {
+        "points": 672,
+        "hit": 521
+      },
+      "line": {
+        "points": 411,
+        "hit": 335
+      }
+    },
+    "pbe_fifo.sv": {
+      "toggle": {
+        "points": 348,
+        "hit": 348
+      },
+      "expr": {
+        "points": 20,
+        "hit": 19
+      },
+      "line": {
+        "points": 6,
+        "hit": 6
+      },
+      "branch": {
+        "points": 10,
+        "hit": 10
+      }
+    },
+    "pbe_host_spi.sv": {
+      "branch": {
+        "points": 30,
+        "hit": 30
+      },
+      "expr": {
+        "points": 33,
+        "hit": 33
+      },
+      "line": {
+        "points": 4,
+        "hit": 4
+      },
+      "toggle": {
+        "points": 186,
+        "hit": 186
+      }
+    },
+    "pbe_line.sv": {
+      "toggle": {
+        "points": 1008,
+        "hit": 891
+      },
+      "expr": {
+        "points": 196,
+        "hit": 193
+      },
+      "branch": {
+        "points": 136,
+        "hit": 136
+      },
+      "line": {
+        "points": 56,
+        "hit": 56
+      }
+    },
+    "pbe_pmem_sram.sv": {
+      "toggle": {
+        "points": 232,
+        "hit": 232
+      },
+      "expr": {
+        "points": 6,
+        "hit": 6
+      },
+      "branch": {
+        "points": 6,
+        "hit": 6
+      }
+    },
+    "tt_um_pbe.sv": {
+      "toggle": {
+        "points": 2102,
+        "hit": 1580
+      },
+      "line": {
+        "points": 100,
+        "hit": 99
+      },
+      "branch": {
+        "points": 96,
+        "hit": 95
+      },
+      "expr": {
+        "points": 122,
+        "hit": 121
+      }
+    }
+  },
+  "rtl_distinct_line_locations": 295,
+  "rtl_distinct_lines_hit": 291,
+  "threshold": "at least one event",
+  "scope": "RTL source metrics coalesce identical source points across hierarchy/test roots; RTL original source only; appended instrumentation and testbench locations excluded from RTL percentages; user bins aggregated across instances and tests"
+}

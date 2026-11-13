@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-x54ar89l/P02/verify/ethernet/run_wire.py",
+    "--sim",
+    "verilator",
+    "--test-module",
+    "test_program_corners"
+  ],
+  "returncode": 1,
+  "seconds": 34.727,
+  "status": "caught",
+  "first_failure": "AssertionError: ('completion status preceded last FCS bit', [1559991456], 1560708180)",
+  "first_failing_check": null,
+  "log": "P02.log.gz",
+  "id": "P02",
+  "category": "Ethernet second END",
+  "file": "pbe_v1/programs/eth_tx.pbe",
+  "before": "fin:    PIN  tdp, END",
+  "after": "fin:    NOP",
+  "baseline_sha256": "43b9ee222a8159e1d27e8347cbf0e59a20d31dedc23b96cbeba8776c82b79114",
+  "mutant_sha256": "a44b5e1e148c28ad9a084eb0721169d438b209d597f010f7cd01eddfb01cb46f"
+}

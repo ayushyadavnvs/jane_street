@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_eth/sim"
+  ],
+  "returncode": 1,
+  "seconds": 47.908,
+  "status": "caught",
+  "first_failure": "FAIL: (1) TX inter-frame gap >= 9.6 us (min 5.03 us), TP_IDL 300-350 ns",
+  "first_failing_check": "tb_eth",
+  "log": "P01.log.gz",
+  "executable_sha256": "544c9fc90bb405e1d8a04cc9a3d53a2bcedadce70ad375a2e52c9b7bab75de6d",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "P01",
+  "category": "Ethernet IFG count",
+  "file": "pbe_v1/programs/eth_tx.pbe",
+  "before": "SET  X, 35",
+  "after": "SET  X, 15",
+  "baseline_sha256": "43b9ee222a8159e1d27e8347cbf0e59a20d31dedc23b96cbeba8776c82b79114",
+  "mutant_sha256": "19d62bde899a25b63acee93f4c73790cf776c0cbf34f4609260adb624a62111f"
+}

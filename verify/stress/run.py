@@ -26,8 +26,13 @@ def main():
     os.environ.update(PBE_ROOT=str(ROOT),PBE_STRESS_OUTPUT=str(result),PBE_STRESS_SEED=str(a.seed),
                       PBE_STRESS_REQUIRED_ONLY=str(int(a.required_only)),PBE_STOCK_I2C='0',PBE_STOCK_SPI='0')
     sources=[ROOT/'src'/f'{n}.sv' for n in ('pbe_fifo','pbe_host_spi','pbe_crc','pbe_line','pbe_bsync','pbe_engine','tt_um_pbe')]
+    # D82: use the same FUNCTIONAL SRAM model as the default design regression.
+    sram = ROOT/'macros/RM_IHPSG13_1P_256x16_c2_bm_bist'
+    sources += [ROOT/'src/pbe_pmem_sram.sv',
+                sram/'RM_IHPSG13_1P_256x16_c2_bm_bist.v',
+                sram/'RM_IHPSG13_1P_core_behavioral_bm_bist.v']
     r=get_runner('icarus')
-    r.build(sources=sources+[HERE/'stress_top.sv'],hdl_toplevel='stress_top',build_dir=out,build_args=['-g2012'],timescale=('1ns','1ps'))
+    r.build(sources=sources+[HERE/'stress_top.sv'],hdl_toplevel='stress_top',build_dir=out,build_args=['-g2012'], defines={'FUNCTIONAL': 1},timescale=('1ns','1ps'))
     xml=out/'results.xml';xml.unlink(missing_ok=True)
     r.test(hdl_toplevel='stress_top',test_module='test_stress',testcase='pin_stress',test_dir=HERE,
            build_dir=out,seed=a.seed,results_xml=str(xml))

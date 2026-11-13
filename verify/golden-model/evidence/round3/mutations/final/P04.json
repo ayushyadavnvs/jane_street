@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-83hwj11b/P04/verify/ethernet/run_wire.py",
+    "--sim",
+    "verilator",
+    "--test-module",
+    "test_program_corners"
+  ],
+  "returncode": 1,
+  "seconds": 21.317,
+  "status": "caught",
+  "first_failure": "AssertionError: ('RX escaped payload/status', [('ffffffffffff02133742aa0188b57e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7ec03ca681', 2)])",
+  "first_failing_check": null,
+  "log": "P04.log.gz",
+  "executable_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "P04",
+  "category": "Ethernet RX escape",
+  "file": "pbe_v1/programs/eth_rx.pbe",
+  "before": "        PUSH                 ; a data 0x7E goes to the host twice",
+  "after": "        NOP                  ; a data 0x7E goes to the host twice",
+  "baseline_sha256": "95458863aa14f697e55edb9d4d19d3ca8513781e45ed4566f2d9843045baa3f6",
+  "mutant_sha256": "d0027ffc364b8769fd18290968066997ce41f9991cbd3f56dbfdc7a2bbf8d079"
+}

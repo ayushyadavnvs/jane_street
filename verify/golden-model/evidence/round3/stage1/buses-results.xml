@@ -1,0 +1,11 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="20261029" />
+    <testcase name="uart_tx" classname="test_buses" file="/workspace/work/jane_street/verify/golden-model/bus_models/test_buses.py" lineno="165" time="175.08395791053772" sim_time_ns="5468412.438" ratio_time="31233.08670457509" />
+    <testcase name="uart_rx" classname="test_buses" file="/workspace/work/jane_street/verify/golden-model/bus_models/test_buses.py" lineno="188" time="171.99366664886475" sim_time_ns="5118817.805999999" ratio_time="29761.66451785907" />
+    <testcase name="spi_controller" classname="test_buses" file="/workspace/work/jane_street/verify/golden-model/bus_models/test_buses.py" lineno="229" time="118.60132431983948" sim_time_ns="4461615.234000001" ratio_time="37618.5954042814" />
+    <testcase name="spi_peripheral" classname="test_buses" file="/workspace/work/jane_street/verify/golden-model/bus_models/test_buses.py" lineno="249" time="131.29682731628418" sim_time_ns="5117101.001999998" ratio_time="38973.531246671235" />
+    <testcase name="i2c_controller" classname="test_buses" file="/workspace/work/jane_street/verify/golden-model/bus_models/test_buses.py" lineno="280" time="201.0968189239502" sim_time_ns="7569997.2179999985" ratio_time="37643.545325611456" />
+    <testcase name="i2c_target" classname="test_buses" file="/workspace/work/jane_street/verify/golden-model/bus_models/test_buses.py" lineno="336" time="187.32180953025818" sim_time_ns="9288161.280000001" ratio_time="49583.98225647975" />
+  </testsuite>
+</testsuites>

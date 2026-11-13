@@ -1,0 +1,43 @@
+{
+  "source_lineages": [
+    {
+      "file": "baseline-results_fifo.json",
+      "lineage": "original 3cca934"
+    },
+    {
+      "file": "baseline-results_host.json",
+      "lineage": "original 3cca934"
+    },
+    {
+      "file": "baseline-results_line.json",
+      "lineage": "original 3cca934"
+    },
+    {
+      "file": "baseline-results_engine.json",
+      "lineage": "original 3cca934"
+    },
+    {
+      "file": "baseline-results_bsync.json",
+      "lineage": "original 3cca934"
+    },
+    {
+      "file": "results_ethernet.json",
+      "lineage": "repaired current RTL"
+    },
+    {
+      "file": "results_default.json",
+      "lineage": "repaired current RTL"
+    },
+    {
+      "file": "results_modern.json",
+      "lineage": "repaired current RTL"
+    }
+  ],
+  "total": 129,
+  "matched": 129,
+  "proven": 8,
+  "bounded_pass": 88,
+  "expected_counterexamples": 13,
+  "covers": 20,
+  "note": "Distinct baseline and repaired-source jobs. Expected counterexamples are false properties. Repair equivalence is additional, not counted as SBY induction."
+}

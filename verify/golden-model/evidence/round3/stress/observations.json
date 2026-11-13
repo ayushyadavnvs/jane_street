@@ -1,0 +1,827 @@
+[
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "PASS",
+    "ppm": -100,
+    "bit_ps": 100010.0010001,
+    "jitter_ps": 13500,
+    "pattern": "uniform",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": -20.008000000126813,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "PASS",
+    "ppm": -100,
+    "bit_ps": 100010.0010001,
+    "jitter_ps": 13500,
+    "pattern": "uniform",
+    "edges": 3183,
+    "seed": 79104,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": -20.008000000126813,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "PASS",
+    "ppm": -100,
+    "bit_ps": 100010.0010001,
+    "jitter_ps": 13500,
+    "pattern": "alternating",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": -20.008000000126813,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "PASS",
+    "ppm": -100,
+    "bit_ps": 100010.0010001,
+    "jitter_ps": 13500,
+    "pattern": "alternating",
+    "edges": 3183,
+    "seed": 79104,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": -20.008000000126813,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "FAIL",
+    "ppm": -100,
+    "bit_ps": 100010.0010001,
+    "jitter_ps": 13500,
+    "pattern": "isi",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": -20.008000000126813,
+    "records": [
+      {
+        "bytes": 226,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-04.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "FAIL",
+    "ppm": -100,
+    "bit_ps": 100010.0010001,
+    "jitter_ps": 13500,
+    "pattern": "isi",
+    "edges": 3183,
+    "seed": 79104,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": -20.008000000126813,
+    "records": [
+      {
+        "bytes": 158,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-05.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "PASS",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 13500,
+    "pattern": "uniform",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "PASS",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 13500,
+    "pattern": "uniform",
+    "edges": 3183,
+    "seed": 79104,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 13500,
+    "pattern": "alternating",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 114,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 106,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-08.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 13500,
+    "pattern": "alternating",
+    "edges": 3183,
+    "seed": 79104,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 107,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 71,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 19,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-09.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 13500,
+    "pattern": "isi",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 226,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-10.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": true,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 13500,
+    "pattern": "isi",
+    "edges": 3183,
+    "seed": 79104,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 158,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-11.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "PASS",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 14000,
+    "pattern": "uniform",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 14000,
+    "pattern": "alternating",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 9,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 96,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 106,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-13.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 14000,
+    "pattern": "isi",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 226,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-14.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "PASS",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 15000,
+    "pattern": "uniform",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 260,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 15000,
+    "pattern": "alternating",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 9,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 96,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 7,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-16.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 15000,
+    "pattern": "isi",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 226,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-17.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 18000,
+    "pattern": "uniform",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 230,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-18.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 18000,
+    "pattern": "alternating",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 30,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 29,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-19.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 18000,
+    "pattern": "isi",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 226,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-20.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 20000,
+    "pattern": "uniform",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 7,
+        "status": 0,
+        "data_matches": false
+      },
+      {
+        "bytes": 247,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-21.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 20000,
+    "pattern": "alternating",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [],
+    "stimulus": "jitter-22.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "FAIL",
+    "ppm": 100,
+    "bit_ps": 99990.00099990002,
+    "jitter_ps": 20000,
+    "pattern": "isi",
+    "edges": 3209,
+    "seed": 32803,
+    "frame_bytes": 256,
+    "local_bit_ps": 100008,
+    "relative_ppm": 180.00800000006478,
+    "records": [
+      {
+        "bytes": 226,
+        "status": 0,
+        "data_matches": false
+      }
+    ],
+    "stimulus": "jitter-23.json"
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "PASS",
+    "ppm": -10000,
+    "bit_ps": 101010.10101010102,
+    "jitter_ps": 0,
+    "pattern": "uniform",
+    "edges": 18301,
+    "seed": 32803,
+    "frame_bytes": 1514,
+    "local_bit_ps": 100008,
+    "relative_ppm": -9920.800000000063,
+    "records": [
+      {
+        "bytes": 1518,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "PASS",
+    "ppm": -1000,
+    "bit_ps": 100100.1001001001,
+    "jitter_ps": 0,
+    "pattern": "uniform",
+    "edges": 18301,
+    "seed": 32803,
+    "frame_bytes": 1514,
+    "local_bit_ps": 100008,
+    "relative_ppm": -920.0799999999898,
+    "records": [
+      {
+        "bytes": 1518,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "PASS",
+    "ppm": 1000,
+    "bit_ps": 99900.09990009991,
+    "jitter_ps": 0,
+    "pattern": "uniform",
+    "edges": 18301,
+    "seed": 32803,
+    "frame_bytes": 1514,
+    "local_bit_ps": 100008,
+    "relative_ppm": 1080.0799999999278,
+    "records": [
+      {
+        "bytes": 1518,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "receive_jitter",
+    "required": false,
+    "delivery": "PASS",
+    "ppm": 10000,
+    "bit_ps": 99009.900990099,
+    "jitter_ps": 0,
+    "pattern": "uniform",
+    "edges": 18301,
+    "seed": 32803,
+    "frame_bytes": 1514,
+    "local_bit_ps": 100008,
+    "relative_ppm": 10080.800000000112,
+    "records": [
+      {
+        "bytes": 1518,
+        "status": 2,
+        "data_matches": true
+      }
+    ]
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 0,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 1042,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 2084,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 3125,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 4167,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 5209,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 6250,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 7292,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 8334,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 9376,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 10418,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 11459,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 12501,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 13543,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 14584,
+    "jitter_ps": 0,
+    "half_min_ps": 66672,
+    "half_max_ps": 66672,
+    "status": "PASS"
+  },
+  {
+    "test": "host_phases",
+    "phase_ps": 15626,
+    "jitter_ps": 2000,
+    "half_min_ps": 66672,
+    "half_max_ps": 68672,
+    "status": "PASS"
+  },
+  {
+    "test": "worst_escape_full_duplex",
+    "delivery": "FAIL",
+    "tx_status": [
+      0
+    ],
+    "rx": [
+      {
+        "bytes": 954,
+        "status": 24,
+        "matches": false
+      }
+    ],
+    "offered_raw_bytes_per_second": 3750000,
+    "host_raw_limit": 3750000,
+    "interpretation": "Command, count-read and chunk overhead consume bandwidth beyond the raw offered limit."
+  },
+  {
+    "test": "tx_underrun",
+    "status": 16,
+    "pause_us": 30,
+    "status_contract": "PASS",
+    "delivery": "FAIL"
+  },
+  {
+    "test": "tx_abort",
+    "status": 20,
+    "pause_us": 1200,
+    "status_contract": "PASS",
+    "delivery": "FAIL"
+  },
+  {
+    "test": "tx_abort_recovery",
+    "status": 0,
+    "status_contract": "PASS"
+  },
+  {
+    "test": "rx_host_overrun",
+    "retained_bytes": 17,
+    "status": 24,
+    "status_contract": "PASS",
+    "delivery": "FAIL"
+  },
+  {
+    "test": "rx_overrun_recovery",
+    "status": 2,
+    "delivery": "PASS"
+  },
+  {
+    "test": "exact_ifg",
+    "ifg_ps": 9600000,
+    "frames": 2,
+    "delivery": "PASS"
+  }
+]

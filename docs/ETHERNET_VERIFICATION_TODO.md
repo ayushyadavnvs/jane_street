@@ -172,3 +172,15 @@ says which `verify/` targets must be extended for the new one.
   per-unit tag, the run reset); `tb_hdlc` NRZI at more rates and clock offsets (the model's
   transmitter is 0.5 % slow); stress with jitter.
 - **Not done (6b):** multi-pin `IN`/`OUT`, see D94 for why.
+
+## Verification pass
+
+The implementation, source-aware results and remaining limits are documented in
+[round 3 of the verification report](../verify/golden-model/REPORT.md#round-3--d89d94-ethernet-verification).
+New public-pin checks are in [verify/ethernet](../verify/ethernet/README.md).
+
+BUG-145's Manchester idle-wait exception has a minimal regression and one-line repair.
+BUG-151 remains open: a minimum valid Ethernet frame with legal per-crossing ±13.5-ns
+spacing-dependent jitter is corrupted in both simulators. Do not interpret complete named
+coverage or a passing no-jitter loopback as standards compliance. The report separates
+proofs, bounded checks, covers, historical counterexamples, error reporting and delivery.

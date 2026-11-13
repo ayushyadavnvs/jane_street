@@ -1,0 +1,42 @@
+{
+  "id": "M19",
+  "category": "timeout",
+  "file": "src/pbe_engine.sv",
+  "before": "tmo_cnt >= timeout",
+  "after": "tmo_cnt > timeout",
+  "baseline_sha256": "e37c78e1d73f4f5a166efee1d8c211f966cbf2a54b272e051f4821f285cbd6b6",
+  "baseline_hdl_sha256": "d7083eab3f5442dd24b2946cd010ccae2dffcae0f3fa0ba4cfb9a0f5f36263a9",
+  "scratch": "/tmp/pbe-mutation-M19-_6u59vod/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+      ],
+      "returncode": null,
+      "seconds": 1800.097,
+      "status": "inconclusive-timeout",
+      "first_failure": null,
+      "first_failing_check": null,
+      "log": "M19-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 16.601,
+      "status": "survived",
+      "first_failure": null,
+      "first_failing_check": null,
+      "log": "M19-diff.log.gz"
+    }
+  },
+  "caught_by": []
+}

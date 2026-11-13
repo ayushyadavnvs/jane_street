@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794580311" />
+    <testcase name="ethernet_tx" classname="test_wire_vectors" file="/workspace/work/jane_street/verify/ethernet/test_wire_vectors.py" lineno="31" time="139.54841542243958" sim_time_ns="30006925.362" ratio_time="215028.7788733633" />
+    <testcase name="ethernet_rx" classname="test_wire_vectors" file="/workspace/work/jane_street/verify/ethernet/test_wire_vectors.py" lineno="52" time="2.5770657062530518" sim_time_ns="1131815.5379999988" ratio_time="439187.69135522447" />
+    <testcase name="hdlc_independent" classname="test_wire_vectors" file="/workspace/work/jane_street/verify/ethernet/test_wire_vectors.py" lineno="71" time="14.121908187866211" sim_time_ns="5472062.73" ratio_time="387487.4880366162" />
+  </testsuite>
+</testsuites>

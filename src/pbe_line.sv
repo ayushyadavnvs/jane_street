@@ -134,7 +134,7 @@ module pbe_line (
   wire       _unused = &{cfg2[7], cfg2[5:4], ctl_param[3:2], 1'b0};  // [5:4] are the engine's
   wire [2:0] sp_sel = cfg2[2:0];
   wire       fall_only = cfg2[3];
-  wire       idle_wait = cfg2[6];
+  wire       idle_wait = cfg2[6] && !manch;  // D90: ignored in Manchester
   wire [1:0] st    = manch ? 2'd0 : cfg[3:2];
   wire       pair  = cfg[4];
   wire       bytes = cfg[5];

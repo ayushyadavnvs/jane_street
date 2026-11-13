@@ -23,6 +23,12 @@ USB_STACK = ('usb_signalling:dp=p1:dm=p0:signalling=low-speed,'
 
 SRC = [ROOT / 'src' / (x + '.sv') for x in
        ('pbe_fifo', 'pbe_host_spi', 'pbe_crc', 'pbe_line', 'pbe_bsync', 'pbe_engine', 'tt_um_pbe')]
+# D82: the default top instantiates the SRAM wrapper and its FUNCTIONAL model.
+SRAM = ROOT.parent/'macros/RM_IHPSG13_1P_256x16_c2_bm_bist'
+SRC += [ROOT/'src/pbe_pmem_sram.sv',
+          SRAM/'RM_IHPSG13_1P_256x16_c2_bm_bist.v',
+          SRAM/'RM_IHPSG13_1P_core_behavioral_bm_bist.v']
+
 
 
 def call(command, output, *, cwd=ROOT):
@@ -41,7 +47,7 @@ def capture(output):
     call(['make', *[f'test/{x}_image.hex' for x in targets]], output / 'images')
     for bench in ('tb_pbe', 'tb_proto', 'tb_usb'):
         sim = output / (bench+'.vvp')
-        call(['iverilog', '-g2012', '-DPBE_SIGROK', '-s', bench, '-o', sim,
+        call(['iverilog', '-g2012', '-DFUNCTIONAL', '-DPBE_SIGROK', '-s', bench, '-o', sim,
               ROOT / 'test' / (bench+'.sv'), *SRC], output / (bench+'_compile'), cwd=ROOT/'test')
         log = call(['vvp', '-n', sim], output / (bench+'_simulation'), cwd=ROOT/'test')
         if b'PASS\n' not in log:
@@ -200,8 +206,8 @@ def main():
     (output/'waveforms.json').write_text(json.dumps(manifest,indent=2)+'\n')
     checks = Checks(cli, output)
     try:
-        got = checks.decode('uart_decode', output/'uart.vcd', 'uart:rx=p0:baudrate=480000',binary='uart=rx')
-        checks.equal('UART 480000 baud 8N1 bytes',got,bytes.fromhex('55 a3 00 ff 0f 80'))
+        got = checks.decode('uart_decode', output/'uart.vcd', 'uart:rx=p0:baudrate=600000',binary='uart=rx')
+        checks.equal('UART 600000 baud 8N1 bytes',got,bytes.fromhex('55 a3 00 ff 0f 80'))
         for name, mosi, miso in [('spi_ctrl','a5 5a 7e','3c c3 81'),
                                  ('spi_periph','11 22 33 44 55 60 61','3c a5 ff 5a c3 ff ff')]:
             stack = 'spi:clk=p0:mosi=p1:miso=p2:cs=p3:cpol=0:cpha=0'

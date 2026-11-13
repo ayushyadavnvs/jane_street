@@ -1,0 +1,352 @@
+`ifndef VERILATOR
+module testbench;
+  reg [4095:0] vcdfile;
+  reg clock;
+`else
+module testbench(input clock, output reg genclock);
+  initial genclock = 1;
+`endif
+  reg genclock = 1;
+  reg [31:0] cycle = 0;
+  wire [0:0] PI_clk = clock;
+  default_equiv UUT (
+    .clk(PI_clk)
+  );
+`ifndef VERILATOR
+  initial begin
+    if ($value$plusargs("vcd=%s", vcdfile)) begin
+      $dumpfile(vcdfile);
+      $dumpvars(0, testbench);
+    end
+    #5 clock = 0;
+    while (genclock) begin
+      #5 clock = 0;
+      #5 clock = 1;
+    end
+  end
+`endif
+  initial begin
+`ifndef VERILATOR
+    #1;
+`endif
+    // UUT.$auto$async2sync.\cc:107:execute$9815  = 1'b0;
+    // UUT.$auto$async2sync.\cc:116:execute$9795  = 1'b1;
+    // UUT.$auto$async2sync.\cc:116:execute$9801  = 1'b1;
+    // UUT.$auto$async2sync.\cc:116:execute$9807  = 1'b1;
+    // UUT.$auto$async2sync.\cc:116:execute$9813  = 1'b1;
+    // UUT.$auto$async2sync.\cc:116:execute$9819  = 1'b1;
+    UUT.f_past = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9326 = 24'b000000000000000000000000;
+    UUT.n._witness_.anyinit_procdff_9331 = 16'b0000000000000000;
+    UUT.n._witness_.anyinit_procdff_9336 = 4'b0000;
+    UUT.n._witness_.anyinit_procdff_9341 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9346 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9351 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9356 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9361 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9366 = 4'b0000;
+    UUT.n._witness_.anyinit_procdff_9371 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9376 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9381 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9386 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9391 = 16'b0000000000000000;
+    UUT.n._witness_.anyinit_procdff_9396 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9401 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9406 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9411 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9416 = 4'b0000;
+    UUT.n._witness_.anyinit_procdff_9421 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9426 = 16'b0000000000000000;
+    UUT.n._witness_.anyinit_procdff_9431 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9436 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9441 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9446 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9526 = 8'b00000000;
+    UUT.n._witness_.anyinit_procdff_9531 = 1'b0;
+    UUT.n._witness_.anyinit_procdff_9536 = 2'b00;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9031 = 4'b0000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9036 = 3'b000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9041 = 8'b00000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9046 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9051 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9056 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9061 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9066 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9071 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9076 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9081 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9086 = 9'b000000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9091 = 8'b00000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9096 = 16'b0000000000000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9101 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9106 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9111 = 3'b000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9116 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9121 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9126 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9131 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9136 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9141 = 8'b00000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9146 = 8'b00000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9151 = 4'b0000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9156 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9161 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9166 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9171 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9176 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9181 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9186 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9191 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9196 = 8'b00000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9201 = 4'b0000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9206 = 5'b00000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9211 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9216 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9221 = 4'b0000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9226 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9231 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9236 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9241 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9246 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9251 = 3'b000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9256 = 4'b0000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9261 = 3'b000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9266 = 7'b0000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9271 = 4'b0000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9276 = 7'b0000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9281 = 7'b0000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9286 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9291 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9296 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9301 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9306 = 3'b000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9311 = 1'b0;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9316 = 16'b0000000000000000;
+    UUT.n.u_bsync._witness_.anyinit_procdff_9321 = 1'b0;
+    UUT.n.u_crc._witness_.anyinit_procdff_8816 = 32'b00000000000000000000000000000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8821 = 8'b00000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8826 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8831 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8836 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8841 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8846 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8851 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8856 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8861 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8866 = 8'b00000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8871 = 8'b00000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8876 = 8'b00000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8881 = 4'b0000;
+    UUT.n.u_line._witness_.anyinit_procdff_8886 = 4'b0000;
+    UUT.n.u_line._witness_.anyinit_procdff_8891 = 3'b000;
+    UUT.n.u_line._witness_.anyinit_procdff_8896 = 3'b000;
+    UUT.n.u_line._witness_.anyinit_procdff_8901 = 16'b0000000000000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8906 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8911 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8916 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8921 = 4'b0000;
+    UUT.n.u_line._witness_.anyinit_procdff_8926 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8931 = 3'b000;
+    UUT.n.u_line._witness_.anyinit_procdff_8936 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8941 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8946 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8951 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8956 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8961 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8966 = 2'b00;
+    UUT.n.u_line._witness_.anyinit_procdff_8971 = 16'b0000000000000000;
+    UUT.n.u_line._witness_.anyinit_procdff_8976 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8981 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8986 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8991 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_8996 = 3'b000;
+    UUT.n.u_line._witness_.anyinit_procdff_9001 = 8'b00000000;
+    UUT.n.u_line._witness_.anyinit_procdff_9006 = 24'b000000000000000000000000;
+    UUT.n.u_line._witness_.anyinit_procdff_9011 = 1'b0;
+    UUT.n.u_line._witness_.anyinit_procdff_9016 = 24'b000000000000000000000000;
+    UUT.n.u_line._witness_.anyinit_procdff_9021 = 16'b0000000000000000;
+    UUT.n.u_line._witness_.anyinit_procdff_9026 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9541 = 16'b0000000000000000;
+    UUT.o._witness_.anyinit_procdff_9546 = 4'b0000;
+    UUT.o._witness_.anyinit_procdff_9551 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9556 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9561 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9566 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9571 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9576 = 4'b0000;
+    UUT.o._witness_.anyinit_procdff_9581 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9586 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9591 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9596 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9601 = 16'b0000000000000000;
+    UUT.o._witness_.anyinit_procdff_9606 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9611 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9616 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9621 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9626 = 4'b0000;
+    UUT.o._witness_.anyinit_procdff_9631 = 8'b00000000;
+    UUT.o._witness_.anyinit_procdff_9636 = 16'b0000000000000000;
+    UUT.o._witness_.anyinit_procdff_9641 = 1'b0;
+    UUT.o._witness_.anyinit_procdff_9721 = 7'b0000000;
+    UUT.o._witness_.anyinit_procdff_9726 = 21'b000000000000000000000;
+    UUT.o.u_crc._witness_.anyinit_procdff_8651 = 16'b0000000000000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8656 = 8'b00000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8661 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8666 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8671 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8676 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8681 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8686 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8691 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8696 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8701 = 8'b00000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8706 = 8'b00000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8711 = 8'b00000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8716 = 4'b0000;
+    UUT.o.u_line._witness_.anyinit_procdff_8721 = 3'b000;
+    UUT.o.u_line._witness_.anyinit_procdff_8726 = 3'b000;
+    UUT.o.u_line._witness_.anyinit_procdff_8731 = 16'b0000000000000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8736 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8741 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8746 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8751 = 4'b0000;
+    UUT.o.u_line._witness_.anyinit_procdff_8756 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8761 = 3'b000;
+    UUT.o.u_line._witness_.anyinit_procdff_8766 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8771 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8776 = 2'b00;
+    UUT.o.u_line._witness_.anyinit_procdff_8781 = 16'b0000000000000000;
+    UUT.o.u_line._witness_.anyinit_procdff_8786 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8791 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8796 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8801 = 1'b0;
+    UUT.o.u_line._witness_.anyinit_procdff_8806 = 3'b000;
+    UUT.o.u_line._witness_.anyinit_procdff_8811 = 8'b00000000;
+
+    // state 0
+    UUT.crc_cfg = 8'b00000000;
+    UUT.crc_good = 16'b0000000000000000;
+    UUT.crc_poly = 16'b0000000000000000;
+    UUT.flags = 4'b0000;
+    UUT.hci = 1'b0;
+    UUT.hlc = 1'b0;
+    UUT.hoc = 1'b0;
+    UUT.htc = 1'b0;
+    UUT.imsb = 1'b0;
+    UUT.jmp_pin = 3'b000;
+    UUT.line_cfg = 8'b00000000;
+    UUT.omsb = 1'b0;
+    UUT.pin_base = 3'b000;
+    UUT.pins = 8'b00000000;
+    UUT.pm_wr = 1'b0;
+    UUT.restart = 1'b0;
+    UUT.rst_n = 1'b0;
+    UUT.run = 1'b0;
+    UUT.rx_full = 1'b0;
+    UUT.start_pc = 8'b00000000;
+    UUT.sync = 8'b10000000;
+    UUT.timeout = 16'b0000000000000000;
+    UUT.tx_empty = 1'b0;
+    UUT.txd = 8'b00000000;
+    UUT.instr = 16'b0000000000000000;
+    UUT.cfg = 8'b00000000;
+    UUT.clkdiv = 16'b0000000000000010;
+  end
+  always @(posedge clock) begin
+    // state 1
+    if (cycle == 0) begin
+      UUT.crc_cfg <= 8'b00011011;
+      UUT.crc_good <= 16'b0000000000000000;
+      UUT.crc_poly <= 16'b0000000000000000;
+      UUT.flags <= 4'b0000;
+      UUT.hci <= 1'b1;
+      UUT.hlc <= 1'b0;
+      UUT.hoc <= 1'b0;
+      UUT.htc <= 1'b0;
+      UUT.imsb <= 1'b0;
+      UUT.jmp_pin <= 3'b000;
+      UUT.line_cfg <= 8'b00000000;
+      UUT.omsb <= 1'b0;
+      UUT.pin_base <= 3'b000;
+      UUT.pins <= 8'b00000000;
+      UUT.pm_wr <= 1'b0;
+      UUT.restart <= 1'b0;
+      UUT.rst_n <= 1'b1;
+      UUT.run <= 1'b1;
+      UUT.rx_full <= 1'b0;
+      UUT.start_pc <= 8'b01101110;
+      UUT.sync <= 8'b10000000;
+      UUT.timeout <= 16'b0000000000000000;
+      UUT.tx_empty <= 1'b0;
+      UUT.txd <= 8'b00000000;
+      UUT.instr <= 16'b0110101100000000;
+      UUT.cfg <= 8'b00000000;
+      UUT.clkdiv <= 16'b0000000000000010;
+    end
+
+    // state 2
+    if (cycle == 1) begin
+      UUT.crc_cfg <= 8'b00101110;
+      UUT.crc_good <= 16'b0000111111111110;
+      UUT.crc_poly <= 16'b0000000000000000;
+      UUT.flags <= 4'b0011;
+      UUT.hci <= 1'b0;
+      UUT.hlc <= 1'b0;
+      UUT.hoc <= 1'b0;
+      UUT.htc <= 1'b0;
+      UUT.imsb <= 1'b0;
+      UUT.jmp_pin <= 3'b001;
+      UUT.line_cfg <= 8'b10000000;
+      UUT.omsb <= 1'b0;
+      UUT.pin_base <= 3'b110;
+      UUT.pins <= 8'b10000000;
+      UUT.pm_wr <= 1'b1;
+      UUT.restart <= 1'b0;
+      UUT.rst_n <= 1'b1;
+      UUT.run <= 1'b1;
+      UUT.rx_full <= 1'b0;
+      UUT.start_pc <= 8'b10010100;
+      UUT.sync <= 8'b00000000;
+      UUT.timeout <= 16'b0000000000000000;
+      UUT.tx_empty <= 1'b0;
+      UUT.txd <= 8'b00000000;
+      UUT.instr <= 16'b0000000000000000;
+      UUT.cfg <= 8'b00000000;
+      UUT.clkdiv <= 16'b0000000000000001;
+    end
+
+    // state 3
+    if (cycle == 2) begin
+      UUT.crc_cfg <= 8'b00000000;
+      UUT.crc_good <= 16'b0000000000000000;
+      UUT.crc_poly <= 16'b0000000000000000;
+      UUT.flags <= 4'b0000;
+      UUT.hci <= 1'b0;
+      UUT.hlc <= 1'b0;
+      UUT.hoc <= 1'b0;
+      UUT.htc <= 1'b0;
+      UUT.imsb <= 1'b0;
+      UUT.jmp_pin <= 3'b000;
+      UUT.line_cfg <= 8'b00000000;
+      UUT.omsb <= 1'b0;
+      UUT.pin_base <= 3'b000;
+      UUT.pins <= 8'b00000000;
+      UUT.pm_wr <= 1'b0;
+      UUT.restart <= 1'b0;
+      UUT.rst_n <= 1'b0;
+      UUT.run <= 1'b0;
+      UUT.rx_full <= 1'b0;
+      UUT.start_pc <= 8'b00000000;
+      UUT.sync <= 8'b00000000;
+      UUT.timeout <= 16'b0000000000000000;
+      UUT.tx_empty <= 1'b0;
+      UUT.txd <= 8'b00000000;
+      UUT.instr <= 16'b0000000000000000;
+      UUT.cfg <= 8'b00000000;
+      UUT.clkdiv <= 16'b0000000000000010;
+    end
+
+    genclock <= cycle < 3;
+    cycle <= cycle + 1;
+  end
+endmodule

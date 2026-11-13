@@ -3501,3 +3501,345 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   line after the first frame, so its receiver stays suppressed (D94).
 - **Test:** `tb_hdlc` TX phases, NRZ and NRZI: before, `FAIL` (status bit 4); after, `PASS`.
 
+
+## BUG-138 — stale default formal/coverage harness inputs after D89–D94 (verification)
+
+- **Before:** host `prep -top pbe_host_spi` leaves `quad_req` symbolic; old single-lane
+  parser asserts `bitcnt == f_bit`. Line harnesses omit `a_early`, `ctl` and `ctl_param`;
+  engine harnesses omit `crc_wide`/`pins_in_n` and supply 16-bit CRC inputs.
+- **Failure:** `make formal FORMAL_BLOCK=host` fails the old parser when quad is selected.
+  Simply tying quad_req low gives a passing base case but UNKNOWN induction because an
+  arbitrary induction state may still have quad set. The induction trace is not an RTL bug.
+- **After:** `host_default.sv` ties new inputs low; the observer asserts `!quad` as an
+  inductive invariant. Line harnesses use `.a_early(a_in), .ctl(1'b0), .ctl_param(5'd0)`;
+  engine harnesses use `.crc_wide(1'b0), .pins_in_n(pins)` and 32-bit zero-extension.
+  Historical default equivalence explicitly excludes the newly assigned encodings.
+- **Regression:** `make formal` (including the existing expected counterexamples),
+  `make coverage`; outcomes and remaining failures are recorded in the round-3 report.
+  No behavioral RTL change.
+
+## BUG-139 — long verification launchers predate D82 SRAM and assembler changes (tool)
+
+- **Before:** bus/stress/sigrok/protocol launchers compile `tt_um_pbe.sv` without
+  `pbe_pmem_sram.sv` or the macro model; bus loader does `program, _ = asm.assemble(...)`
+  and writes a shared `[0]*128` image. Bus `PERIOD_PS = 20834` still describes 48 MHz.
+- **Failure:** each launcher exits nonzero with `Unknown module type: pbe_pmem_sram`.
+  With the model supplied, all six bus tests and stress fail at `Chip.load` with
+  `ValueError: too many values to unpack (expected 2)`.
+- **After:** supply the wrapper and both stock SRAM model files with FUNCTIONAL defined;
+  unpack `program, _, _`, initialize separate 256-word images through the host's pointer
+  high register 0x0F, retain per-engine start offsets, and derive rates from 16668 ps.
+  Replace fixed I2C-controller divisors 17/35/68 with `ceil(HZ/(7*rate))-1` for
+  400/200/100 kbit/s; at 60 MHz these are 21/42/85.
+- **Regression:** `make test-buses`, `make stress`, `make sigrok`,
+  `make test-protocol-vectors`. Exact post-fix outcomes remain in the round-3 evidence;
+  failed runs are never relabelled passing. No RTL or program change.
+- During SRAM-model bring-up the protocol runner completed USB and seven Modbus cases
+  but failed while exporting hashes: `path.relative_to(ROOT)` rejects the newly added
+  sibling macro directory. Use `os.path.relpath(path, ROOT)` (preserves existing keys and
+  records macros as `../macros/...`), then rerun the complete target. Keep the failed
+  receipt-export run distinct from a successful end-to-end target.
+
+## BUG-140 — old mutation anchors no longer match current FIFO/engine/line source (tool)
+
+- **Before:** M07 compares full against rptr, M18 lacks `!n_ns`, M21 expects a one-line
+  pop update, M22 lacks `!lv_hit`, and M24 predates the nonblocking PULL variants.
+- **Failure:** preflight `source.count(before) == 1` returns zero for all five sites;
+  the old campaign would abort with RuntimeError rather than injecting those faults.
+- **After:** M07 flips the full pointer comparison against mptr; M18 disables the current
+  stuffing predicate; M21 removes the guard from the current pop block; M22 removes only
+  restart exclusion and retains `!lv_hit`; M24 inverts FIFO readiness while preserving
+  nonblocking PULL variants. Exactly one site must still match.
+- **Regression:** preflight all 24 replacements, then `make mutate`; each still invokes
+  both make test and the separate differential on an isolated copy. Source drift, compile
+  failures and timeouts cannot count as detected mutations. No tracked RTL change.
+- The old mutation output default also targeted `evidence/round2/mutations`; it now targets
+  ignored `build/mutations` so a fresh campaign cannot replace historical evidence.
+
+## BUG-141 — formal line wall-time budget cuts off the required bound on this runner (tool)
+
+- **Before:** `verify/formal/line.sby`: `timeout 120`; the outer runner's longer timeout
+  cannot override SymbiYosys's own cutoff.
+- **Failure:** default `rt_nrz_s1_single_bit_lsb` returns TIMEOUT around step 138, short of
+  depth 164. The retained log shows no failed assertion. A timeout is inconclusive.
+- **After:** `timeout 1200`, with every depth, property and assumption unchanged; run one
+  solver job while finishing the default campaigns. Source-aware receipts reject results
+  whose expanded configuration differs, so the changed line jobs must be rerun.
+- **Regression:** `make formal FORMAL_JOBS=1 FORMAL_ARGS='--timeout 1800'` or validated
+  collection of individually completed identical jobs. Actual solver outcomes remain in
+  the round-3 report; an increased budget alone is never evidence of a proof.
+
+## BUG-142 — draft Manchester reference placed the first edge half a clock early (model)
+
+- **Before:** first edge did `self.mc_elapsed = offset`; carrier age used
+  `min(old_age + 8, limit)`. The receiver's first reference is established at the rising
+  clock; the early sample refines subsequent edge errors, not that initial reference.
+- **Failure:** seeded D90 line differential, cycle 28051, CFG 0xB3/period_m1 3: RTL pulses
+  frame_end but the draft model accepts a boundary as a new mid-bit and misses carrier end.
+  The compact captured age/input history is retained in round3/model. This is a model error,
+  not an RTL bug. Diagnosing it used RTL state only after observable output disagreement.
+- **After:** initialize the reference age to zero on the first edge. Stop incrementing when
+  the age reaches/passes the carrier threshold, retaining a possible sub-clock overshoot;
+  do not clamp its numeric value prematurely.
+- **Regression:** `test_first_manchester_reference_and_carrier_deadline` checks the observable
+  deadline from a 14-clock edge sequence; the draft code misses its expected frame_end at
+  index 13. Rerun `PBE_LINE_ETHERNET=1 make diff-line` for the complete randomized campaign.
+- The first-edge quantization/overshoot are implementation-informed cycle clarifications;
+  do not call their agreement an independent architectural proof (D96).
+
+## BUG-143 — stock UART decoder was still configured for the 48 MHz capture (tool)
+
+- **Before:** `sigrok_verify.py`: `uart:rx=p0:baudrate=480000`; the current tb_pbe transmits
+  one bit per 100 clocks at 60 MHz. The fixed decoder baud therefore disagrees with the wire.
+- **Failure:** fresh `make sigrok`: 21 PASS + 2 documented USB XFAIL + 1 UART FAIL;
+  UART decoded `4b1a7f04`, expected `55a300ff0f80`.
+- **After:** request 600000 baud (60 MHz / 100); no capture, decoder source, expected payload
+  or tolerance is changed. The approximately 80-ppm simulated clock rounding is negligible
+  compared with the stock UART receiver's baud window.
+- **Regression:** rerun the checker on the same fresh compact captures with `--vcd-dir`;
+  require 22 PASS + the same 2 USB XFAIL, and preserve the failed receipt separately.
+
+## BUG-144 — draft generated SV fixture did not elaborate genvar port expressions correctly (tool/test)
+
+- **Before:** the minimal two-coder bench connected `drive[k]` and `cfg2(k==0?0:64)` directly
+  from an inline genvar. Icarus 12 rejected the output bit select as nonconstant; fixing only
+  the selects left the cfg2 condition as an undriven expression, giving a misleading PASS.
+- **After:** bind a local integer parameter `K=k` and use K for both the port bit selects
+  and configuration condition. Add an explicit four-state fixture assertion requiring the
+  actual input ports to be 0x00 and 0x40, respectively, before applying stimulus.
+- **Regression:** the corrected bench compiles, prints its known-input fixture PASS and then
+  exposes the real D90 contract violation (BUG-145). Retain the compile failure and the old
+  false-PASS transcript; neither is evidence about the RTL contract.
+
+## BUG-145 — Manchester transmitter incorrectly waits for LINE2 idle qualification (RTL)
+
+- **Contract:** `pbe_line.sv` Manchester header/D90: LINE2 sample point, resync and idle wait
+  do not apply. The hand-off explicitly flagged LINE2[6] as untested.
+- **Before:** `wire idle_wait = cfg2[6];` feeds the common tx_ok gate even in Manchester.
+  An idle-high fixture waits for eleven bit samples; a physical idle-low receiver cannot
+  qualify that wait. Neither behavior matches the documented Manchester exception.
+- **Minimal failing test first:** `verify/ethernet/tb_manchester_idle_wait.sv`: identical
+  Manchester bytes, with LINE2 0 and 0x40, must have identical driven outputs. It fails at
+  292690 ps on the baseline, before any RTL edit. The fixture asserts its input settings
+  are both known. No end-to-end Ethernet program or model is needed to reproduce it.
+- **Small repair:** qualify the old idle wait with `!manch`, so it retains its old
+  effect in modes 0–2 and has no effect in mode 3. This is a documented exception, not a
+  changed Manchester algorithm. Apply only after retaining the running baseline source
+  receipts, then rerun the minimal test, old-mode checks, both simulators and all gates.
+- **Status:** repair applied after retaining baseline evidence; the isolated reproducer and
+  new formal/smoke differential checks pass. The final full gate, six simulator-log comparisons, both lints and all new formal
+  checks pass; repair-only legacy equivalence proves 575 cells. Report at
+  the top of the final message, including whether repaired and validated.
+
+## BUG-148 — the old timeout mutant lacks a fast exact-deadline RTL regression (test)
+
+- **Before:** M19 replaces `tmo_cnt >= timeout` with `tmo_cnt > timeout`; its long make-test
+  path timed out at 1800 seconds and its separate one-seed differential survived. These
+  outcomes are inconclusive/survived, not detection. The current PAGE/SRAM seed schedule
+  differs from the historical campaign where that differential caught the fault.
+- **After:** add `tb_timeout_boundary.sv` near the beginning of `make test`: after an explicit
+  restart, a permanently blocked WAIT with TIMEOUT=1/CLKDIV=0 must set STATUS[2] on the fourth
+  post-restart clock, and not on the first three. No internal engine state is read.
+- **Fail before/pass after:** the actual one-site M19 scratch RTL fails at that fourth clock;
+  unmodified RTL passes `make test-timeout-boundary`. Rerun M19's full make-test and separate
+  differential after adding the regression. Retain the separate differential's blind spot.
+- This fixes a verification gap, not the engine's existing timeout behavior.
+
+## BUG-146 — quad parser induction initially admitted unreachable stride states (formal observer)
+
+- **Before:** the generalized byte parser asserted output/state equivalence but did not
+  constrain its own reachable quad bit/read-shift alignment by proved invariants.
+- **Failure:** the base case passes, while induction returns UNKNOWN with arbitrary quad
+  bit indices that cannot arise after reset; framing/read-load assertions then disagree.
+- **After:** assert (not assume) `f_bit[1:0]==0` and `f_read_shift[1:0]==0` whenever the
+  reference mode is quad. The step relation proves these reachable-state invariants.
+- **Regression:** `ethernet.sby host` passes base case and temporal induction at depth 32;
+  no timing assumption or old framing assertion was removed.
+
+## BUG-147 — CRC formal reference reset and equivalence observer were incomplete (formal harness)
+
+- **Before:** coefficient reference used a synchronous `always @(posedge clk)` reset while
+  the documented CRC reset is asynchronous. The narrow miter also duplicated raw/reversed
+  CRC instances without asserting their complete stored-state relation.
+- **Failure:** wide reference assertion fails at step 3 after a repeated reset; the DUT has
+  reset while the synchronous reference still exposes prior coefficients. Narrow base case
+  passes, but induction can reveal unmatched hidden bits after a live width change (UNKNOWN).
+- **After:** use an asynchronous coefficient reset and compare the actual primary instances'
+  full raw CRC registers through observation-only ports, alongside value and comparator.
+- **Regression:** both `ethernet.sby crc32` and `crc16` pass temporal induction at depth 8.
+  Preserve the pilot counterexample/UNKNOWN logs separately from final proofs. No RTL repair.
+
+## BUG-149 — Verilator C++ grouping exhausts the shared runner's memory (tool)
+
+- **Before:** coverage builds pass `-j 2` without an explicit output-group policy. Verilator
+  5.051 groups many generated tb_pbe translation units into two huge `vm_classes` files.
+- **Failure:** tb_pbe compilation exits 2 with `cc1plus` killed. The cgroup reports one
+  `oom_kill` at its 8-GiB limit. No simulation or coverage result exists for that failed build;
+  the other bench/differential/line results must not substitute for it.
+- **After:** add `--output-groups 0` so generated C++ files compile individually. Keep the
+  same Verilator, RTL, instrumentation, assertions, source splits, stimulus and coverage
+  aggregation. This is a compiler resource adjustment, not a coverage relaxation.
+- **Regression:** rerun `verify/coverage/run.py --reuse-builds`; reuse only already successful
+  source-signature-matching builds, rebuild tb_pbe and the changed port-tieoff fixture, and
+  require every bench plus fresh nonempty coverage dumps. The repaired baseline campaign passes all 140/140 old functional bins; exact metrics
+  are retained in round3/stage1/coverage-summary.json.
+
+## BUG-150 — pre-CAN equivalence miter predates PAGE jump semantics (verification)
+
+- **Before:** the `default_engine` miter compared arbitrary live `start_pc` and arbitrary
+  8-bit program locations against pre-CAN 797314f, whose jumps always target its first
+  64-word page. D83 now targets the executing instruction's page. Merely comparing PC modulo
+  128 cannot make these behaviors equivalent.
+- **Failure:** the retained original counterexample has `start_pc=148`, new `pc_d=4`, old
+  `pc_d=68`. Even fixing START_PC at zero admits a jump from word 64: new target 0x4a,
+  old target 0x0a. These are D83 behavior differences, not new Ethernet defects.
+- **After:** retain the historical `engine` as an explicit expected failing property. State the
+  page-zero/no-PAGE compatibility domain explicitly for the additional `engine_page0`; do not claim the broader
+  historical property was proved. Add a separate `modern` miter against D88 159650f with
+  full 8-bit PC/PAGE, arbitrary live configuration and old encodings, excluding only newly
+  assigned non-bsync LINECTL actions. Report all bounded depths and actual outcomes.
+- **Regression:** the unrestricted property must still produce an assertion counterexample;
+  the restricted and modern comparisons are separate checks. Preserve pilot timeout receipts.
+
+## BUG-151 — Manchester recovery does not meet the full tested ±13.5 ns edge envelope (RTL, open)
+
+- **Before:** the D90 recovery loop accepts edges using `m_tau >= m_thr`, with threshold
+  `6*period_m1` eighth clocks, early correction four eighths and loop gain one quarter.
+  Earlier uniform-jitter evidence reached ±0.8 clock (13.3344 ns), below 13.5 ns.
+- **Failure:** public-pin Scapy frames with independently computed binascii FCS, 256 data
+  bytes, ±100 ppm source frequency and exactly ±13500 ps per crossing: six of twelve
+  required seed/pattern combinations lose bytes or split frames. All four tested uniform
+  combinations pass; both data-dependent-spacing patterns fail, as do alternating extremes
+  for the fast source. Received records have bad CRC rather than silently accepting payloads.
+- IEEE 802.3-2012 14.3.1.3.1 specifies the limit relative to each ideal zero crossing.
+  The generator perturbs actual transitions only; opposite extremes permit intervals to vary
+  by 27 ns. Its spacing-dependent pattern is a digital ISI proxy, not an analog cable model.
+- **After:** RTL recovery is deliberately unchanged. A gain/threshold retune is not a small,
+  self-evidently correct repair. Retain failing stimuli, actual received bytes, seed, phase,
+  clock offset, tool/source hashes and a minimized reproducer. A minimum 60-byte Ethernet frame reproduces it in both
+  Icarus and Verilator (30 delivered bytes, status 0). The stress target returns
+  nonzero for required-envelope failures. Do not call this Ethernet compliance or a pass.
+- **Regression:** `make stress-ethernet` (`receive_jitter`); ordinary no-jitter vectors and
+  the model differential can pass while this independent timing requirement fails.
+
+## BUG-152 — draft pin-vector expectations contradicted documented host records (test)
+
+- **Before:** the draft HDLC checker waited for a TX status byte although hdlc_tx explicitly
+  returns nothing; its Ethernet dribble test expected eight extra bits not to form a byte;
+  overrun recovery expected sticky STATUS[3] to clear itself at the next frame.
+- **Failures:** HDLC host-output deadline with empty status FIFO; dribble_8 returns 65 rather
+  than 64 bytes; a subsequent intact CRC-valid Ethernet frame reports 0x0a after overflow.
+- **After:** decode actual HDLC TX bits/FCS after sufficient frame time without inventing a
+  status response; expect 0xff for eight additional one bits and a failed CRC; require
+  the next good record's 0x0a, explicitly clear overflow with the public STATUS write, then
+  require 0x02 on another good frame. No DUT state or RTL change supplies expected payloads.
+- **Regression:** independent Ethernet RX and HDLC tests pass; underrun/overrun recovery
+  passes including the sticky-status observation, host clear and subsequent exact payload.
+
+## BUG-153 — mutation runner resolved away its virtual-environment executable (tool)
+
+- **Before:** `str((ROOT/'.venv/bin/python').resolve())` follows the Python symlink to the
+  base interpreter, losing its virtual environment and installed cocotb_tools.
+- **Failure:** feature-mutant pilots return ModuleNotFoundError. They are classified
+  inconclusive infrastructure failures, never killed mutants.
+- **After:** preserve the absolute `.venv/bin/python` path without resolving its symlink.
+  Re-anchor early-offset, flag-run and program-escape sites to exactly one current source
+  fragment; reject ambiguous/missing sites before execution.
+- **Regression:** rerun the actual scratch mutants; require observable assertion failures,
+  not compile errors, missing dependencies, generic nonzero returns or timeouts.
+
+## BUG-154 — old and Ethernet coverage sweeps would overwrite the same dump (tool)
+
+- **Before:** an extended campaign reused `line_sweep.dat` and its object directory for the
+  old 160-configuration campaign and new 240-configuration campaign.
+- **Failure:** this is a harness collision found before running the extended aggregation;
+  a second producer would erase the first producer's contribution.
+- **After:** use `line_sweep` and `ethernet_line_sweep` build/dump names separately; require
+  fresh nonempty data from each. Retain default instrumentation as exactly its existing
+  140-bin mode; opt-in Ethernet instrumentation adds bins and reports uncovered ones explicitly.
+- **Regression:** the extended summary lists both distinct data inputs, and the two sweeps'
+  independent assertion outcomes remain visible in their logs.
+
+## BUG-155 — end-state host readback compared a stale volatile STATUS snapshot (test)
+
+- **Before:** `expected=h.model.read(addr)` ran before an entire host SPI transaction;
+  its result was compared with a register byte prefetched after the command. A stopped
+  engine does not stop its line coder: receive overruns can set line error during that time.
+- **Failure:** the 1,000-seed Ethernet Icarus campaign reaches global index 983 / seed
+  5260828, then compares actual STATUS 20 with the earlier expected 4. At transaction end
+  both model and RTL status are 20. Diagnostic per-clock coder error pulses agree throughout.
+  A naive single-seed replay is different because index zero substitutes a coverage program.
+- **After:** capture expected bits from the independent model at each actual host sample,
+  assemble the predicted read byte, and compare that with the returned byte. Keep the
+  existing every-clock output oracle, FIFO checks, final internal-state diagnostics and
+  hardcoded directed register checks. No RTL/model state transition is changed or masked.
+  Add `--start-index` so a replay retains its original program/profile selection, and write
+  progress without changing RNG draws or existing default counters.
+- **Regression:** `run.py --ethernet --n 1 --start-index 983 --seed 0x504245 --cycles 1200`
+  fails before and passes after (30,688 clocks). Retain the failed large-campaign manifest;
+  do not claim its first 983 seeds as a complete 1,000-seed pass. The corrected full 1,000-seed campaign passes 20,951,842 checked clocks under Verilator;
+  the exact failing-seed replay also passes under Icarus.
+
+## BUG-156 — draft line limit fixtures assumed the wrong reset idle level (test)
+
+- **Before:** divider/glitch fixtures held a_in low across reset although the documented
+  coder resets its previous level high. The first release clock therefore started carrier
+  before the test's intended reference; a later frame_end was attributed to the glitch.
+- **After:** start both observed samples high, settle after reset, then create the intentional
+  falling edge (or early-only low sample). Do not adjust the carrier deadline to measured RTL.
+- **Regression:** external-port tests pass at period 65536: carrier end exactly 131072 clocks
+  after its first intentional edge; an early-only short glitch produces neither data nor end.
+  Continuous flag-delimited one runs produce an end every 30 clocks at a five-clock period.
+
+## BUG-157 — random line campaign missed the injected flag-run reset fault (test gap)
+
+- **Before:** E10 injects `rrun <= 6` at a flag-delimited frame end. The 240-configuration
+  random line campaign survives; it is not a detected fault.
+- **After:** add the public-output continuous-one-run check above. A receiver that stays in
+  flag-delimited mode must reset its run and emit another end after each six sampled ones.
+- **Regression:** baseline intervals are 30 clocks; E10 gives events [29,69,109,149], hence
+  40-clock intervals, and fails the directed assertion. Preserve the original survivor receipt.
+
+## BUG-158 — payload-only program checking missed the second-END completion barrier (test gap)
+
+- **Before:** P02 replacing the second END survives the canonical payload/FCS/IFG tests.
+  Removing the barrier can still leave enough gap for valid frames, but completion status
+  becomes available before the last FCS bit. D93 documents the second END as that barrier.
+- **After:** monitor public uo_out[4] for the first completion record, independently decode
+  the TX pins, and require status availability not to precede the last FCS bit. Replace the
+  removed instruction with NOP, preserving X and every other instruction's position.
+- **Regression:** baseline passes; pure P02 exposes completion at 1559991456 ps versus
+  last-FCS end 1560708180 ps and fails. Retain the original survivor receipt.
+- Also replace frame-start STAT/extra escape PUSH with NOP. The earlier SET X,0 substitution
+  had an incidental register effect and does not establish single-purpose sensitivity.
+  Pure P03 fails with leaked idle-timeout status 04; pure P04 fails exact escaped RX bytes.
+  Add a descriptive payload assertion so the strict mutation classifier can identify its
+  actual failure; the earlier bare-assertion nonzero remains inconclusive in pilot evidence.
+
+## BUG-159 — draft proof/receipt diagnostics referenced unsupported names (verification tooling)
+
+- **Before:** a page-zero pilot assumed `n.jump` / `n.cur_off` via hierarchical references
+  that Yosys treated as undriven implicit nets; it did not impose the intended domain.
+  A separate provenance addition tried to open the bare command name `make` as a file.
+- **Failures:** the ineffective domain pilot still yields the PAGE counterexample; the
+  mutation provenance pilot exits with FileNotFoundError before its next check. Neither
+  supplies a proof or mutant kill.
+- **After:** express the extra page-zero domain using the actual public `pc_new` output;
+  retain the historical unrestricted property separately, under its original engine name.
+  Resolve command binaries with PATH before hashing, preserving the venv invocation path.
+- **Regression:** source-aware collection accepts the historical expected counterexample
+  and the separate depth-eight page-zero pass. The final frozen 14-mutant campaign completes
+  with per-campaign input manifests, binary hashes and observable assertion detections.
+
+## BUG-160 — extended coverage and quad observer needed stricter final acceptance (verification)
+
+- **Before:** the exploratory Ethernet coverage wrapper automatically passed `--partial`
+  to the summarizer; its first run reported 217/219 bins but did not reject the gaps. The
+  generalized host parser proved the full internal read word but explicitly checked only
+  Q0, leaving the other three external output-lane relations implicit in the RTL wiring.
+- **After:** remove automatic partial acceptance: the normal extended target now requires
+  all old and new named bins. Add an explicit Q3..Q1 comparison with the independent
+  predicted word at each quad read sampling edge. Default old checks are unchanged.
+- **Regression:** the strict summarizer passes the actual 219/219 data after directed
+  closure. The Ethernet formal block passes all 13 jobs with all four read lanes asserted; retain
+  the earlier, narrower observer receipts separately. No DUT assumption or RTL repair is added.

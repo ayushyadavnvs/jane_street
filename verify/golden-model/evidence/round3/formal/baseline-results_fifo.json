@@ -1,0 +1,84 @@
+{
+  "results": [
+    {
+      "block": "fifo",
+      "task": "prove",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "fifo",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "prove",
+      "depth": 32,
+      "unbounded_k_induction": true,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/fifo_formal.sv": "39f11660558aa7e645f4ac132ffc821fa1408429591246f88cd3e70bce2c3ef6"
+      },
+      "seconds": 0.382,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/fifo"
+    },
+    {
+      "block": "fifo",
+      "task": "cover",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "fifo_cover",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 64,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/fifo_formal.sv": "39f11660558aa7e645f4ac132ffc821fa1408429591246f88cd3e70bce2c3ef6"
+      },
+      "seconds": 0.326,
+      "failed_assertions": [],
+      "covers": [
+        "pbe_fifo: fifo_formal.sv:142.5-142.71 (_witness_.cover_cover_fifo_formal_sv_142_255)",
+        "pbe_fifo: fifo_formal.sv:141.5-141.53 (_witness_.cover_cover_fifo_formal_sv_141_251)",
+        "pbe_fifo: fifo_formal.sv:139.5-139.54 (_witness_.cover_cover_fifo_formal_sv_139_244)",
+        "pbe_fifo: fifo_formal.sv:140.5-140.86 (_witness_.cover_cover_fifo_formal_sv_140_247)"
+      ],
+      "workdir": "build/formal/fifo_cover"
+    },
+    {
+      "block": "fifo",
+      "task": "mark",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "fifo_mark",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "prove",
+      "depth": 32,
+      "unbounded_k_induction": true,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/fifo_formal.sv": "39f11660558aa7e645f4ac132ffc821fa1408429591246f88cd3e70bce2c3ef6"
+      },
+      "seconds": 0.371,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/fifo_mark"
+    }
+  ],
+  "total": 3,
+  "matched": 3,
+  "proven": 2,
+  "bounded_pass": 0,
+  "expected_counterexamples": 0,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven."
+}

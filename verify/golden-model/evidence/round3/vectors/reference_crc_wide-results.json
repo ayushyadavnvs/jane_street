@@ -1,0 +1,322 @@
+{
+  "seed": 4411971,
+  "random_cases": 8,
+  "rtl_configurations": 24,
+  "catalogue_entries": 24,
+  "cycles": 39542,
+  "library": "crccheck 1.3.1",
+  "clock_period_ps": 16668,
+  "results": [
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-17/CAN-FD",
+      "check": "0x04f03",
+      "residue": "0x00000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x00000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-21/CAN-FD",
+      "check": "0x0ed841",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/BLE",
+      "check": "0xc25a56",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/FLEXRAY-A",
+      "check": "0x7979bd",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/FLEXRAY-B",
+      "check": "0x1f23b8",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/INTERLAKEN",
+      "check": "0xb4f3e6",
+      "residue": "0x144e63",
+      "raw_crc_good": "0x144e63",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0xffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/LTE-A",
+      "check": "0xcde703",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/LTE-B",
+      "check": "0x23ef52",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/OPENPGP",
+      "check": "0x21cf02",
+      "residue": "0x000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-24/OS-9",
+      "check": "0x200fa5",
+      "residue": "0x800fe3",
+      "raw_crc_good": "0x800fe3",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0xffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-30/CDMA",
+      "check": "0x04c34abf",
+      "residue": "0x34efa55a",
+      "raw_crc_good": "0x34efa55a",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x3fffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-31/PHILIPS",
+      "check": "0x0ce9e46c",
+      "residue": "0x4eaf26f1",
+      "raw_crc_good": "0x4eaf26f1",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x7fffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/AIXM",
+      "check": "0x3010bf7f",
+      "residue": "0x00000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x00000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/AUTOSAR",
+      "check": "0x1697d06a",
+      "residue": "0x904cddbf",
+      "raw_crc_good": "0xfdbb3209",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0xffffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/BASE91-D",
+      "check": "0x87315576",
+      "residue": "0x45270551",
+      "raw_crc_good": "0x8aa0e4a2",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0xffffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/BZIP2",
+      "check": "0xfc891918",
+      "residue": "0xc704dd7b",
+      "raw_crc_good": "0xc704dd7b",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0xffffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/CD-ROM-EDC",
+      "check": "0x6ec2edc4",
+      "residue": "0x00000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0x00000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/CKSUM",
+      "check": "0x765e7680",
+      "residue": "0xc704dd7b",
+      "raw_crc_good": "0xc704dd7b",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0xffffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/ISCSI",
+      "check": "0xe3069283",
+      "residue": "0xb798b438",
+      "raw_crc_good": "0x1c2d19ed",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0xffffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/ISO-HDLC",
+      "check": "0xcbf43926",
+      "residue": "0xdebb20e3",
+      "raw_crc_good": "0xc704dd7b",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0xffffffff",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/JAMCRC",
+      "check": "0x340bc6d9",
+      "residue": "0x00000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0x00000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/MEF",
+      "check": "0xd2c22f51",
+      "residue": "0x00000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": true,
+      "refout": true,
+      "xorout": "0x00000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/MPEG-2",
+      "check": "0x0376e6e7",
+      "residue": "0x00000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x00000000",
+      "status": "PASS"
+    },
+    {
+      "corrupted_checksum_rejected": true,
+      "name": "CRC-32/XFER",
+      "check": "0xbd0be338",
+      "residue": "0x00000000",
+      "raw_crc_good": "0x0",
+      "payloads": 10,
+      "refin": false,
+      "refout": false,
+      "xorout": "0x00000000",
+      "status": "PASS"
+    }
+  ],
+  "unsupported": [],
+  "host_prefeed": [
+    {
+      "name": "CRC-24/BLE",
+      "prefix": "e58efb",
+      "native_init_register": false
+    },
+    {
+      "name": "CRC-24/FLEXRAY-A",
+      "prefix": "1624bb",
+      "native_init_register": false
+    },
+    {
+      "name": "CRC-24/FLEXRAY-B",
+      "prefix": "67d13f",
+      "native_init_register": false
+    },
+    {
+      "name": "CRC-24/OPENPGP",
+      "prefix": "b111c9",
+      "native_init_register": false
+    }
+  ]
+}

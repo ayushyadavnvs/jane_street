@@ -1,0 +1,45 @@
+{
+  "id": "M06",
+  "category": "FIFO-empty",
+  "file": "src/pbe_fifo.sv",
+  "before": "assign empty = (wptr == rptr);",
+  "after": "assign empty = (wptr != rptr);",
+  "baseline_sha256": "9de94713ce3d42f8746f425556f5430312196e9ed5a285b12b87d353fc98eae3",
+  "baseline_hdl_sha256": "cf7c114888d8a2f633a46500f059f8ba55762d27e9acc8fc08d948b9821aca67",
+  "scratch": "/tmp/pbe-mutation-M06-s24ktljr/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 5.83,
+      "status": "caught",
+      "first_failure": "FATAL: tb_fifo_robustness.sv:15: FIFO boundary: reset empties count=0 empty=0 full=0",
+      "first_failing_check": "tb_fifo_robustness",
+      "log": "M06-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 2,
+      "seconds": 1.714,
+      "status": "caught",
+      "first_failure": "\"reason\": \"outputs actual=(0, 0, 48), expected=(0, 0, 0)\",",
+      "first_failing_check": "test_diff.random_differential",
+      "log": "M06-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test",
+    "diff"
+  ]
+}

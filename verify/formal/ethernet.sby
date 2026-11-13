@@ -1,0 +1,70 @@
+[tasks]
+host host
+host_cover host cover
+host_single host_single
+crc32 crc
+crc16 crc narrow
+manchester_p0 mc p0
+manchester_p1 mc p1
+manchester_cover mc p0 cover
+manchester_timer timer
+stuff_tags tags
+stuff_cover tags cover
+flag_frames flags
+flag_cover flags cover
+
+[options]
+mode prove
+depth 32
+host: depth 32
+host_single: depth 4
+crc: depth 8
+timer: depth 8
+mc: mode bmc
+mc: depth 260
+tags: mode bmc
+tags: depth 80
+flags: mode bmc
+flags: depth 80
+cover: mode cover
+host_cover: depth 224
+manchester_cover: depth 260
+timeout 1200
+
+[engines]
+smtbmc yices
+
+[script]
+host: read -formal -sv ethernet_host.sv
+host: prep -top pbe_host_spi
+host_single: read -formal -sv host_new_equiv.sv host_old_equiv.sv ethernet_host_equiv.sv
+host_single: prep -top ethernet_host_equiv
+crc: read -formal -sv ethernet_crc_observers.sv ethernet_crc.sv
+narrow: chparam -set NARROW 1 ethernet_crc
+crc: prep -top ethernet_crc
+mc: read -formal -sv ethernet_line.sv ethernet_line_formal.sv
+p1: chparam -set POLARITY 1 ethernet_line_formal
+mc: prep -top ethernet_line_formal
+tags: read -formal -D ETH_TAGS -sv ethernet_line.sv ethernet_line_formal.sv
+tags: chparam -set KIND 1 ethernet_line_formal
+tags: prep -top ethernet_line_formal
+flags: read -formal -D ETH_FLAGS -sv ethernet_line.sv ethernet_line_formal.sv
+flags: chparam -set KIND 2 ethernet_line_formal
+flags: prep -top ethernet_line_formal
+timer: read -formal -D ETH_TIMER -sv ethernet_line.sv ethernet_line_formal.sv
+timer: chparam -set KIND 3 ethernet_line_formal
+timer: prep -top ethernet_line_formal
+async2sync
+dffunmap
+
+[files]
+../../pbe_v1/build/formal/generated/ethernet_crc_observers.sv
+../../pbe_v1/build/formal/generated/ethernet_host.sv
+../../pbe_v1/build/formal/generated/host_new_equiv.sv
+../../pbe_v1/build/formal/generated/host_old_equiv.sv
+../../pbe_v1/build/formal/generated/ethernet_line.sv
+../../src/pbe_crc.sv
+../../pbe_v1/test/ref_pbe_crc16.sv
+ethernet_host_equiv.sv
+ethernet_crc.sv
+ethernet_line_formal.sv

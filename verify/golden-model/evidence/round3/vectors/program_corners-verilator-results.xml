@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794589400" />
+    <testcase name="idle_timeout_then_frame" classname="test_program_corners" file="/workspace/work/jane_street/verify/ethernet/test_program_corners.py" lineno="8" time="7.173590898513794" sim_time_ns="1645456.626" ratio_time="229376.98138611464" />
+  </testsuite>
+</testsuites>

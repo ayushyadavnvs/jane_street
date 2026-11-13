@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794590418" />
+    <testcase name="minimum_frame_edge_jitter" classname="test_jitter_reproducer" file="/workspace/work/jane_street/verify/ethernet/test_jitter_reproducer.py" lineno="9" time="0.4815526008605957" sim_time_ns="461028.546" ratio_time="957379.4122928282">
+      <failure error_type="AssertionError" error_msg="('BUG-151', [(30, 0)])" />
+    </testcase>
+  </testsuite>
+</testsuites>

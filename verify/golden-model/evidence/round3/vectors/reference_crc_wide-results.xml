@@ -1,0 +1,7 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794580289" />
+    <testcase name="catalogue_checks" classname="test_catalogue" file="/workspace/work/jane_street/verify/vectors/crc/test_catalogue.py" lineno="85" time="1.0369055271148682" sim_time_ns="659086.056" ratio_time="635627.874251833" />
+    <testcase name="every_wide_width" classname="test_catalogue" file="/workspace/work/jane_street/verify/vectors/crc/test_catalogue.py" lineno="140" time="0.12089824676513672" sim_time_ns="78406.272" ratio_time="648531.0920373902" />
+  </testsuite>
+</testsuites>

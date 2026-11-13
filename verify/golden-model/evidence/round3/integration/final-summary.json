@@ -1,0 +1,92 @@
+{
+  "branch": "verify/ethernet",
+  "base": "3cca934",
+  "rtl_edits": [
+    "Manchester idle_wait guard only"
+  ],
+  "full_gate": "PASS",
+  "race_check": "6/6 PASS",
+  "lint": "SRAM and FF PASS",
+  "differential": {
+    "seeds": 1000,
+    "checked_clocks": 20951842,
+    "input_hashes_unchanged": true,
+    "simulator": "Verilator 5.051",
+    "default_clocks": 50663,
+    "default_json_equal_to_base": true
+  },
+  "formal": {
+    "source_lineages": [
+      {
+        "file": "baseline-results_fifo.json",
+        "lineage": "original 3cca934"
+      },
+      {
+        "file": "baseline-results_host.json",
+        "lineage": "original 3cca934"
+      },
+      {
+        "file": "baseline-results_line.json",
+        "lineage": "original 3cca934"
+      },
+      {
+        "file": "baseline-results_engine.json",
+        "lineage": "original 3cca934"
+      },
+      {
+        "file": "baseline-results_bsync.json",
+        "lineage": "original 3cca934"
+      },
+      {
+        "file": "results_ethernet.json",
+        "lineage": "repaired current RTL"
+      },
+      {
+        "file": "results_default.json",
+        "lineage": "repaired current RTL"
+      },
+      {
+        "file": "results_modern.json",
+        "lineage": "repaired current RTL"
+      }
+    ],
+    "total": 129,
+    "matched": 129,
+    "proven": 8,
+    "bounded_pass": 88,
+    "expected_counterexamples": 13,
+    "covers": 20,
+    "note": "Distinct baseline and repaired-source jobs. Expected counterexamples are false properties. Repair equivalence is additional, not counted as SBY induction."
+  },
+  "coverage": {
+    "named_bins": 219,
+    "named_hit": 219,
+    "structural": {
+      "toggle": {
+        "points": 13030,
+        "hit": 8849
+      },
+      "expr": {
+        "points": 2323,
+        "hit": 1942
+      },
+      "line": {
+        "points": 641,
+        "hit": 564
+      },
+      "branch": {
+        "points": 1120,
+        "hit": 949
+      }
+    }
+  },
+  "mutations": {
+    "old_combined_caught": 24,
+    "old_total": 24,
+    "new_caught": 14,
+    "new_total": 14
+  },
+  "open_rtl_bug": "BUG-151: required per-crossing jitter fails 6/12 sampled cases; minimum frame fails both simulators",
+  "pushes": 0,
+  "physical_or_gate_level_workflows": 0
+}

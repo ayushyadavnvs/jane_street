@@ -1,0 +1,11 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794588096" />
+    <testcase name="receive_jitter" classname="test_wire_stress" file="/workspace/work/jane_street/verify/ethernet/test_wire_stress.py" lineno="12" time="70.60979223251343" sim_time_ns="21324414.15" ratio_time="302003.63824581297">
+      <failure error_type="AssertionError" error_msg="6 required +/-13.5ns receiver cases failed; retained observations.json" />
+    </testcase>
+    <testcase name="host_phases_and_full_duplex" classname="test_wire_stress" file="/workspace/work/jane_street/verify/ethernet/test_wire_stress.py" lineno="43" time="20.44976782798767" sim_time_ns="10366162.145" ratio_time="506908.5493876762" />
+    <testcase name="underrun_overrun_recovery" classname="test_wire_stress" file="/workspace/work/jane_street/verify/ethernet/test_wire_stress.py" lineno="64" time="10.144649982452393" sim_time_ns="3351375.833999999" ratio_time="330358.9418853295" />
+    <testcase name="exact_ifg" classname="test_wire_stress" file="/workspace/work/jane_street/verify/ethernet/test_wire_stress.py" lineno="93" time="0.9249207973480225" sim_time_ns="431192.82599999756" ratio_time="466194.3241370877" />
+  </testsuite>
+</testsuites>

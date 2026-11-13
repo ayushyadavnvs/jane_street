@@ -1,0 +1,24 @@
+{
+  "command": [
+    "make",
+    "diff-line",
+    "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+  ],
+  "returncode": 2,
+  "seconds": 0.64,
+  "status": "caught",
+  "first_failure": "AssertionError: {'cycle': 2347, 'inputs': {'clear': False, 'cfg': 195, 'cfg2': 2, 'sync': 0, 'period_m1': 3, 'out_msb_first': 0, 'in_msb_first': 0, 'a_in': 0, 'a_early': 0, 'b_in': 1, 'tx_put': True, 'tx_end': False, 'tx_data': 11, 'rx_take': False, 'ctl': False, 'ctl_param': 19}, 'actual': {'drive': 0, 'a_out': 1, 'b_out': 0, 'tx_ready': 0, 'rx_valid': 1, 'rx_data': 1, 'frame_end': 0, 'err': 1}, 'expected': {'drive': 0, 'a_out': 1, 'b_out': 0, 'tx_ready': 0, 'rx_valid': 1, 'rx_data': 0, 'frame_end': 0, 'err': 0}}",
+  "first_failing_check": null,
+  "log": "E05.log.gz",
+  "executable_sha256": "8a229baf64671988cfb5af43ba3070c6ce7214cf32bcf96155115559d1466fa7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "E05",
+  "category": "Manchester early offset",
+  "file": "src/pbe_line.sv",
+  "before": "m_tau  = mcnt - (m_early ? 24'sd4 : 24'sd0)",
+  "after": "m_tau  = mcnt - (m_early ? 24'sd0 : 24'sd0)",
+  "baseline_sha256": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+  "mutant_sha256": "932044c32718300ffd2b9d10955b57d75b0e7c8517b0273e82e53c1c8577d22e"
+}

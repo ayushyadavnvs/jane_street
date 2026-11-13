@@ -1,0 +1,45 @@
+{
+  "id": "M14",
+  "category": "CRC-feedback",
+  "file": "src/pbe_crc.sv",
+  "before": "bit_in ^ |(crc & top)",
+  "after": "bit_in ^ ~|(crc & top)",
+  "baseline_sha256": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+  "baseline_hdl_sha256": "7700e9e7e95a9cab0eda0eddd89aa593240df011be9c7706200230ce5bafeab8",
+  "scratch": "/tmp/pbe-mutation-M14-6r1mnsun/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 6.328,
+      "status": "caught",
+      "first_failure": "FAIL: byte 3 is 9c, expected dd",
+      "first_failing_check": "tb_engine_ops",
+      "log": "M14-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 2,
+      "seconds": 13.762,
+      "status": "caught",
+      "first_failure": "\"reason\": \"0 CRC\",",
+      "first_failing_check": "test_diff.random_differential",
+      "log": "M14-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test",
+    "diff"
+  ]
+}

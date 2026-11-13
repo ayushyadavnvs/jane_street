@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,json,shutil
 PBE=Path(__file__).resolve().parents[2]/'pbe_v1'  # the design
 
-def prepare(out=None):
+def prepare(out=None, ethernet=False):
  out=Path(out) if out else PBE/'build/coverage/src';out.mkdir(parents=True,exist_ok=True)
  manifests=[]
  def add(module,name,cond):
@@ -55,8 +55,58 @@ def prepare(out=None):
  top+=add('tt_um_pbe','pm_write_engine0','pm_wr_e[0]')+add('tt_um_pbe','pm_write_engine1','pm_wr_e[1]')
  top+=add('tt_um_pbe','pm_write_other_running','(pm_wr_e[0] && run[1]) || (pm_wr_e[1] && run[0])')
  top+=add('tt_um_pbe','pm_second_refetch','pm_wr_q != 2\'b00 && pm_wr_e == 2\'b00')+'  end\n'
+ host=crc=''
+ if ethernet:
+  def block(module,rows):
+   return '  always @(posedge clk) if (rst_n) begin\n'+''.join(add(module,n,c) for n,c in rows)+'  end\n'
+  host=block('pbe_host_spi',[
+   ('quad_command','quad && !cs_n && sck_rise && last_bit && !have_cmd'),
+   ('quad_write','quad && wr_en'),('quad_read','quad && rd_done'),
+   ('quad_load','quad && load_dly[1] && !cs_n'),
+   ('quad_skip_fall','quad && sck_fall && bitcnt == 0 && !cs_n'),
+   ('quad_mode_request_inside','!cs_n && quad_req != quad'),
+   ('quad_latch_high','cs_n && quad_req != quad'),
+   ('quad_partial_abort','cs_n && bitcnt == 4'),
+   ('quad_exit_seven','cs_n && sck_rise && idle_sck == 6'),
+   ('quad_exit_eight','quad_exit'),('quad_idle_counter_reset','!cs_n && idle_sck != 0'),
+   *[(f'quad_stream_{a:02x}',f'quad && !cs_n && no_incr && addr == 7\'h{a:02x} && (wr_en || rd_done)') for a in (7,22,38)]])
+  crc=block('pbe_crc',[(f'crc_width_{w}',f'width_m1 == 5\'d{w-1} && step && !init') for w in range(17,33)]+[
+   ('crc_wide_reflected','width_m1[4] && out_rev && step'),('crc_wide_plain','width_m1[4] && !out_rev && step'),
+   ('crc_wide_init_zero','width_m1[4] && init && !init_ones'),('crc_wide_init_ones','width_m1[4] && init && init_ones'),
+   ('crc_init_wins_step','width_m1[4] && init && step'),('crc_wide_good','width_m1[4] && ok'),('crc_wide_bad','width_m1[4] && !ok')])
+  eng+=block('pbe_engine',[
+   ('wide_osrcrc_b2','exec && op == OP_EXT && ext_op == 1 && crc_wide && arg[3:0] == 8'),
+   ('wide_osrcrc_b3','exec && op == OP_EXT && ext_op == 1 && crc_wide && arg[3:0] == 9'),
+   ('wide_osrcrc_left_ignored','exec && op == OP_EXT && ext_op == 1 && crc_wide && arg[2]'),
+   ('narrow_osrcrc_param3','exec && op == OP_EXT && ext_op == 1 && !crc_wide && arg[3]'),
+   ('linectl_non_bsync_off','lctl && !bsm && arg[0]'),('linectl_non_bsync_on','lctl && !bsm && arg[1]'),
+   ('linectl_non_bsync_both','lctl && !bsm && arg[1:0] == 3')])
+  line+=block('pbe_line',[
+   *[(f'manchester_polarity_{p}',f'manch && minv == {p} && drive') for p in range(2)],
+   *[(f'manchester_period_{p}',f'manch && period_m1 == 16\'d{p} && drive') for p in (3,4,5,6,19)],
+   ('manchester_max_period','manch && period_m1 == 16\'hffff && rs == R_RUN'),
+   ('manchester_bit','manch && !bytes && drive'),('manchester_byte','manch && bytes && drive'),
+   ('manchester_msb','manch && out_msb_first && drive'),('manchester_lsb','manch && !out_msb_first && drive'),
+   ('manchester_sync_tx','manch && sync != 0 && drive'),('manchester_idle_wait_ignored','manch && cfg2[6] && drive'),
+   ('manchester_flag_ignored','manch && cfg[6] && drive'),('manchester_stuff_ignored','manch && cfg[3:2] != 0 && drive'),
+   ('manchester_early_edge','manch && m_edge && m_early && rs == R_RUN'),
+   ('manchester_late_edge','manch && m_edge && !m_early && rs == R_RUN'),
+   ('manchester_boundary_skip','manch && m_edge && !m_mid && rs == R_RUN'),
+   ('manchester_short_glitch','manch && a_d == a_in && a_early != a_in'),
+   ('manchester_carrier_sync','manch && m_lost && !hunting && sync != 0 && rs == R_RUN'),
+   ('manchester_carrier_no_sync','manch && m_lost && sync == 0 && rs == R_RUN'),
+   ('manchester_hunt_loss','manch && m_lost && hunting && rs == R_RUN'),
+   ('manchester_rx_overrun','manch && rx_valid && !rx_take && m_mid && rbits == 7'),
+   ('manchester_tail','manch && ts == T_SE0A && drive'),
+   ('stuff_ctl_off','ctl && ctl_param[0] && !ctl_param[1]'),('stuff_ctl_on_wins','ctl && ctl_param[1:0] == 3'),
+   ('stuff_queued_tag','q_valid && q_ns != ns_mode'),('stuff_shifter_tag','tbits != 0 && tns != ns_mode'),
+   ('stuff_due_before_no_stuff','tstuff && q_valid && q_ns'),
+   ('flag_low_frame_end','flagd && frame_end && !a_in'),
+   ('flag_run_reset','flagd && frame_end && rrun == 0'),
+   ('flag_continuous_receive','flagd && frame_end && rs == R_RUN')])
+  top+=block('tt_um_pbe',[('hostcfg_enabled','host_quad'),('quad_mux_active','quad && !host_s2[1]')])
  for source in sorted((PBE/'src').glob('*.sv')):
-  s=source.read_text();extra={'pbe_engine.sv':eng,'pbe_line.sv':line,'tt_um_pbe.sv':top,'pbe_bsync.sv':bs}.get(source.name,'')
+  s=source.read_text();extra={'pbe_engine.sv':eng,'pbe_line.sv':line,'tt_um_pbe.sv':top,'pbe_bsync.sv':bs,'pbe_host_spi.sv':host,'pbe_crc.sv':crc}.get(source.name,'')
   # Every used top can dump after final() in the simulator's normal shutdown path.
   extra+='\n  final begin $c("VerilatedCov::write();"); end\n'
   (out/source.name).write_text(s.replace('endmodule',extra+'\nendmodule'))

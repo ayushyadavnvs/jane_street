@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Run reproducible top-level model/RTL differential tests (cocotb 2.x)."""
 import argparse
+import hashlib
+import json
+import platform
 import os
 from pathlib import Path
 import sys
@@ -13,8 +16,10 @@ COV = GM.parent / 'coverage'                 # verify/coverage (Verilator covera
 
 def main():
     p=argparse.ArgumentParser()
+    p.add_argument('--ethernet',action='store_true',help='opt-in D89-D94 modes; preserve the historical default schedule')
     p.add_argument('--n',type=int,default=4,help='number of reproducible random program seeds')
     p.add_argument('--seed',type=lambda x:int(x,0),default=0x504245)
+    p.add_argument('--start-index',type=int,default=0,help='retain the original global-index stimulus when replaying a seed')
     p.add_argument('--cycles',type=int,default=1200,help='random stimulus clocks per seed')
     p.add_argument('--testcase',default='random_differential')
     p.add_argument('--sim',choices=('icarus','verilator'),default='icarus')
@@ -25,7 +30,7 @@ def main():
     a=p.parse_args()
     if a.coverage and a.sim != 'verilator': p.error('--coverage requires --sim verilator')
     build=(a.build_dir or PBE/'build'/('differential' if a.sim=='icarus' else 'differential_verilator')).resolve()
-    flags=['-g2012'] if a.sim=='icarus' else ['--timing','-Wno-fatal']
+    flags=['-g2012'] if a.sim=='icarus' else ['--timing','-Wno-fatal','--output-groups','0']
     if a.coverage:
         flags+=['--coverage','--assert','--compiler-include','verilated_cov.h']
         if a.source_dir.resolve() == (PBE/'src').resolve():
@@ -34,12 +39,21 @@ def main():
             module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
             a.source_dir=module.prepare()
 
+    os.environ['PBE_ETHERNET']='1' if a.ethernet else '0'
     os.environ['PBE_TWO_STATE']='1' if a.sim=='verilator' else '0'
     coverage_output=(a.coverage_output or build/'coverage.dat').resolve()
 
     if a.n < 1 or a.cycles < 1: p.error('n and cycles must be positive')
-    os.environ.update(PBE_N=str(a.n),PBE_SEED=str(a.seed),PBE_CYCLES=str(a.cycles),PBE_DIFF_OUTPUT_DIR=str(build))
+    os.environ.update(PBE_N=str(a.n),PBE_SEED=str(a.seed),PBE_CYCLES=str(a.cycles),PBE_DIFF_OUTPUT_DIR=str(build),PBE_START_INDEX=str(a.start_index))
     sys.path[:0]=[str(GM),str(Path(__file__).parent)]
+    build.mkdir(parents=True,exist_ok=True)
+    tracked=[*sorted(a.source_dir.resolve().glob('*.sv')),
+             *sorted((GM/'model').glob('*.py')),*sorted((GM/'differential').glob('*.py'))]
+    manifest=dict(start_index=a.start_index,seed=a.seed,seeds=a.n,cycles=a.cycles,ethernet=a.ethernet,
+                  python=platform.python_version(),simulator=a.sim,
+                  clock_period_ps=16668 if a.ethernet else 20832,
+                  inputs={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in tracked})
+    (build/'inputs.json').write_text(json.dumps(manifest,indent=2)+'\n')
     r=get_runner(a.sim)
     # D82: the program memories are IHP SRAM macros; simulate IHP's model (FUNCTIONAL core)
     sram=GM.parents[1]/'macros'/'RM_IHPSG13_1P_256x16_c2_bm_bist'

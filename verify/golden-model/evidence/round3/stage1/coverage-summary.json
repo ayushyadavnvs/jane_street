@@ -1,0 +1,329 @@
+{
+  "coverage_inputs": [
+    "build/coverage/diff.dat",
+    "build/coverage/line_sweep.dat",
+    "build/coverage/tb_can.dat",
+    "build/coverage/tb_coverage_gaps.dat",
+    "build/coverage/tb_debug.dat",
+    "build/coverage/tb_engine_known_reset.dat",
+    "build/coverage/tb_engine_ops.dat",
+    "build/coverage/tb_engine_restart.dat",
+    "build/coverage/tb_fetch.dat",
+    "build/coverage/tb_fifo_robustness.dat",
+    "build/coverage/tb_line.dat",
+    "build/coverage/tb_page.dat",
+    "build/coverage/tb_pbe.dat",
+    "build/coverage/tb_proto.dat",
+    "build/coverage/tb_spec_boundaries.dat",
+    "build/coverage/tb_usb.dat"
+  ],
+  "user_bins": 140,
+  "user_hit": 140,
+  "user_counts": {
+    "opcode_0": 56294,
+    "opcode_1": 12291,
+    "opcode_2": 6049,
+    "opcode_3": 484041,
+    "opcode_4": 3930,
+    "opcode_5": 9328,
+    "opcode_6": 6739,
+    "opcode_7": 15945,
+    "sub_0_0": 11493,
+    "sub_0_1": 4670,
+    "sub_0_2": 7147,
+    "sub_0_3": 19972,
+    "sub_0_4": 6431,
+    "sub_0_5": 6315,
+    "sub_0_6": 155,
+    "sub_0_7": 111,
+    "sub_5_0": 4783,
+    "sub_5_1": 4545,
+    "sub_6_0": 278,
+    "sub_6_1": 484,
+    "sub_6_2": 310,
+    "sub_6_3": 5667,
+    "sub_7_0": 414,
+    "sub_7_1": 428,
+    "sub_7_2": 532,
+    "sub_7_3": 77,
+    "sub_7_4": 795,
+    "sub_7_5": 1331,
+    "sub_7_6": 4823,
+    "sub_7_7": 7545,
+    "jump_0": 171454,
+    "jump_1": 15528,
+    "jump_2": 272,
+    "jump_3": 109913,
+    "jump_4": 312,
+    "jump_5": 38178,
+    "jump_6": 118000,
+    "jump_7": 30384,
+    "wait_0_0": 43,
+    "wait_0_1": 4969,
+    "wait_0_2": 435,
+    "wait_0_3": 558,
+    "wait_1_0": 25,
+    "wait_1_1": 17,
+    "wait_1_2": 1,
+    "wait_1_3": 1,
+    "timeout_taken": 226,
+    "rx_overflow": 20477,
+    "d50_refetch": 66,
+    "pull_kind_0": 3090,
+    "pull_kind_1": 1298,
+    "pull_kind_2": 224,
+    "pull_kind_3": 171,
+    "linectl_width": 752,
+    "linectl_action": 158,
+    "line_event_vector": 205,
+    "start_pc_upper_half": 212336,
+    "exec_word_255": 13,
+    "page_executed": 6619,
+    "jump_other_page": 6611,
+    "page_cleared": 2,
+    "jump_wraps_256": 1353,
+    "status_0_set": 1525,
+    "status_0_clear": 1522,
+    "status_1_set": 301,
+    "status_1_clear": 260,
+    "status_2_set": 37,
+    "status_2_clear": 36,
+    "status_3_set": 4,
+    "status_3_clear": 3,
+    "status_4_set": 65,
+    "status_4_clear": 64,
+    "status_5_set": 2,
+    "status_5_clear": 2,
+    "status_6_set": 33,
+    "status_6_clear": 33,
+    "status_7_set": 35,
+    "status_7_clear": 35,
+    "line_1_0_0_0": 6527,
+    "line_1_0_0_1": 2372,
+    "line_1_0_1_0": 2404,
+    "line_1_0_1_1": 2433,
+    "line_1_1_0_0": 2402,
+    "line_1_1_0_1": 2453,
+    "line_1_1_1_0": 2390,
+    "line_1_1_1_1": 2418,
+    "line_1_2_0_0": 7934,
+    "line_1_2_0_1": 2399,
+    "line_1_2_1_0": 2359,
+    "line_1_2_1_1": 2425,
+    "line_1_3_0_0": 5346,
+    "line_1_3_0_1": 2412,
+    "line_1_3_1_0": 2376,
+    "line_1_3_1_1": 2425,
+    "line_2_0_0_0": 2359,
+    "line_2_0_0_1": 2437,
+    "line_2_0_1_0": 2396,
+    "line_2_0_1_1": 2449,
+    "line_2_1_0_0": 2391,
+    "line_2_1_0_1": 2406,
+    "line_2_1_1_0": 2401,
+    "line_2_1_1_1": 1012255,
+    "line_2_2_0_0": 8641,
+    "line_2_2_0_1": 6583,
+    "line_2_2_1_0": 2404,
+    "line_2_2_1_1": 2462,
+    "line_2_3_0_0": 2392,
+    "line_2_3_0_1": 2403,
+    "line_2_3_1_0": 2400,
+    "line_2_3_1_1": 2424,
+    "bsync_state_integ": 32851,
+    "bsync_state_idle": 453457,
+    "bsync_state_frame": 1303167,
+    "bsync_state_tail": 169052,
+    "bsync_state_eflag": 35160,
+    "bsync_state_edwait": 30019,
+    "bsync_state_edelim": 40992,
+    "bsync_state_busoff": 136335,
+    "bsync_own_start": 94,
+    "bsync_foreign_start": 129,
+    "bsync_late_join": 1,
+    "bsync_arbitration_lost": 5,
+    "bsync_bit_error": 34,
+    "bsync_frame_sent": 36,
+    "bsync_error_detected": 65,
+    "bsync_passive_flag": 10507,
+    "bsync_active_flag": 23229,
+    "bsync_stuff_slot": 682,
+    "bsync_ack_given": 12720,
+    "bsync_unit_1": 172,
+    "bsync_unit_3": 192,
+    "bsync_unit_4": 596,
+    "bsync_unit_7": 161,
+    "bsync_unit_8": 958,
+    "bsync_busoff_recovered": 1,
+    "both_engines": 21201223,
+    "pm_write_engine0": 14161,
+    "pm_write_engine1": 14125,
+    "pm_write_other_running": 13,
+    "pm_second_refetch": 28307
+  },
+  "user_missing": [],
+  "rtl_point_coverage": {
+    "toggle": {
+      "points": 13030,
+      "hit": 7954
+    },
+    "expr": {
+      "points": 2320,
+      "hit": 1924
+    },
+    "line": {
+      "points": 641,
+      "hit": 553
+    },
+    "branch": {
+      "points": 1120,
+      "hit": 920
+    }
+  },
+  "per_file": {
+    "pbe_bsync.sv": {
+      "toggle": {
+        "points": 788,
+        "hit": 671
+      },
+      "expr": {
+        "points": 301,
+        "hit": 262
+      },
+      "line": {
+        "points": 59,
+        "hit": 59
+      },
+      "branch": {
+        "points": 162,
+        "hit": 143
+      }
+    },
+    "pbe_crc.sv": {
+      "toggle": {
+        "points": 476,
+        "hit": 186
+      },
+      "line": {
+        "points": 5,
+        "hit": 5
+      },
+      "expr": {
+        "points": 8,
+        "hit": 8
+      },
+      "branch": {
+        "points": 8,
+        "hit": 8
+      }
+    },
+    "pbe_engine.sv": {
+      "toggle": {
+        "points": 7890,
+        "hit": 4222
+      },
+      "expr": {
+        "points": 1637,
+        "hit": 1296
+      },
+      "branch": {
+        "points": 672,
+        "hit": 517
+      },
+      "line": {
+        "points": 411,
+        "hit": 331
+      }
+    },
+    "pbe_fifo.sv": {
+      "toggle": {
+        "points": 348,
+        "hit": 348
+      },
+      "expr": {
+        "points": 20,
+        "hit": 19
+      },
+      "line": {
+        "points": 6,
+        "hit": 6
+      },
+      "branch": {
+        "points": 10,
+        "hit": 10
+      }
+    },
+    "pbe_host_spi.sv": {
+      "branch": {
+        "points": 30,
+        "hit": 23
+      },
+      "expr": {
+        "points": 33,
+        "hit": 28
+      },
+      "line": {
+        "points": 4,
+        "hit": 4
+      },
+      "toggle": {
+        "points": 186,
+        "hit": 166
+      }
+    },
+    "pbe_line.sv": {
+      "toggle": {
+        "points": 1008,
+        "hit": 829
+      },
+      "expr": {
+        "points": 193,
+        "hit": 186
+      },
+      "branch": {
+        "points": 136,
+        "hit": 133
+      },
+      "line": {
+        "points": 56,
+        "hit": 56
+      }
+    },
+    "pbe_pmem_sram.sv": {
+      "toggle": {
+        "points": 232,
+        "hit": 232
+      },
+      "expr": {
+        "points": 6,
+        "hit": 6
+      },
+      "branch": {
+        "points": 6,
+        "hit": 6
+      }
+    },
+    "tt_um_pbe.sv": {
+      "toggle": {
+        "points": 2102,
+        "hit": 1300
+      },
+      "line": {
+        "points": 100,
+        "hit": 92
+      },
+      "branch": {
+        "points": 96,
+        "hit": 80
+      },
+      "expr": {
+        "points": 122,
+        "hit": 119
+      }
+    }
+  },
+  "rtl_distinct_line_locations": 295,
+  "rtl_distinct_lines_hit": 281,
+  "threshold": "at least one event",
+  "scope": "RTL source metrics coalesce identical source points across hierarchy/test roots; RTL original source only; appended instrumentation and testbench locations excluded from RTL percentages; user bins aggregated across instances and tests"
+}

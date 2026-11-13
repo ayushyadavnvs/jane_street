@@ -23,13 +23,39 @@ def bits(value,width,lsb_first):
     return [(value>>i)&1 for i in (range(width) if lsb_first else range(width-1,-1,-1))]
 
 
+def seed_prefix(row):
+    """Solve a GF(2) initialization prefix using the EXTERNAL library's byte map.
+
+    The four non-native wide seeds are 24 bits, so the prefix is exactly 3 bytes.
+    This is host software initialization, never a claimed arbitrary seed register.
+    """
+    width=row['width'];assert width%8==0
+    poly=int(row['poly'],0)
+    def image(value):
+        return library.Crc(width,poly,initvalue=0,reflect_input=row['refin']).process(
+            value.to_bytes(width//8,'little')).value()
+    basis={}
+    for column in range(width):
+        remainder,combination=image(1<<column),1<<column
+        while remainder:
+            pivot=remainder.bit_length()-1
+            if pivot not in basis:
+                basis[pivot]=(remainder,combination);break
+            r,c=basis[pivot];remainder^=r;combination^=c
+    remaining=int(row['init'],0);solution=0
+    while remaining:
+        r,c=basis[remaining.bit_length()-1];remaining^=r;solution^=c
+    assert image(solution)==int(row['init'],0)
+    return solution.to_bytes(width//8,'little')
+
+
 class WireCRC:
     def __init__(self,dut):self.dut=dut;self.cycles=0
     async def edge(self,**values):
         d=self.dut;d.clk.value=0
         for name,value in values.items():getattr(d,name).value=value
-        await Timer(10416,unit='ps');d.clk.value=1
-        await Timer(10416,unit='ps');d.clk.value=0;self.cycles+=1
+        await Timer(8334 if os.getenv('PBE_CRC_WIDE')=='1' else 10416,unit='ps');d.clk.value=1
+        await Timer(8334 if os.getenv('PBE_CRC_WIDE')=='1' else 10416,unit='ps');d.clk.value=0;self.cycles+=1
     def raw(self,row):
         value=int(self.dut.value.value)
         return reflect(value,row['width']) if row['refout'] else value
@@ -39,6 +65,10 @@ class WireCRC:
                         width_m1=row['width']-1,init_ones=int(int(row['init'],0)==mask),
                         out_rev=int(row['refout']),good=good)
         await self.edge(rst_n=1,init=1,step=1,bit_in=1)
+        if not row['native_init']:
+            await self.edge(init=0,step=0)
+            for byte in seed_prefix(row):
+                for bit in bits(byte,8,row['refin']):await self.edge(step=1,bit_in=bit)
         assert self.raw(row)==int(row['init'],0),row['name']+' init / init-over-step'
         await self.edge(init=0,step=0)
     async def feed(self,row,data,oracle):
@@ -54,7 +84,8 @@ class WireCRC:
 
 @cocotb.test()
 async def catalogue_checks(dut):
-    rows=json.loads((HERE/'catalogue.json').read_text())['vectors']
+    wide=os.getenv('PBE_CRC_WIDE')=='1'
+    rows=json.loads((HERE/('catalogue_wide.json' if wide else 'catalogue.json')).read_text())['vectors']
     seed=int(os.getenv('PBE_CRC_SEED',str(0x435243)))
     random_cases=int(os.getenv('PBE_CRC_RANDOM','8'));rng=random.Random(seed)
     h=WireCRC(dut);results=[];unsupported=[]
@@ -65,7 +96,7 @@ async def catalogue_checks(dut):
             assert actual==int(row[key],0),f"catalogue/library metadata disagree: {row['name']} {key}"
         assert cls.width()==width and cls.reflect_input()==row['refin'] and cls.reflect_output()==row['refout']
         assert cls.calc(b'123456789')==int(row['check'],0),row['name']+' independent library check'
-        if not row['native_init']:
+        if not row['native_init'] and not wide:
             unsupported.append(dict(name=row['name'],reason=f"init {row['init']} is neither zero nor all ones; no arbitrary seed-load register"))
             continue
         residue=int(row['residue'],0)
@@ -98,6 +129,21 @@ async def catalogue_checks(dut):
     report=dict(seed=seed,random_cases=random_cases,rtl_configurations=len(results),catalogue_entries=len(rows),
                 cycles=h.cycles,library='crccheck '+version('crccheck'),clock_period_ps=20832,
                 results=results,unsupported=unsupported)
-    out=PBE/'build/reference_crc/results.json';out.parent.mkdir(parents=True,exist_ok=True)
+    if wide:
+        report['clock_period_ps']=16668
+        report['host_prefeed']=[dict(name=r['name'],prefix=seed_prefix(r).hex(),native_init_register=False) for r in rows if not r['native_init']]
+    out=PBE/('build/reference_crc_wide/results.json' if wide else 'build/reference_crc/results.json');out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(report,indent=2)+'\n')
     dut._log.info('CRC CATALOGUE %s',json.dumps(report,sort_keys=True))
+
+
+@cocotb.test(skip=os.getenv('PBE_CRC_WIDTH_SWEEP')!='1')
+async def every_wide_width(dut):
+    h=WireCRC(dut)
+    for width in range(17,33):
+        for rev in (False,True):
+            poly=(1<<(width-1))|0x87
+            row=dict(width=width,poly=hex(poly),init='0x0',refin=rev,refout=rev,native_init=True,name=f'synthetic-{width}-{rev}')
+            await h.configure(row,0)
+            oracle=library.Crc(width,poly,initvalue=0,reflect_input=rev)
+            await h.feed(row,bytes(range(16)),oracle)

@@ -5,6 +5,7 @@ SPI pins. The fixture exposes scalar aliases because endpoint libraries need
 single-bit simulator handles, not slices of uio_in.
 """
 import importlib.util
+import math
 import os
 import random
 from collections import deque
@@ -44,8 +45,8 @@ ROOT = Path(os.environ['PBE_ROOT'])
 spec = importlib.util.spec_from_file_location('pbe_asm', ROOT/'pbe_v1/tools/pbe_asm.py')
 asm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(asm)
-# 48 MHz rounded to the closest even number of picoseconds: 32 ppm error.
-PERIOD_PS = 20834
+# 60 MHz rounded to the closest even number of picoseconds: 80 ppm period error.
+PERIOD_PS = 16668
 HZ = 1e12/PERIOD_PS
 CASES = int(os.getenv('PBE_BUS_CASES', '3'))
 SEED = int(os.getenv('PBE_BUS_SEED', '20261029'))
@@ -107,12 +108,19 @@ class Chip:
 
     async def load(self, *programs):
         await self.write(0, 0xc0)
-        words = [0]*128
-        for name, base in programs:
-            program, _ = asm.assemble((ROOT/'pbe_v1/programs'/f'{name}.pbe').read_text(), base, name)
-            words[base:base+len(program)] = program
-        await self.write(6, 0)
-        await self.write(7, *[b for word in words for b in (word >> 8, word & 255)])
+        # D82: separate 256-word SRAMs. Keep each caller's start offset;
+        # tuple order selects the engine, no longer a shared 128-word image.
+        for engine in range(2):
+            words = [0]*256
+            if engine < len(programs):
+                name, base = programs[engine]
+                program, _, _ = asm.assemble(
+                    (ROOT/'pbe_v1/programs'/f'{name}.pbe').read_text(), base, name)
+                assert base + len(program) <= 256
+                words[base:base+len(program)] = program
+            await self.write(0x0f, engine << 1)
+            await self.write(6, 0)
+            await self.write(7, *[b for word in words for b in (word >> 8, word & 255)])
 
     async def config(self, e=0, div=0, base=0, shift=3, start=0, jump=0):
         p = 0x10+16*e
@@ -291,7 +299,9 @@ async def i2c_controller(d):
     cocotb.start_soon(stretch())
     for case in range(CASES):
         await c.load(('i2c_ctrl', 0))
-        await c.config(div=r.choice((17, 35, 68)))
+        # Seven engine ticks per SCL period; round down the requested bus rate.
+        rate = r.choice((400_000, 200_000, 100_000))
+        await c.config(div=math.ceil(HZ / (7 * rate)) - 1)
         await c.write(0, 0x11)
         data = bytes(r.randrange(256) for _ in range(4))
         pointer = r.randrange(0, 240)

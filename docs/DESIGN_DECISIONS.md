@@ -3182,3 +3182,172 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
   the golden model and formal engine properties would need the new semantics before `make diff`
   could exercise it. It belongs in a session of its own.
 
+
+## D95. Ethernet verification: preserve the default contract, then extend independent checks
+
+- **Chosen:** work from D94 on `verify/ethernet`, in the seven ordered stages of
+  `ETHERNET_VERIFICATION_TODO.md`. Keep source RTL and old evidence unchanged. New receipts
+  belong under `verify/golden-model/evidence/round3/`; fresh generated work stays in build/.
+- **Default stage:** tie quad inputs low in a wrapper, connect early samples to ordinary
+  samples in non-Manchester harnesses, disable LINECTL, and zero-extend narrow CRC inputs.
+  Include the reset-derived single-lane invariant in induction rather than assuming internal
+  state. The historical equivalence comparison excludes newly assigned LINE mode 3, LINE[6]
+  and non-bit-synchronous LINECTL action encodings: those are new features, tested separately.
+  Preserve every old assertion, counterexample, depth and expected status otherwise.
+- **D82 compatibility:** standalone launchers must include the actual FUNCTIONAL SRAM models,
+  not silently select the FF fallback. The external bus loader uses the current assembler's
+  three return values and each engine's own SRAM, retaining caller-specified start offsets.
+  Bus baud calculations derive from 16668 ps (60 MHz rounded to an even ps, as required).
+- **Mutations:** re-anchor old faults to their current semantic sites; retain one replacement
+  per mutant and reject source drift. A compile error or timeout is inconclusive, never a kill.
+- **Alternatives rejected:** changing RTL to fit stale checkers; constraining away a new mode
+  in its own tests; replacing recorded evidence; counting BMC/cover as inductive proof;
+  selecting the FF implementation just to avoid supplying the SRAM model.
+- **Tools:** OSS CAD Suite 2026-07-27: Verilator 5.051 devel (v5.050-99-gf8fb1d664),
+  Yosys 0.67+94 (7defa5186), bundled SBY/Yices. Debian Icarus/vvp 12.0 precede the suite
+  for simulation and `make test`; stock sigrok-cli 0.7.2/libsigrokdecode 0.5.3.
+  Python 3.12 with cocotb 2.0.1 and the pinned per-target requirements. Version probes and
+  command receipts distinguish this environment from historical Python runtimes.
+- **Boundary:** no GDS or gate-level workflow, analog/electrical compliance or routed timing
+  claim. Existing default results and new-feature outcomes must be reported separately.
+- Mutation output defaults to ignored `pbe_v1/build/mutations`, preventing `make mutate`
+  from overwriting the historical round-2 receipts. Selected round-3 receipts are copied
+  explicitly after the campaign, as with other generated build artifacts.
+- Raise only the line SBY wall-time budget from 120 to 1200 seconds on the shared two-CPU
+  runner. Retain depth 164/48 and all properties/assumptions; do not trade proof depth for
+  runtime. Resume with one solver job and source/configuration-validated collection.
+
+## D96. D89–D94 executable reference and opt-in differential profile
+
+- **Chosen:** extend the existing Python reference from D89–D94 and public source-header
+  specification text. Retain the queue-of-bits representation and represent Manchester's
+  reference as an integer age in eighth clocks, not an RTL shifter or a copy of its code.
+  CRC remains the polynomial-remainder bit algorithm; D91 supplies the wider mask and
+  OSRCRC byte rules. Host parsing uses a lane stride and request latched at idle.
+- Add architectural examples for quad framing/latching/recovery, both engines' wide registers,
+  and CRC-32/ISO-HDLC's independent check value. Run examples before implementing support;
+  retain failing and passing transcripts. Their scope is conformance, not a proof.
+- `make diff ETHERNET=1` opts into quad mode changes, idle-SCK recovery and wide CRC settings.
+  Keep the default seeded schedule and RNG draws intact. Compare against an isolated checkout
+  of 3cca934: two default seeds/600 iterations produce the same 50,663 clocks and counters.
+  Historical 49,010-clock reports predate PAGE/SRAM/current test setup; do not rewrite them.
+- Model unknown host outputs per lane. Require four-state unknowns exactly where FIFO head
+  data is unspecified; do not silently zero unknown known-data bits. The two-state exception
+  remains limited to those model-marked lanes.
+- Add a separate seeded per-clock D90/D94 line campaign; keep the old 160-configuration,
+  80,160-clock sweep independently runnable. Diagnostic RTL state may explain a mismatch;
+  it never feeds predictions. Any implementation-informed timing clarification must be
+  recorded as a shared cycle contract, not claimed as an independent architectural proof.
+- **Alternatives rejected:** changing the old default generator to force new modes; masking
+  all quad output lanes on reads; inferring the expected mode/data from the DUT; copying RTL
+  into the model. Preserve old receipts and separate old-profile/new-profile coverage.
+- **Workflow update from owner:** complete all stages locally; defer all pushes until the end.
+  Repository write access does not block implementation or validation.
+
+## D97. Enforce Manchester's documented LINE2 idle-wait exception
+
+- The minimal two-coder test establishes BUG-145 independently of the golden model.
+- **Chosen small repair:** make `idle_wait = cfg2[6] && !manch`. Preserve the existing
+  qualification and timing in modes 0–2. Keep Manchester's loop, coding, clock and TP_IDL
+  behavior unchanged. Apply after the baseline campaigns have retained their original
+  source provenance; rerun the regression gates on the repaired source.
+- **Alternative:** document Manchester+LINE2[6] as unsupported. Rejected because the public
+  D90 contract already says the setting is ignored, and one mode guard expresses it exactly.
+- Fixing this RTL bug is within the owner's explicit minimal-test/small-clear-fix exception.
+
+## D98. Ethernet formal scope, observer strengthening, and exact fast regressions
+
+- The new `ethernet` formal block separates unbounded k-induction (quad/single host framing,
+  pre-D89 single-lane equivalence, coefficient-reference CRC widths 17–32, and pre-D91 narrow
+  equivalence) from bounded Manchester/HDLC checks and nonvacuity covers.
+- Keep the existing host's legal synchronized mode-0 timing assumptions (SCK phases >=4
+  clocks and CS setup). The equivalence comparison itself allows arbitrary pin timing and
+  arbitrary extra MOSI lanes, with quad disabled. Request changes are unconstrained; the mode
+  latch and eight-idle-SCK counter are checked independently of the DUT's state.
+- Prove parser stride alignment as an invariant, never assume an unreachable quad bit index
+  away. Export common host/CRC state only to strengthen sequential equivalence. Observers do
+  not drive the design; source-aware receipts retain the generated inputs and expected modes.
+- CRC reference reset must be asynchronous, matching the documented primitive interface.
+  Narrow equivalence includes live width changes and the entire raw state, not only a
+  potentially truncated/reversed output. Do not claim an induction failure is an RTL bug.
+- Manchester's bounded harness uses two preamble bytes, SFD, and an arbitrary payload. It
+  checks the IEEE first/second halves independently on the TX wire, the 3-bit TP_IDL tail,
+  recovered data and a completion deadline; the paired coding cannot cancel a polarity bug
+  silently. Jitter/clock offsets are simulation stress, not claimed formal proofs.
+- Add exact external-interface timeout/parity regressions early in the normal gate. They
+  retain all old checks and preserve the random profile's seeded schedule, while preventing
+  long protocol scenarios from being the first detector of simple M19/M23 faults.
+- Alternative rejected: weakening properties/depths, calling UNKNOWN a proof, asserting
+  partial output equivalence without the stored-state relation, or counting a timed-out
+  mutation check as detection. Actual bounds and any pilot counterexamples are reported.
+
+## D99. Independent wire vectors and standards-based digital stress
+
+- **Chosen:** Scapy 2.8.0 supplies Ethernet frame bytes; Python binascii/zlib CRC-32 supplies
+  FCS independently of the PBE model. A stateless IEEE-half-cell decoder checks captured
+  public TX pins, preamble/SFD, LSB bit order, all FCS bits, TP_IDL and minimum IFG. Save
+  actual decoded packets as pcap plus FCS/timing sidecars. An independent flag/zero-deletion
+  parser and crccheck 1.3.1 CRC-16/IBM-SDLC check HDLC NRZI frames.
+- Cover 60–1514-byte Ethernet frames, boundary sizes and larger frames. A 32,640-byte jumbo
+  uses every nonzero chunk length 1–255 once. Test empty TX input, escape density, corrupted
+  FCS, runts, dribble bits and quiet link/noise events through actual host-visible records.
+- Extend RevEng checks to all 24 primary catalogue entries of widths 17–32. Twenty have
+  native zero/all-ones initialization; four non-native 24-bit seeds use explicit host-fed
+  prefixes solved with the external library's GF(2) map. Report those as prefeed-assisted,
+  never as an arbitrary-seed register. Preserve all old narrow counts and random draws.
+- IEEE 802.3-2012 clauses 3.2.9, 4.4.2 and 14 define FCS, IFG and link timing. Section One,
+  14.3.1.3.1 (printed p346) requires ±13.5 ns relative to **each ideal zero crossing**;
+  adjacent intervals can vary by twice that amount. Primary text inspected at the mirror
+  https://www.my-wire.de/schnittstellenbeschreibung/ethernet.pdf; no copyrighted PDF is
+  added to the repository. The independent encoder perturbs actual edges, never every
+  half-cell slot irrespective of whether an edge exists.
+- Test uniform, alternating-extreme and spacing-dependent jitter, ±100 ppm and larger
+  offsets, exact 9.6-us back-to-back receive, clk/8 host phase sweeps, starvation/timeout,
+  overflow and recovery. Save delivery separately from error-reporting success. Worst-case
+  escaped receive plus transmit consumes the raw host bandwidth before command overhead;
+  a detected overflow is an architectural throughput limit, not successful delivery.
+- The spacing-dependent stimulus is a digital ISI proxy. Analog thresholds, squelch,
+  impedance, cable transfer, metastability, routed half-cycle setup/hold and physical
+  compliance remain unverified. No GDS or gate-level workflow is permitted or invoked.
+- **Alternatives rejected:** using the golden model as an external frame oracle; rounding
+  13.3344 ns up to the standard's 13.5 ns; retuning RTL merely to pass a few seeds; calling
+  a bad-CRC record delivery success; hiding unrestricted PAGE counterexamples in a narrowed
+  default proof. Unbounded legacy line equivalence covers all LINE2 values in modes 0–2;
+  the full-PC D88 engine comparison is distinct from the historical pre-CAN domain.
+- **Tools:** OSS CAD Suite 2026-07-27, Verilator 5.051, Yosys 0.67+94, bundled SBY/Yices;
+  Icarus/vvp 12.0 for four-state simulation; Python 3.12.4/cocotb 2.0.1. Stock sigrok versions
+  and all existing pinned bus/protocol libraries remain as D95. Compiler output grouping
+  is disabled to fit the two-CPU/eight-GiB runner without dropping instrumentation/assertions.
+
+## D100. Coverage closure, mutation sensitivity and volatile read timing
+
+- Default instrumentation remains 140 bins. Opt-in D89–D94 instrumentation adds 79 bins
+  for host framing/latch/recovery, every wide width, reflection/init/comparison, OSRCRC
+  byte selection, Manchester period/polarity/early samples/carrier behavior and D94 tags.
+  Keep the old and new line sweeps in separate data files. Directed public-interface
+  programs close simultaneous STUFFOFF/ON and Manchester idle-wait bins. Structural holes
+  and boundaries not represented by these bins remain explicitly listed in the report;
+  219/219 named events is not exhaustive configuration, analog or path coverage.
+- Preserve every mutant's single source site, frozen input manifest, command, assertion
+  reason and separate outcome. Original timeout/survivor/compile outcomes remain evidence.
+  A new continuous-one-run test detects E10's run-reset fault after the random test survives.
+  Program mutants replace the second END, frame-start STAT or extra escape PUSH with NOP,
+  avoiding incidental changes to X. Completion status must follow the last FCS bit: this
+  tests the documented second-END barrier, which payload/FCS-only checking can miss.
+- Stopped engines do not stop their line coder. Compare volatile host readback against the
+  model at actual sample time, preserving per-clock pin checks and explicit directed values;
+  do not assume a pre-command STATUS snapshot is stable through a transaction. Global-index
+  replay and progress receipts preserve the seeded schedule and identify any aborted run.
+- Distinguish unbounded equivalence/induction, bounded checks, nonvacuity covers, deliberate
+  historical counterexamples and incomplete proof attempts. The optional broad structural
+  engine-equivalence pilot leaves 35 cells unproved; it supplies no proof claim. The D88
+  full-PC engine miter instead has a successful bounded depth-eight result. A separate
+  repair-only unbounded line comparison admits all LINE2 values and D94 controls in modes
+  0–2, establishing preservation of the one-line Manchester guard repair.
+- All work stays on verify/ethernet. The owner's updated workflow defers pushes until the
+  complete local verification and report are ready; no stage pushes, merges or prohibited
+  physical/gate-level workflows are part of this campaign.
+- Final acceptance requires all 219 named bins: the exploratory `--partial` summarization
+  is removed from the normal extended recipe after gap closure. The quad formal observer
+  explicitly checks Q3..Q1 as well as Q0; full internal word equality alone is not substituted
+  for checking the externally specified lane mapping (BUG-160).

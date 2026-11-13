@@ -61,28 +61,43 @@ class HostSPI:
         self.command = self.write = False
         self.wr = self.rd = None
         self.tx_unknown = 0
+        self.quad = self.quad_exit = False
+        self.idle_edges = 0
 
     @property
-    def miso(self): return None if self.tx_unknown & 128 else self.tx >> 7
+    def miso(self):
+        index = 4 if self.quad else 7
+        return None if self.tx_unknown & (1 << index) else (self.tx >> index) & 1
 
-    def edge(self, pins, rd_data):
+    @property
+    def output_nibble(self): return self.tx >> 4
+
+    def edge(self, pins, rd_data, quad_req=0):
         sck, cs, mosi = pins & 1, (pins >> 1) & 1, (pins >> 2) & 1
         rising, falling = sck and not self.prev_sck, self.prev_sck and not sck
         self.prev_sck = sck
         self.wr = self.rd = None
+        self.quad_exit = False
         if cs:
+            self.quad = bool(quad_req)
+            if rising:
+                self.quad_exit = self.idle_edges == 7
+                self.idle_edges = min(7, self.idle_edges + 1)
             self.bits = self.load = self.tx = self.tx_unknown = 0
             self.command = False
             return
+        self.idle_edges = 0
+        stride = 4 if self.quad else 1
         old_bits, old_load = self.bits, self.load
         self.load = (old_load << 1) & 3
         if old_load & 2:
             self.tx = 0 if rd_data is None else rd_data
             self.tx_unknown = 255 if rd_data is None else 0
         if rising:
-            self.rx = ((self.rx << 1) | mosi) & 255
-            self.bits = (old_bits+1) & 7
-            if old_bits == 7:
+            incoming = (pins >> 2) & (15 if self.quad else 1)
+            self.rx = ((self.rx << stride) | incoming) & 255
+            self.bits = (old_bits+stride) & 7
+            if old_bits + stride == 8:
                 if not self.command:
                     self.command = True
                     self.write = bool(self.rx & 128)
@@ -95,8 +110,8 @@ class HostSPI:
                         self.load = 1
                     if self.addr not in (7, 0x16, 0x26): self.addr = (self.addr+1) & 127
         if falling and old_bits:
-            self.tx = (self.tx << 1) & 255
-            self.tx_unknown = (self.tx_unknown << 1) & 255
+            self.tx = (self.tx << stride) & 255
+            self.tx_unknown = (self.tx_unknown << stride) & 255
 
 
 WORDS = 256   # each engine's program memory (D82)
@@ -117,13 +132,15 @@ class PBEModel:
             for fifo, memory in zip(self.tx+self.rx,retained): fifo.mem=memory
         self.config = [dict(clkdiv=0,pin_base=0,jmp_pin=0,out_msb_first=0,in_msb_first=0,
                             start_pc=0,crc_poly=0,crc_cfg=0,timeout=0,line_cfg=0,
-                            coder_cfg=0,sync=0,crc_good=0) for _ in range(2)]
+                            coder_cfg=0,coder_cfg2=0,sync=0,crc_good=0,crc_wide=0) for _ in range(2)]
         self.flag_base = [0, 4]
         self.run = self.flags = self.irq = self.pin_own = self.pm_ptr = 0
         self.pm_wr_q = [self.sram, self.sram]   # the SRAM's reset refetch
         self.host1 = self.host2 = 2
         self.pins1 = self.pins2 = 0
+        self.pins_n0 = self.pins_n1 = self.pins_n2 = 0
         self.host = HostSPI()
+        self.hostcfg = 0
         self.cycle = 0
 
     @property
@@ -133,7 +150,16 @@ class PBEModel:
         oe = (a.pins_oe & ~self.pin_own) | (b.pins_oe & self.pin_own)
         uo = (self.tx[1].full << 7) | (self.tx[0].full << 6) | (not self.rx[1].empty) << 5
         uo |= (not self.rx[0].empty) << 4 | self.run << 2 | bool(self.irq) << 1 | (self.host.miso or 0)
+        if self.host.quad and not self.host2 & 2:
+            uo = (uo & 0xf0) | self.host.output_nibble
         return out & 255, oe & 255, uo
+
+    @property
+    def unknown_outputs(self):
+        if self.host.quad and not self.host2 & 2:
+            return self.host.tx_unknown >> 4
+        bit = 4 if self.host.quad else 7
+        return (self.host.tx_unknown >> bit) & 1
 
     def read(self, addr):
         if addr == 0: return self.run
@@ -142,7 +168,7 @@ class PBEModel:
                         self.rx[e].empty << (e*4) | self.rx[e].full << (e*4+1))
                        for e,f in enumerate(self.tx))
         fixed = {2:self.irq,3:self.pin_own,4:self.flags,5:self.pins2,6:self.pm_ptr & 255,
-                 15:self.pm_ptr >> 8,
+                 15:self.pm_ptr >> 8,0x50:self.hostcfg,
                  10:self.rx[0].count,11:self.rx[1].count,12:self.tx[0].count,13:self.tx[1].count}
         if addr in fixed: return fixed[addr]
         page, reg = addr >> 4, addr & 15
@@ -150,13 +176,17 @@ class PBEModel:
             e = page-1; c = self.config[e]; m = self.engines[e]
             values = {0:c['clkdiv'] & 255,1:c['clkdiv'] >> 8,2:c['pin_base'],3:c['jmp_pin'],
                       4:c['out_msb_first'] | c['in_msb_first'] << 1,5:c['start_pc'],
-                      6:self.rx[e].data,8:self.flag_base[e],9:m.crc_now & 255,10:m.crc_now >> 8,
+                      6:self.rx[e].data,8:self.flag_base[e],9:m.crc_now & 255,10:(m.crc_now >> 8) & 255,
                       11:c['crc_cfg'],12:c['timeout'] & 255,13:c['timeout'] >> 8,
                       14:c['line_cfg'],15:m.status}
             return values.get(reg,0)
         if page in (3,4):
             c = self.config[page-3]
-            return {0:c['coder_cfg'],1:c['sync'],2:c['crc_good'] & 255,3:c['crc_good'] >> 8}.get(reg,0)
+            return {0:c['coder_cfg'],1:c['sync'],4:c['coder_cfg2'],2:c['crc_good'] & 255,3:(c['crc_good'] >> 8) & 255,
+                    8:(self.engines[page-3].crc_now >> 16)&255,
+                    9:(self.engines[page-3].crc_now >> 24)&255,
+                    10:(c['crc_good'] >> 16)&255,11:(c['crc_good'] >> 24)&255,
+                    12:c['crc_wide']}.get(reg,0)
         return 0
 
     def write(self, addr, data):
@@ -165,6 +195,7 @@ class PBEModel:
         elif addr == 2: self.irq &= ~(data & 3)
         elif addr == 3: self.pin_own = data
         elif addr == 4: self.flags = data
+        elif addr == 0x50: self.hostcfg = data & 1
         elif addr == 6: self.pm_ptr = (self.pm_ptr & 0x300) | data
         elif addr == 15: self.pm_ptr = (self.pm_ptr & 0xff) | (data & 3) << 8
         elif addr == 7:
@@ -202,11 +233,19 @@ class PBEModel:
             elif reg in (11,14): c[{11:'crc_cfg',14:'line_cfg'}[reg]]=data
         if page in (3,4):
             c=self.config[page-3]
-            if reg in (0,1): c[{0:'coder_cfg',1:'sync'}[reg]]=data
-            elif reg in (2,3):
-                shift=(reg-2)*8; c['crc_good']=(c['crc_good'] & ~(255 << shift)) | data << shift
+            if reg in (0,1,4): c[{0:'coder_cfg',1:'sync',4:'coder_cfg2'}[reg]]=data
+            elif reg in (2,3,8,9,10,11):
+                key = 'crc_poly' if reg in (8,9) else 'crc_good'
+                shift = {2:0,3:8,8:16,9:24,10:16,11:24}[reg]
+                c[key]=(c[key] & ~(255 << shift)) | data << shift
+            elif reg == 12: c['crc_wide'] = data & 1
+
+    def sample_falling(self, pins=0):
+        """First stage of D90's negedge sampler, before two rising-edge stages."""
+        self.pins_n0 = pins & 255
 
     def edge(self, ui=2, pins=0):
+        previous_request, old_exit = self.hostcfg, self.host.quad_exit
         wr,rd=self.host.wr,self.host.rd
         wa,wd=wr if wr else (-1,0)
         rd_data=self.read(self.host.addr)
@@ -218,7 +257,7 @@ class PBEModel:
             clear=wd if wa == 0x1f+16*e else 0
             pm_wr=wa == 7 and (self.pm_ptr >> 9) == e   # only the selected engine's memory
             base=e*WORDS
-            signals.append(m.step(lambda a,base=base: self.program[base+a],pins_in=self.pins2,flags=f,
+            signals.append(m.step(lambda a,base=base: self.program[base+a],pins_in=self.pins2,pins_in_n=self.pins_n2,flags=f,
                 tx_data=self.tx[e].data,tx_empty=self.tx[e].empty,rx_full=self.rx[e].full,
                 run=bool(self.run & (1 << e)),restart=bool(wa == 0 and wd & (16 << e)),
                 pm_wr=pm_wr or self.pm_wr_q[e],host_crc_init=bool(clear & 1),host_tmo_clr=bool(clear & 2),
@@ -238,9 +277,13 @@ class PBEModel:
         self.flags=(self.flags | sets) & ~clears & 255
         if wr: self.write(wa,wd)
         for e,m in enumerate(self.engines): m.configure(**self.config[e])
-        self.host.edge(self.host2,rd_data)
-        self.host2,self.host1=self.host1,ui & 7
+        # Mode requests and exit pulses, like register writes, observe old state.
+        old_request = previous_request
+        self.host.edge(self.host2,rd_data,quad_req=old_request)
+        if old_exit: self.hostcfg = 0
+        self.host2,self.host1=self.host1,ui & 63
         self.pins2,self.pins1=self.pins1,pins
+        self.pins_n2,self.pins_n1=self.pins_n1,self.pins_n0
         self.cycle+=1
         return signals
 

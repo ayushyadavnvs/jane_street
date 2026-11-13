@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-cb19_xzi/E10/verify/ethernet/run_line_corners.py"
+  ],
+  "returncode": 1,
+  "seconds": 12.851,
+  "status": "caught",
+  "first_failure": "AssertionError: [29, 69, 109, 149]",
+  "first_failing_check": null,
+  "log": "E10.log.gz",
+  "id": "E10",
+  "category": "flag run reset",
+  "file": "src/pbe_line.sv",
+  "before": "if (!pair && flagd) begin\n                    frame_end",
+  "after": "if (!pair && flagd) begin\n                    rrun <= 3'd6;\n                    frame_end",
+  "baseline_sha256": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+  "mutant_sha256": "5b547c3583a63b54634a3f1e06296de099e21351ff4a23555ecb99d46a22bb27"
+}

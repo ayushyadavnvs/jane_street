@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_eth/sim"
+  ],
+  "returncode": 0,
+  "seconds": 107.863,
+  "status": "survived",
+  "first_failure": null,
+  "first_failing_check": null,
+  "log": "P02.log.gz",
+  "id": "P02",
+  "category": "Ethernet second END",
+  "file": "pbe_v1/programs/eth_tx.pbe",
+  "before": "fin:    PIN  tdp, END",
+  "after": "fin:    SET  X, 0",
+  "baseline_sha256": "43b9ee222a8159e1d27e8347cbf0e59a20d31dedc23b96cbeba8776c82b79114",
+  "mutant_sha256": "21be0d3150aa973aa660e52c092f7541b7f5e781788da49262dfd17cf9341620"
+}

@@ -1,0 +1,45 @@
+{
+  "id": "M09",
+  "category": "flag-clear",
+  "file": "src/tt_um_pbe.sv",
+  "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+  "after": "p_clr[7:0] | p_clr[15:8] | 8'h00",
+  "baseline_sha256": "aafba2a656a35d235eccc45e9bbb878d1fa1c3859b202cb032031a8ed587cef6",
+  "baseline_hdl_sha256": "39922d778030a138b880c23694c8815d7c40215834ff1613cc426f66799aee38",
+  "scratch": "/tmp/pbe-mutation-M09-uk32xhhi/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 207.641,
+      "status": "caught",
+      "first_failure": "FAIL: USB: status stage is not a DATA1 ZLP",
+      "first_failing_check": "tb_usb",
+      "log": "M09-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 2,
+      "seconds": 12.044,
+      "status": "caught",
+      "first_failure": "\"reason\": \"flags\",",
+      "first_failing_check": "test_diff.random_differential",
+      "log": "M09-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test",
+    "diff"
+  ]
+}
