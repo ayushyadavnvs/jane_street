@@ -26,7 +26,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_gpio.sv` | 24-bit GPIO expander against `hc_chain.sv` (74HC595 and 74HC165 models, 3 deep) (D85) |
 | `test/tb_la.sv` | Logic analyser and waveform generator against an independent stimulus and timestamps (D86) |
 | `test/tb_qspi.sv` | Quad SPI controller against `qspi_flash_model.sv` (a NOR flash: 9F, 03, 0B, 6B, EB, 06, 05, 32) (D87) |
-| `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ) (D88) |
+| `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ and NRZI) (D88, D94) |
 | `test/tb_eth.sv` | 10BASE-T: `eth_tx`/`eth_rx` against `eth_model.sv` (an IEEE 802.3 link partner): frames of 64-1518 bytes both ways, clock offsets, loopback, link pulses, underrun and overrun (D93) |
 | `test/tb_quad.sv` | The quad host port: modes, pins, recovery, burst rates, a program load and a UART loopback in quad mode (D89) |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
@@ -149,7 +149,9 @@ that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
 - **`LINE` fields:** [1:0] mode (0 off, 1 NRZ, 2 NRZI, 3 Manchester); [3:2] stuffing (0 none,
   1 after 6 ones, 2 after 5 ones, 3 after 5 equal bits; none in Manchester); [4] pair (pin
   base + 1 is the complement, both low = SE0 ends a frame, except in Manchester); [5] byte
-  transfers; [7] Manchester polarity (0: IEEE 802.3, a 1 is low then high).
+  transfers; [6] flag-delimited frames (D94: a stuffing violation ends a frame at either level
+  and reception goes on, for HDLC); [7] Manchester polarity (0: IEEE 802.3, a 1 is low then high).
+  `LINECTL STUFFOFF`/`STUFFON` switch stuffing off and on for the units queued after them (D94).
 - **Manchester (D90):** half a bit of the complement, then half a bit of the value. After `END`
   the line is held high for 3 bit times, then released (10BASE-T's TP_IDL, DALI's stop). The
   receiver recovers the clock from the mid-bit transitions (sampling the pin on both clock
@@ -437,20 +439,17 @@ phase (`make sigrok-proto2 PROTO2=qspi`).
 
 ## HDLC host protocol (`programs/hdlc_tx.pbe`, `programs/hdlc_rx.pbe`)
 
-HDLC/SDLC framing in NRZ (D88): flags, zero-bit insertion and deletion (the line coder's
-"after 5 ones" stuffing), CRC-16/X.25, aborts. Transmit on one engine, receive on the other.
-Both: `CLKDIV` = bit time − 1, `LINE` = 0x09, `SYNC` = 0, LSB first, `CRC_POLY` = 0x1021,
-`LINE_CFG` = 0x40.
+HDLC/SDLC framing in NRZ or NRZI (D88, D94): flags, zero-bit insertion and deletion (the line
+coder's "after 5 ones" stuffing), CRC-16/X.25, aborts. Transmit on one engine, receive on the
+other. Both: `CLKDIV` = bit time − 1, `SYNC` = 0, LSB first, `CRC_POLY` = 0x1021, `LINE_CFG` = 0x40.
 
-- **Transmit** (`CRC_CFG` 0x7F; TXD = pin base): TX `[n-1][n bytes]` per frame; the engine adds
-  the FCS and the flags (shared between back-to-back frames; mark idle after). Up to 4 Mbit/s.
-- **Receive** (`CRC_CFG` 0x9F, `CRC_GOOD` 0xD0F9, `JMP_PIN` 0; RXD = pin base): first write one
-  byte d = ceil((bit time in clocks / 2 + 4) / 10) to this engine's TX FIFO (the abort check).
-  RX: each frame's bytes (FCS included; 0x7E doubled), then `[0x7E][status]`: 0x02 good, other
-  values ≤ 0x1F CRC error / overflow / line error, 0x40 abort, 0x80 not whole bytes. Up to
-  2 Mbit/s.
-- NRZI is not possible without hardware (D88: a pbe_line `LINECTL STUFFOFF/STUFFON` and a
-  "violation ends the frame at either level" option).
+- **Transmit** (`LINE` 0x09 NRZ or 0x0A NRZI; `CRC_CFG` 0x7F; TXD = pin base): TX `[n-1][n bytes]`
+  per frame; the engine adds the FCS and the flags, sent unstuffed with `LINECTL STUFFOFF` (shared
+  between back-to-back frames; flags fill the time between frames). Up to 5 Mbit/s at 60 MHz.
+- **Receive** (`LINE` 0x49 NRZ or 0x4A NRZI: `LINE[6]` flag-delimited; `CRC_CFG` 0x9F, `CRC_GOOD`
+  0xD0F9; RXD = pin base): RX: each frame's bytes (FCS included; 0x7E doubled), then
+  `[0x7E][status]`: 0x02 good, other values ≤ 0x1F CRC error / overflow / line error, 0x40
+  abort, 0x80 not whole bytes. Up to 2.5 Mbit/s at 60 MHz.
 
 Tested by `tb_hdlc` against an HDLC model (no stock sigrok decoder exists).
 

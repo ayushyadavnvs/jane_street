@@ -153,7 +153,22 @@ says which `verify/` targets must be extended for the new one.
   (abort, escape, overrun); mutations of the programs (IFG count, the second `END`, the `STAT`
   at frame start, the escape).
 
-## 6. If present: D94 (pbe_line stuffing control, HDLC NRZI) and multi-pin IN/OUT
+## 6. pbe_line stuffing control and flag-delimited frames (D94)
 
-See D94 in `docs/DESIGN_DECISIONS.md` for what was built or why not; the same pattern applies:
-model, default equivalence, coverage, and the HDLC model (`test/hdlc_model.sv`) in NRZI.
+- **Spec:** `src/pbe_line.sv` header (LINE[6], stuffing control), `src/pbe_engine.sv` (LINECTL
+  outside bit-synchronous mode), the HDLC program headers, ISO/IEC 13239, D94.
+- **To verify:** the stuffing state travels with each queued unit (a `LINECTL` between two
+  `OUT`s affects only the later one, also when the earlier is still in the queue or the shift
+  register); `STUFFOFF` and `STUFFON` together (on wins); clear/restart resets to on; a stuff
+  bit already due when a no-stuff unit starts is still sent; `LINE[6]` ends frames at a low
+  level too and keeps receiving, with the run count restarting; the "8 idle bits" end is off;
+  `LINE[6]` = 0 is cycle-identical to before (equivalence); `LINE[6]` with Manchester does
+  nothing; `LINECTL` in bit-synchronous mode is unchanged (it goes to pbe_bsync only).
+- **Corner cases known:** a flag-delimited receiver never returns to idle (so a long idle line
+  gives a frame end every 6 bits; the programs ignore empty frames); the transmitter's flag fill
+  keeps the engine busy between frames (a restart stops it).
+- **Targets:** golden model (`LineModel`: LINE[6], `ctl`); `check_line_model.py`; formal line
+  properties (default equivalence with LINE[6] = 0 and no `ctl`); coverage bins; mutations (the
+  per-unit tag, the run reset); `tb_hdlc` NRZI at more rates and clock offsets (the model's
+  transmitter is 0.5 % slow); stress with jitter.
+- **Not done (6b):** multi-pin `IN`/`OUT`, see D94 for why.

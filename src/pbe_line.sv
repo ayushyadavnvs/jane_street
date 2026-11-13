@@ -8,6 +8,11 @@
 //   cfg[3:2]  stuffing   0 none, 1 after 6 ones (USB), 2 after 5 ones (HDLC), 3 after 5 equal (CAN)
 //   cfg[4]    pair       pin a carries the line, pin b its complement; both low (SE0) ends a frame
 //   cfg[5]    bytes      the engine transfers whole bytes (else single bits)
+//   cfg[6]    flag-delimited frames (HDLC, D94; not with Manchester): a stuffing violation
+//             ends the frame at either line level, and reception goes on: the bit after the
+//             violation is the first of the next frame (a flag's last 0, or an abort's 7th 1).
+//             The "8 idle bits" frame end is off. Without it a violation ends a frame only at
+//             the idle (high) level, and reception then waits for the line to leave it.
 //   cfg[7]    Manchester only: the other polarity (a 1 is high then low, as G.E. Thomas and
 //             MIL-STD-1553); 0 is IEEE 802.3's (a 1 is low then high). Reserved otherwise.
 //   cfg2      LINE2 (D65), every bit 0 = the behaviour described below:
@@ -32,6 +37,12 @@
 // The frame ends on SE0 followed by the idle level (pair mode); otherwise after 8 bit times at
 // the idle level, or when a run at the idle level breaks the stuffing rule. frame_end pulses, and
 // a byte of that frame the engine has not taken is dropped.
+//
+// Stuffing control (D94): LINECTL (ctl, ctl_param[4] = 1) [0] stuffing off, [1] stuffing on
+// (both: on). It applies to the units queued after it, so a program sends an unstuffed flag
+// as an ordinary byte between STUFFOFF and STUFFON, inside one coder frame, and the NRZI level
+// stays continuous through it. The SYNC byte is always stuffed. The other LINECTL controls are
+// the bit-synchronous coder's (ignored here). Reset and clear: stuffing on.
 //
 // Manchester (cfg[1:0] = 3, D90). Each bit is two halves, the second the bit's value and the
 // first its complement (IEEE 802.3 clause 7.3.1.1: "during the first half of the bit-symbol
@@ -103,6 +114,8 @@ module pbe_line (
     output logic        a_out,
     output logic        b_out,
     // transmit
+    input  logic        ctl,         // LINECTL (D94): stuffing off/on for the units queued after it
+    input  logic [4:0]  ctl_param,
     input  logic        tx_put,
     input  logic        tx_end,
     input  logic [7:0]  tx_data,
@@ -117,7 +130,8 @@ module pbe_line (
   wire       nrzi  = cfg[1:0] == 2'd2;
   wire       manch = cfg[1:0] == 2'd3;                 // Manchester (D90)
   wire       minv  = cfg[7];                           // Manchester polarity
-  wire       _unused = &{cfg[6], cfg2[7], cfg2[5:4], 1'b0};  // reserved; [5:4] are the engine's
+  wire       flagd = cfg[6] && !manch;                // flag-delimited frames (D94)
+  wire       _unused = &{cfg2[7], cfg2[5:4], ctl_param[3:2], 1'b0};  // [5:4] are the engine's
   wire [2:0] sp_sel = cfg2[2:0];
   wire       fall_only = cfg2[3];
   wire       idle_wait = cfg2[6];
@@ -141,6 +155,7 @@ module pbe_line (
   logic [2:0]  trun;
   logic        tlast, tstuff;        // stuff bit due in the next slot
   logic        mhalf;                // Manchester: the level of the current bit's second half
+  logic        ns_mode, q_ns, tns;   // stuffing off (D94): now, for the queued unit, for tsh
 
   assign tx_ready = !q_valid;
   wire boundary = tcnt == period_m1;
@@ -170,7 +185,8 @@ module pbe_line (
       n_last = n_bit;
     end
   end
-  wire n_stuff = !tstuff && st != 2'd0 && n_run == run_n;
+  wire n_ns    = n_load ? q_ns : tns;  // the bit comes from a unit sent with stuffing off
+  wire n_stuff = !tstuff && st != 2'd0 && !n_ns && n_run == run_n;
   wire n_level = nrzi ? (n_bit ? level : !level) : n_bit;
 
   // ---------------- receive ----------------
@@ -267,6 +283,7 @@ module pbe_line (
       hunting <= 1'b0; rrun <= '0; ridle <= '0; win <= '0; rsh <= '0; rbits <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0;
       icnt <= '0; after_end <= 1'b0; mhalf <= 1'b1; mcnt <= '0;
+      ns_mode <= 1'b0; q_ns <= 1'b0; tns <= 1'b0;
     end else if (clear) begin
       ts <= T_IDLE; tcnt <= '0; gap2 <= 1'b0; kick <= 1'b0;
       q_valid <= 1'b0; q_end <= 1'b0; q_data <= '0; tsh <= '0; tbits <= '0;
@@ -276,6 +293,7 @@ module pbe_line (
       hunting <= 1'b0; rrun <= '0; ridle <= '0; win <= '0; rsh <= '0; rbits <= '0;
       rx_valid <= 1'b0; rx_data <= '0; frame_end <= 1'b0; err <= 1'b0;
       icnt <= '0; after_end <= 1'b0; mhalf <= 1'b1; mcnt <= '0;
+      ns_mode <= 1'b0; q_ns <= 1'b0; tns <= 1'b0;
     end else begin
       frame_end <= 1'b0;
       err       <= 1'b0;
@@ -285,6 +303,11 @@ module pbe_line (
         q_valid <= 1'b1;
         q_end   <= tx_end;
         q_data  <= tx_data;
+        q_ns    <= ns_mode;
+      end
+      if (ctl && ctl_param[4]) begin    // LINECTL STUFFOFF / STUFFON (D94)
+        if (ctl_param[1]) ns_mode <= 1'b0;
+        else if (ctl_param[0]) ns_mode <= 1'b1;
       end
       tcnt <= (ts == T_IDLE || boundary || kick) ? 16'd0 : tcnt + 16'd1;
       kick <= 1'b0;
@@ -308,6 +331,7 @@ module pbe_line (
               tlast  <= 1'b1;
               tstuff <= 1'b0;
               tsh    <= sync;
+              tns    <= 1'b0;             // the SYNC byte is stuffed
               tbits  <= (sync != 8'd0) ? 4'd8 : 4'd0;
             end
           end
@@ -326,7 +350,10 @@ module pbe_line (
                 tsh   <= n_rest;
                 tbits <= n_left;
               end
-              if (n_load) q_valid <= 1'b0;
+              if (n_load) begin
+                q_valid <= 1'b0;
+                tns     <= q_ns;
+              end
             end else if (n_end) begin
               q_valid <= 1'b0;
               if (manch) begin              // TP_IDL: high for 3 bit times (SE0A, SE0B, J)
@@ -428,7 +455,7 @@ module pbe_line (
               rrun  <= r_run;
               // without SE0, a frame ends after 8 bit times at the idle level
               ridle <= a_in ? ridle + 3'd1 : 3'd0;
-              if (!pair && a_in && ridle == 3'd7) begin
+              if (!pair && !flagd && a_in && ridle == 3'd7) begin
                 rs        <= R_IDLE;
                 frame_end <= 1'b1;
               end
@@ -437,7 +464,14 @@ module pbe_line (
                 if (r_bit != r_exp) begin
                   // Without SE0, a run too long for stuffing at the idle level is how a frame
                   // ends (HDLC flag or abort, CAN end of frame); anywhere else it is an error.
-                  if (!pair && a_in) begin
+                  // Flag-delimited (D94): at either level, and the next frame starts with the
+                  // next bit (the run count restarts, r_run = 0).
+                  if (!pair && flagd) begin
+                    frame_end <= 1'b1;
+                    hunting   <= sync != 8'd0;
+                    win       <= '0;
+                    rbits     <= '0;
+                  end else if (!pair && a_in) begin
                     rs        <= R_IDLE;
                     frame_end <= 1'b1;
                   end else err <= 1'b1;

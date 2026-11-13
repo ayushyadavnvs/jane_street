@@ -1,13 +1,14 @@
 `timescale 1ns / 1ps
-// End-to-end test of HDLC/SDLC (NRZ): hdlc_tx.pbe on engine 0 (TXD = pin 0) and hdlc_rx.pbe on
+// End-to-end test of HDLC/SDLC (NRZ and NRZI): hdlc_tx.pbe on engine 0 (TXD = pin 0) and hdlc_rx.pbe on
 // engine 1 (RXD = pin 4), D88, against an HDLC line model written from ISO/IEC 13239
 // (hdlc_model.sv): the model receives what the chip sends and sends what the chip receives.
 // Frames: data containing 0x7E, 0x7D and runs of five and more 1s (0xFF, 0x3E, 0x7C, 0xF8,
 // 0x1F), back-to-back frames (shared flags), several flags between frames, a 1-byte and a
 // 64-byte frame (more than the FIFOs); the model's transmitter runs 0.5 % off the chip's rate.
 // Received side: a CRC error and aborts (followed by idle, and directly by a flag) must be
-// reported; good frames must come through exactly. Rates: 1 Mbit/s (CLKDIV 47) and 2 Mbit/s
-// (CLKDIV 23) both ways, 4 Mbit/s (CLKDIV 11) transmit only.
+// reported; good frames must come through exactly. Rates at 60 MHz: 1.25 Mbit/s (CLKDIV 47)
+// and 2.5 Mbit/s (CLKDIV 23) both ways, 5 Mbit/s (CLKDIV 11) transmit only; NRZ, then the
+// first two in NRZI (D94: flags sent unstuffed with LINECTL, the receiver flag-delimited).
 module tb_hdlc;
   localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam real CLK_SIM = 16.668;  // the simulated period (the half period rounds to 1 ps)
@@ -35,14 +36,14 @@ module tb_hdlc;
   task automatic result(input string name, input bit ok);
     check(ok, name);
     if (ok) pass++;
-    $display("  HDLC %-62s %s", name, ok ? "PASS" : "FAIL");
+    $display("  HDLC %s %-62s %s", nrzi ? "NRZI" : "NRZ ", name, ok ? "PASS" : "FAIL");
   endtask
 
   // ---------------- set-up ----------------
+  bit nrzi = 0;  // the coding of the phases that follow (D94)
   task automatic setup(input int div);
     int p, d;
     p = div + 1;
-    d = (p / 2 + 4 + 9) / 10;                // ceil((P/2 + 4) / 10)
     reg_write(7'h00, 8'b1100_0000);          // stop both, flush
     reg_write(7'h03, 8'hF0);                 // pins 4..7 to engine 1
     for (int e = 0; e < 2; e++) begin
@@ -62,13 +63,13 @@ module tb_hdlc;
       reg_write(b + 'hD, 8'h00);
       reg_write(b + 'hE, 8'h40);             // no parity
       reg_write(b + 'hF, 8'h0F);             // clear status
-      reg_write(b2 + 0, 8'h09);              // LINE: NRZ, stuff after 5 ones, bits
+      // LINE: NRZ (1) or NRZI (2), stuff after 5 ones, bits; the receiver flag-delimited (D94)
+      reg_write(b2 + 0, (nrzi ? 8'h0A : 8'h09) | (e ? 8'h40 : 8'h00));
       reg_write(b2 + 1, 8'h00);              // no SYNC
       reg_write(b2 + 2, e ? 8'hF9 : 8'h00);  // CRC_GOOD 0xD0F9 (RX)
       reg_write(b2 + 3, e ? 8'hD0 : 8'h00);
       reg_write(b2 + 4, 8'h00);              // LINE2
     end
-    reg_write(7'h26, 8'(d));                 // the receiver's abort-check length, in its TX FIFO
     reg_write(7'h00, 8'b0011_0011);          // restart and run both
   endtask
 
@@ -259,6 +260,7 @@ module tb_hdlc;
   endtask
 
   task automatic rate(input int div);
+    u_m.NRZI = nrzi;
     u_m.BIT_NS = (div + 1) * CLK_SIM * 1.005;   // the model's transmitter: 0.5 % slow
     u_m.RX_BIT_NS = (div + 1) * CLK_SIM;
     setup(div);
@@ -277,12 +279,19 @@ module tb_hdlc;
     rate(23);                 // 2 Mbit/s
     tx_test(23, 0);
     rx_test(23, 0);
-    rate(11);                 // 4 Mbit/s: transmit
+    rate(11);                 // 5 Mbit/s: transmit
     tx_test(11, 40);
+    nrzi = 1;                 // the same in NRZI (D94)
+    rate(47);
+    tx_test(47, 64);
+    rx_test(47, 1);
+    rate(23);
+    tx_test(23, 0);
+    rx_test(23, 0);
 
     $display("  model: %0d flags, %0d aborts seen on the chip's TXD", u_m.n_flags, u_m.n_aborts);
     check(u_m.n_aborts == 0, "the chip's transmitter sent an abort");
-    if (errors == 0 && pass == 5) begin
+    if (errors == 0 && pass == 9) begin
       $display("PASS: HDLC");
       $finish;
     end else $fatal(1, "FAILED with %0d error(s)", errors);

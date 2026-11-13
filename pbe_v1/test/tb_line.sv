@@ -21,6 +21,8 @@
 //  M  Manchester (D90): transmit against IEEE 802.3's encoding and TP_IDL, both polarities,
 //     an underrun; receive with preamble/SFD lock at +-100 ppm and +-2 % with jitter, link
 //     pulses ignored, a coder-to-coder loopback, a jitter sweep (tb_line_manch.svh).
+//  H  Stuffing control and flag-delimited frames (D94): HDLC in NRZ and NRZI, flags and an
+//     abort sent unstuffed inside one coder frame, received with LINE[6] (tb_line_hdlc.svh).
 module tb_line;
   localparam int P = 32;  // clocks per bit (USB low speed at 48 MHz; the period only scales time)
   logic clk = 0, rst_n = 0;
@@ -39,6 +41,8 @@ module tb_line;
   logic       a_in = 1, b_in = 0, use_loop = 0;
   logic       put_u = 0, end_u = 0, take_u = 0, put_v = 0, end_v = 0, take_v = 0;
   logic [7:0] data_u = 0, data_v = 0;
+  logic       ctl_v = 0;          // LINECTL into v (D94)
+  logic [4:0] ctlp_v = 0;
   wire        drive_u, ao_u, bo_u, ready_u, rv_u, fe_u, err_u;
   wire        drive_v, ao_v, bo_v, ready_v, rv_v, fe_v, err_v;
   wire [7:0]  rd_u, rd_v;
@@ -48,6 +52,7 @@ module tb_line;
       .clk, .rst_n, .clear(1'b0), .cfg(cfg_u), .cfg2(cfg2_u), .sync(sync_u), .period_m1(16'(P - 1)),
       .out_msb_first(1'b0), .in_msb_first(1'b0),
       .a_in(use_loop ? line_v : a_in), .a_early(use_loop ? line_v : a_in), .b_in(use_loop ? 1'b0 : b_in),
+      .ctl(1'b0), .ctl_param(5'd0),
       .drive(drive_u), .a_out(ao_u), .b_out(bo_u),
       .tx_put(put_u), .tx_end(end_u), .tx_data(data_u), .tx_ready(ready_u),
       .rx_valid(rv_u), .rx_data(rd_u), .rx_take(take_u), .frame_end(fe_u), .err(err_u)
@@ -56,6 +61,7 @@ module tb_line;
       .clk, .rst_n, .clear(1'b0), .cfg(cfg_v), .cfg2(8'h00), .sync(sync_v), .period_m1(16'(P - 1)),
       .out_msb_first(1'b0), .in_msb_first(1'b0),
       .a_in(1'b1), .a_early(1'b1), .b_in(1'b0),
+      .ctl(ctl_v), .ctl_param(ctlp_v),
       .drive(drive_v), .a_out(ao_v), .b_out(bo_v),
       .tx_put(put_v), .tx_end(end_v), .tx_data(data_v), .tx_ready(ready_v),
       .rx_valid(rv_v), .rx_data(rd_v), .rx_take(take_v), .frame_end(fe_v), .err(err_v)
@@ -277,6 +283,7 @@ module tb_line;
     run_line2_tests();
     run_bsync_tests();
     run_manch_tests();
+    run_hdlc_tests();
     if (errors == 0) begin
       $display("PASS: line coder");
       $finish;
@@ -285,6 +292,7 @@ module tb_line;
 
   `include "tb_line_can.svh"
   `include "tb_line_manch.svh"
+  `include "tb_line_hdlc.svh"
 
   initial begin
     #80ms;

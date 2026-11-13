@@ -34,6 +34,7 @@ always @(negedge clk) mr_early <= use_mloop ? mt_line : m_line;
 pbe_line mt (
     .clk, .rst_n, .clear(1'b0), .cfg(cfg_mt), .cfg2(8'h00), .sync(8'h00), .period_m1(16'(PM - 1)),
     .out_msb_first(1'b0), .in_msb_first(1'b0), .a_in(1'b0), .a_early(1'b0), .b_in(1'b0),
+    .ctl(1'b0), .ctl_param(5'd0),
     .drive(drive_mt), .a_out(ao_mt), .b_out(bo_mt),
     .tx_put(put_mt), .tx_end(end_mt), .tx_data(data_mt), .tx_ready(ready_mt),
     .rx_valid(rv_mt), .rx_data(rd_mt), .rx_take(1'b0), .frame_end(fe_mt), .err(err_mt)
@@ -41,7 +42,7 @@ pbe_line mt (
 pbe_line mr (
     .clk, .rst_n, .clear(1'b0), .cfg(cfg_mr), .cfg2(8'h00), .sync(sync_mr), .period_m1(16'(PM - 1)),
     .out_msb_first(1'b0), .in_msb_first(1'b0), .a_in(use_mloop ? mt_line : m_line), .a_early(mr_early),
-    .b_in(1'b0),
+    .b_in(1'b0), .ctl(1'b0), .ctl_param(5'd0),
     .drive(drive_mr), .a_out(ao_mr), .b_out(bo_mr),
     .tx_put(1'b0), .tx_end(1'b0), .tx_data(8'h00), .tx_ready(ready_mr),
     .rx_valid(rv_mr), .rx_data(rd_mr), .rx_take(take_mr), .frame_end(fe_mr), .err(err_mr)

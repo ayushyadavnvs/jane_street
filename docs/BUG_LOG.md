@@ -92,6 +92,8 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-133 | Program (10BASE-T) | `eth_tx` sent a link pulse right before a frame | `tb_eth`'s 802.3 model (D93) | Fixed before commit |
 | BUG-134 | Program (10BASE-T) | `eth_tx`'s frame status carried the idle loop's timeouts | `tb_eth` (3) (D93) | Fixed before commit |
 | BUG-135 | Testbench, Tooling | `tb_eth` re-parsed de-escaped bytes of an unfinished frame; Icarus has no `break` | `tb_eth` (3) | Fixed |
+| BUG-136 | Program (HDLC) | `hdlc_rx`'s hunt after an abort read one bit and started a frame in the middle of idle | `tb_hdlc` (D94) | Fixed before commit |
+| BUG-137 | Program (HDLC) | `hdlc_tx` let go of the line between frames; in NRZI the level is data-dependent and its own receiver overran | `tb_hdlc` (D94) | Fixed before commit (flag fill) |
 
 ---
 
@@ -3459,3 +3461,43 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **After:** find the end of the first whole record (skipping 0x7E 0x7E pairs) before consuming
   anything; flags and `disable` of a named block instead of `break` and `return`.
 - **Test:** `tb_eth` (3): before, the loopback failed; after, 3 frames, bytes and status ok.
+
+## BUG-136 — hdlc_rx (D94) started a frame after an abort one bit later, in the middle of idle (design)
+
+- **Where:** `pbe_v1/programs/hdlc_rx.pbe`, the rewrite on flag-delimited frames, before commit.
+- **Cause:** after an abort the program "hunts": it must skip bits until the next frame end
+  (six 1s). The first version read one bit and fell into the frame code, so a frame started
+  wherever that bit was: idle 1s and the next flag's first bits (1 1 1, 0 1 1 1 1) made a byte
+  (0xFB), and the abort frame was reported as a 1-byte frame with status 0x80 and the rest of the
+  frame separately. `tb_hdlc` RX phases: `frame 3: status 00000080, expected 00000040` and later
+  frames shifted. A trace of engine 1's `IN`s and `PUSH`es showed the byte formed before the flag.
+- **Before:**
+  ```
+  hunt:   IN   rx, NOCRC
+          JLINE fend0
+  seg:    SET  OSR, 0x7E
+  ```
+- **After:**
+  ```
+  hunt:   IN   rx, NOCRC
+          JLINE fend0
+          JMP  hunt
+  seg:    SET  OSR, 0x7E
+  ```
+- **Test:** `tb_hdlc` RX at CLKDIV 47 and 23, NRZ and NRZI: before, 5-8 wrong records; after,
+  `PASS`.
+
+## BUG-137 — hdlc_tx (D94) let go of the line between frames; its own receiver reported overruns (design)
+
+- **Where:** `pbe_v1/programs/hdlc_tx.pbe`, the rewrite, before commit.
+- **Cause:** after the last frame's closing flag the program ended the coder frame (`END`), as
+  D88's did. The flag ends with a 0, so in NRZ the line was low at the release (BUG-123's
+  situation, which D88 cured with a trailing 1), and in NRZI the level is data-dependent, so no
+  trailing bit can fix it. The engine's own receiver, idle under the coder, then took the
+  release for a frame and overran: `the transmitter reported a line error (underrun)` in every
+  TX phase, although the model received every frame correctly.
+- **Before:** `JMP TX_READY, next` / `PIN tx, END` / `JMP idle` after the closing flag.
+- **After:** flags until the next frame (interframe time fill): the coder never lets go of the
+  line after the first frame, so its receiver stays suppressed (D94).
+- **Test:** `tb_hdlc` TX phases, NRZ and NRZI: before, `FAIL` (status bit 4); after, `PASS`.
+

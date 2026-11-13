@@ -2720,7 +2720,12 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   its `spi` decoder on SCK, CS# and IO0 decodes the single-line command and address bytes of
   all 22 transactions exactly as the host sent them.
 
-## D88. HDLC / SDLC: NRZ with exact flags around the line coder; NRZI needs hardware
+## D88. HDLC / SDLC: NRZ with exact flags around the line coder; NRZI needs hardware — **Changed (the hardware, D94)**
+
+**Changed (D94):** `pbe_line` now has `LINECTL STUFFOFF/STUFFON` and `LINE[6]` (flag-delimited
+frames), the two pieces proposed below; `hdlc_tx` and `hdlc_rx` were rewritten on them and work in
+NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are history.
+
 
 - **Asked by the owner:** HDLC/SDLC framing: 0x7E flags, zero-bit insertion and deletion by the
   line coder's "after 5 ones" stuffing, CRC-16/X.25, abort detection; NRZ or NRZI. Two programs:
@@ -3128,3 +3133,52 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   apart; the loopback engine 0 -> engine 1 with the host streaming both at once; link pulses
   while idle and the model's link pulses into engine 1 (no record); a 30 us host underrun (status
   bit 4), a 1.2 ms one (the engine aborts: bit 2), and an RX overrun (bits 3 and 4).
+
+## D94. pbe_line stuffing control and flag-delimited frames: HDLC in NRZI (item 6a); multi-pin IN/OUT not done (6b)
+
+- **Asked by the owner** (from D88): the minimal general hardware for HDLC with NRZI.
+- **Chosen, in `pbe_line`:**
+  1. **`LINECTL STUFFOFF` / `STUFFON`** (EXT sub-op 7, param[4] = 1, [0] off, [1] on; the same
+     encoding as the bit-synchronous coder's, D67). Each queued unit carries the stuffing state
+     current when it was queued (`q_ns`, then `tns` with the shift register), so a program sends
+     `STUFFOFF`, a flag 0x7E as an ordinary byte or 8 bits, `STUFFON`, and the flag goes out
+     unstuffed inside the same coder frame as the data around it: the NRZI level is continuous
+     and the bits already queued keep their own state. The SYNC byte is always stuffed. Reset,
+     clear (coder off, restart): stuffing on. The width and arbitration controls stay
+     bit-synchronous only. *Alternative:* a mode bit in `LINE`: it would apply to the bits in
+     the queue at the moment of the write, not to a chosen unit.
+  2. **`LINE[6]`, flag-delimited frames** (the reserved bit; ignored in Manchester): a stuffing
+     violation ends the frame at either line level (not only at the idle high level, BUG-033's
+     rule), and the receiver does not go idle: the run count restarts and the bit after the
+     violation is the first bit of the next frame (a flag's last 0, or an abort's 7th 1). The
+     "8 idle bit times" end is off in this mode. With `LINE[6]` = 0 everything is as before.
+  - *Not done:* the receive flag pattern (a raw-bit SYNC compare, to deliver aligned bytes):
+    with continuous reception the program finds the alignment itself at no cost (it reads the
+    bit after each frame end), so the pattern compare was not needed.
+- **Programs (rewritten, one pair for both codings):**
+  - `hdlc_tx.pbe` (41 words, was 41): flags between `STUFFOFF` and `STUFFON`; NRZ `LINE` 0x09,
+    NRZI 0x0A. Between frames it sends flags (interframe time fill) instead of letting go of the
+    line: letting go hands the line to the pin unit at a level that in NRZI depends on the data,
+    and the engine's own receiver then reported overruns (the BUG-123 effect, which a trailing 1
+    cured only in NRZ). Before the first frame the line idles high (mark).
+  - `hdlc_rx.pbe` (43 words, was 38): `LINE` 0x49 / 0x4A. At a frame end it reads the next bit: 0
+    is a flag (the next frame starts), 1 an abort. D88's RXD poll (and its `d` byte in the TX
+    FIFO) is gone; it also removes D88's 10 kbit/s lower limit for abort detection. The records
+    and the `CRC_GOOD` 0xD0F9 are unchanged (each segment is still the frame and the closing
+    flag's 0 1 1 1 1 1).
+- **Tests:** `tb_line` H (unit, both codings): flags and an abort sent with `LINECTL` inside one
+  coder frame, received with `LINE[6]`: the frame ends where expected, the data bits exact, the
+  bit after an abort's sixth 1 is a 1. `tb_hdlc`: the D88 phases (transmit at 1.25, 2.5 and
+  5 Mbit/s, receive at 1.25 and 2.5 Mbit/s with shared flags, a CRC error, aborts followed by
+  idle and by a flag, 64-byte frames) in NRZ and again in NRZI, against `hdlc_model.sv`, now
+  NRZI-capable (0 = a transition): 9/9. The model saw 914 flags and no abort from the chip.
+- **Cost:** three flip-flops and a few gates per engine.
+- **6b, multi-pin IN/OUT (optional): not done.** Free encoding bits exist (`IN` ARG[4:0] and
+  `PIN` ARG[2:1] are always 0 today, and the golden model's random programs never set them), and
+  sampling or driving 4 pins in one clock is small in the engine. It was left out because what
+  it is for is not small: the logic analyser (`la_capture.pbe`) and the quad SPI program
+  (`qspi_flash.pbe`) would be rewritten around it with their benches (`tb_la`'s skew checks,
+  `tb_qspi`'s timing), the CRC and parity rules for a multi-bit `IN`/`OUT` need defining, and
+  the golden model and formal engine properties would need the new semantics before `make diff`
+  could exercise it. It belongs in a session of its own.
+

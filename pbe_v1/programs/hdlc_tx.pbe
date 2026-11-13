@@ -1,24 +1,21 @@
-; HDLC / SDLC transmitter, NRZ, with 0x7E flags, zero-bit insertion and CRC-16/X.25, D88.
+; HDLC / SDLC transmitter, NRZ or NRZI, with 0x7E flags, zero-bit insertion and CRC-16/X.25,
+; D88, D94.
 ; Pin (relative to pin base): TXD = 0, driven. The line coder sends the frames and inserts a 0
 ;   after five 1s; the flags are made around it (below).
 ; Engine settings: CLKDIV = bit time - 1 in clocks (>= 11: 5 Mbit/s at 60 MHz; 59 = 1 Mbit/s),
-;   LINE = 0x09 (NRZ, stuffing after 5 ones, bit transfers), SYNC = 0, LINE2 = 0,
+;   LINE = 0x09 (NRZ) or 0x0A (NRZI) (stuffing after 5 ones, bit transfers), SYNC = 0, LINE2 = 0,
 ;   SHIFT = 0x00 (LSB first), CRC_POLY = 0x1021, CRC_CFG = 0x7F (16 bits, init 0xFFFF,
 ;   reflected output, fed by OUT), LINE_CFG = 0x40, TIMEOUT 0.
-; Flags: the coder stuffs every bit it sends, so it can never send six 1s (in pbe_line,
-;   LINECTL's stuffing on/off works only in bit-synchronous mode). Instead:
-;   - the pin unit holds TXD high (DRV1) under the coder; while the coder does not drive the
-;     line, that is what the line shows;
-;   - each coder frame starts with a 2-bit gap in which the coder does not drive the line, and
-;     the coder lets go of the line as soon as a frame ends;
-;   - so a flag 0 1 1 1 1 1 1 0 is "0 1 1 1 1" at the end of one coder frame (no stuffing: four
-;     1s), "1 1" from the gap of the next (the pin unit's high level), and "0" as that frame's
-;     first bit. The gap starts the clock after the release when the next OUT is already
-;     waiting, so it lasts 2 bit times + 2 clocks (the receiver re-centres on the flag's edges).
-;   - between frames the closing flag is the next frame's opening flag (a shared flag); after
-;     the last frame a coder frame of "0 1" completes the flag, then the line idles high
-;     (mark idle).
+; Flags (D94): each flag (0x7E) is sent between LINECTL STUFFOFF and STUFFON, inside the same
+;   coder frame as the data, so the line level is continuous through it and NRZI works as well
+;   as NRZ (LINE 0x0A instead of 0x09; nothing else changes). Back-to-back frames share a flag;
+;   between frames the engine sends flags (interframe time fill, ISO/IEC 13239), so after the
+;   first frame the coder never lets go of the line: letting go would hand it to the pin unit
+;   at a level that in NRZI depends on the data, and the engine's own receiver would see it.
+;   Before the first frame the line idles high (mark, the pin unit). (D88's version made each
+;   flag from the coder's gap and the pin unit's high level, and idled with mark: NRZ only.)
 ; Host protocol: TX FIFO: [n-1] [n bytes] per frame (address, control, information; n = 1..256).
+;   (A restart stops the flag fill and lets the line go.)
 ;   The engine adds the FCS (CRC-16/X.25: inverted, low byte first) and the flags. Frames
 ;   queued back to back share flags. A frame longer than the FIFO must be fed at least one byte
 ;   per 8 bit times: if the FIFO runs dry mid-frame the coder repeats the line level and STATUS
@@ -29,14 +26,13 @@
         PIN  tx, DRV1           ; mark idle; the coder overrides it while it drives
 idle:   PULL                    ; n - 1: a frame
         MOV  ISR, OSR           ; ISR: bytes left - 1
-        SET  OSR, 0x1E          ; the opening flag's first part: 0 1 1 1 1 (LSB first)
-        SET  X, 4
+        LINECTL STUFFOFF        ; the opening flag
+        SET  OSR, 0x7E
+        SET  X, 7
 of:     PIN  tx, OUT, NOCRC
         JMP  X--, of
-        PIN  tx, END            ; let go: the high level, then the next frame's gap: 1 1
+        LINECTL STUFFON
 frame:  CRCRST
-        SET  OSR, 0x00
-        PIN  tx, OUT, NOCRC     ; the flag's last 0: the coder's first bit (after its gap)
 byte:   PULL
         SET  X, 7
 bit:    PIN  tx, OUT            ; data: stuffed by the coder, fed to the CRC
@@ -51,18 +47,19 @@ f1:     PIN  tx, OUT, NOCRC
         SET  X, 7
 f2:     PIN  tx, OUT, NOCRC
         JMP  X--, f2
-        SET  OSR, 0x1E          ; the closing flag: 0 1 1 1 1, then the gap's 1 1
-        SET  X, 4
+        LINECTL STUFFOFF        ; the closing flag (the next frame's opening flag too)
+        SET  OSR, 0x7E
+        SET  X, 7
 cf:     PIN  tx, OUT, NOCRC
         JMP  X--, cf
-        PIN  tx, END
-        JMP  TX_READY, next     ; another frame: it starts with this flag's last 0
-        SET  OSR, 0x02
-        PIN  tx, OUT, NOCRC     ; no frame: the flag's last 0, then a 1 (mark idle), so the
-        PIN  tx, OUT, NOCRC     ;   coder lets go of a high line (its own receiver, which sees
-        PIN  tx, END            ;   the pin 2 clocks late, must not see a frame start)
-        JMP  idle
-next:   PULL
+fill:   JMP  TX_READY, next     ; another frame: it shares this flag
+        SET  OSR, 0x7E          ; none yet: another flag (interframe time fill), so the coder
+        SET  X, 7               ;   never lets go of the line and its own receiver stays off
+ff:     PIN  tx, OUT, NOCRC
+        JMP  X--, ff
+        JMP  fill
+next:   LINECTL STUFFON
+        PULL
         MOV  ISR, OSR
         JMP  frame
 more:   MOV  ISR, X

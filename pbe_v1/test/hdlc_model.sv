@@ -16,6 +16,7 @@ module hdlc_model (
     input  wire  rx_line
 );
   real BIT_NS = 1000.0;     // the transmitter's bit time (set by the bench)
+  bit  NRZI = 0;            // NRZI line coding (ISO/IEC 13239: a 0 is a transition, a 1 none)
   real RX_BIT_NS = 1000.0;  // the receiver's nominal bit time
   // ---------------- FCS ----------------
   logic [7:0] all[$];       // the frame being sent
@@ -52,7 +53,8 @@ module hdlc_model (
   endtask
 
   task automatic send_bit(input bit b);
-    line = b;
+    if (!NRZI) line = b;
+    else if (!b) line = !line;
     #(BIT_NS);
   endtask
   task automatic send_flag;
@@ -113,7 +115,7 @@ module hdlc_model (
         n_sent++;
         if (!(q_share.size() > 0 && q_share[0])) begin   // (share: no idle before the next)
           last_was_flag = 0;
-          line = 1;
+          if (!NRZI) line = 1;   // (NRZI: 1s are no transitions: the level stays)
           #(BIT_NS * 16);        // mark idle
         end
       end
@@ -190,12 +192,14 @@ module hdlc_model (
 
   // clock recovery: re-centre at every edge, sample every RX_BIT_NS from mid-bit
   realtime next_s = 0;
+  logic rx_prev = 1;
   always @(rx_line) next_s = $realtime + RX_BIT_NS / 2;
   initial begin
     forever begin
       #1;
       if (next_s > 0 && $realtime >= next_s) begin
-        rx_bit(rx_line);
+        rx_bit(NRZI ? rx_line == rx_prev : rx_line);
+        rx_prev = rx_line;
         next_s = next_s + RX_BIT_NS;
       end
     end

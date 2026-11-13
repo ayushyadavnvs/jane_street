@@ -116,7 +116,7 @@ None needed for the loopback test. Depending on the protocol loaded:
 - for a quad SPI flash: SCK, CS#, IO0, IO1, IO2, IO3 on pin base + 0..5, pull-ups (10–100 kΩ)
   on CS# and IO0–IO3 (IO2/IO3 are WP#/HOLD# in single-line commands), a 3.3 V flash;
 - for the logic analyser and generator: nothing (inputs and outputs at 3.3 V levels);
-- for HDLC/SDLC (NRZ): TXD on one engine's pin base and RXD on the other's, through a line
+- for HDLC/SDLC (NRZ or NRZI): TXD on one engine's pin base and RXD on the other's, through a line
   driver for the physical layer (e.g. RS-422/RS-485 transceivers);
 - for USB low speed: a 1.5 kΩ pull-up on D− (`uio[0]`) and a USB connector. The electrical
   levels are still to be checked against the I/O pads;

@@ -64,7 +64,8 @@
 //                                 param[4]=1: [0] stuffing off (ends the stuffed region: the
 //                                             coder runs the CAN frame tail), [1] stuffing on,
 //                                             [2] error now (an error flag from the next bit)
-//                                 without bit-synchronous mode LINECTL does nothing
+//                                 without bit-synchronous mode only param[4] = 1's [0] and
+//                                 [1] act: pbe_line's stuffing off/on (D94); the rest does nothing
 //                     param[5]=1: PAGE p (D83), p = param[1:0] ([4:2] reserved, 0): the next
 //                                 instruction's jump target is in page p of the program
 //                                 (a one-shot prefix; see "Program addresses" below)
@@ -350,6 +351,7 @@ module pbe_engine #(
   assign status  = {sent_st, berr_st, arb_st, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
   assign crc_now = crc_value;
 
+  wire lctl = exec && op == OP_EXT && ext_op == E_LINECTL && !arg[5];
   pbe_line u_line (
       .clk, .rst_n,
       .clear        (restart || !coder_on || bsm),
@@ -365,6 +367,8 @@ module pbe_engine #(
       .drive        (p_drive),
       .a_out        (p_a),
       .b_out        (p_b),
+      .ctl          (lctl && !bsm),       // LINECTL STUFFOFF / STUFFON (D94)
+      .ctl_param    (arg[4:0]),
       .tx_put       (exec && is_txop && pin_act != 3'd7 && !bsm),
       .tx_end       (exec && is_txop && pin_act == 3'd7 && !bsm),
       .tx_data      (coder_bytes ? osr : {7'b0, out_bit}),
@@ -376,7 +380,6 @@ module pbe_engine #(
       .err          (p_err)
   );
 
-  wire lctl = exec && op == OP_EXT && ext_op == E_LINECTL && !arg[5];
   pbe_bsync u_bsync (
       .clk, .rst_n,
       .clear        (restart || !bsm || !run),  // a stopped CAN node stays off the bus

@@ -1,22 +1,20 @@
-; HDLC / SDLC receiver, NRZ: flag detection, zero-bit deletion, CRC-16/X.25 check, abort
-; detection, D88.
-; Pin (relative to pin base): RXD = 0. JMP_PIN = 0 (RXD).
-; Engine settings: CLKDIV = bit time - 1 in clocks (>= 23: 2.5 Mbit/s at 60 MHz), LINE = 0x09
-;   (NRZ, stuffing after 5 ones, bit transfers), SYNC = 0, LINE2 = 0, SHIFT = 0x00 (LSB first),
-;   CRC_POLY = 0x1021, CRC_CFG = 0x9F (16 bits, init 0xFFFF, fed by IN), CRC_GOOD = 0xD0F9,
-;   LINE_CFG = 0x40, TIMEOUT 0. Before starting, write one byte d to this engine's TX FIFO:
-;   d = ceil((bit time / 2 + 4) / 10), the length of the abort check (bit time in clocks;
-;   d = 3 at 1 Mbit/s, 26 at 100 kbit/s; d <= 255, so abort detection needs >= 10 kbit/s).
-; How the coder sees HDLC (NRZ): the line idles high; a frame starts when it goes low. Six 1s
-;   break the stuffing rule at the high level, which ends the coder's frame (frame_end): at
-;   every flag, and at an abort. The bits before that are delivered (destuffed) one by one, so
-;   each "segment" between two flags is: the last 0 of the previous flag, the frame's bytes
-;   (with its FCS), and 0 1 1 1 1 1 of the closing flag. The CRC is fed from the second bit
-;   on, so a good frame leaves it at the X.25 residue (0x1D0F) advanced by 0 1 1 1 1 1: 0xD0F9.
-;   A good frame has 6 bits after its last whole byte.
-; Abort (7 or more 1s): the coder ends the frame on the 6th 1 in both cases; the 7th bit tells.
-;   For about one bit time after the frame end the engine polls RXD (every 10 clocks, d + 1
-;   times): a flag's last 0 pulls it low half a bit later, an abort keeps it high.
+; HDLC / SDLC receiver, NRZ or NRZI: flag detection, zero-bit deletion, CRC-16/X.25 check, abort
+; detection, D88, D94.
+; Pin (relative to pin base): RXD = 0.
+; Engine settings: CLKDIV = bit time - 1 in clocks (>= 23: 2.5 Mbit/s at 60 MHz), LINE = 0x49
+;   (NRZ) or 0x4A (NRZI) (stuffing after 5 ones, bit transfers, LINE[6] flag-delimited frames),
+;   SYNC = 0, LINE2 = 0, SHIFT = 0x00 (LSB first), CRC_POLY = 0x1021, CRC_CFG = 0x9F (16 bits,
+;   init 0xFFFF, fed by IN), CRC_GOOD = 0xD0F9, LINE_CFG = 0x40, TIMEOUT 0.
+; How the coder sees HDLC with LINE[6] (D94): six 1s break the stuffing rule, which ends the
+;   coder's frame (frame_end) at either line level, at every flag and at an abort, and the
+;   coder goes on receiving: the bit after the six 1s is the next one IN gets (a flag's last
+;   0, or an abort's seventh 1). The bits before the frame end are delivered (destuffed) one by
+;   one, so a frame's segment is: the frame's bytes (with its FCS), then 0 1 1 1 1 1 of the
+;   closing flag. The CRC is fed with all of them, so a good frame leaves it at the X.25
+;   residue (0x1D0F) advanced by 0 1 1 1 1 1: 0xD0F9. A good frame has 6 bits after its last
+;   whole byte.
+; Abort (7 or more 1s): after the frame end the engine reads one more bit: 0 is a flag, 1 an
+;   abort. (D88's NRZ-only version polled the RXD level for that.)
 ; Host protocol: RX FIFO: the bytes of each frame (address ... FCS: the last 2 bytes are the
 ;   FCS), with 0x7E sent twice (0x7E 0x7E), then [0x7E] [status]:
 ;     0x02 good frame (CRC ok); other values <= 0x1F: STATUS bits, bit 1 CRC ok, bit 3 RX
@@ -24,12 +22,13 @@
 ;          error): the frame is bad;
 ;     0x40 aborted (7 or more 1s); 0x80 not a whole number of bytes before the flag.
 ;   Frames with no byte (flags, idle) report nothing. The engine sets no IRQ: poll RX_COUNT.
+;   (No byte in the TX FIFO is needed any more; one written there is ignored.)
 .equ rx 0
 
-        MARK                    ; keep d readable in the TX FIFO
-hunt:   SET  OSR, 0x7E          ; (OSR: the escape byte while a frame is received)
-        IN   rx, NOCRC          ; the first bit of a segment: a flag's last 0
-        JLINE hunt
+hunt:   IN   rx, NOCRC          ; after an abort (or at the start): skip bits until the six
+        JLINE fend0             ;   1s of a flag (or of idle) end a frame
+        JMP  hunt
+seg:    SET  OSR, 0x7E          ; (OSR: the escape byte while a frame is received)
         CRCRST                  ; the frame's CRC (and line error) start here
         FLAG 0, CLR             ; no byte pushed yet
 byte:   SET  X, 7
@@ -43,24 +42,29 @@ plain:  PUSH
         FLAG 0, SET
         JMP  byte
 fend:   MOV  ISR, X             ; X = 1: 6 bits after the last whole byte
-        REWIND
-        PULL                    ; d
-        MOV  X, OSR
-chk:    JMP  PIN_LO, flg        ; the bit after the six 1s: 0, a flag
-        JMP  X--, chk [7]
-        SET  X, 0x40            ; still high: an abort
-        JMP  rep
-flg:    SET  OSR, 1
+        SET  OSR, 1
         JNE  mis
         STAT                    ; 0x02: CRC ok, no line error, no overflow
         MOV  X, ISR
-        JMP  rep
+        JMP  nxt
 mis:    SET  X, 0x80
-rep:    JMP  FLAG0, out
-        JMP  hunt               ; nothing pushed: flags, idle, or what follows an abort
-out:    SET  OSR, 0x7E
+nxt:    MOV  ISR, 0
+        IN   rx, NOCRC          ; the bit after the six 1s
+        SET  OSR, 0x80
+        JNE  flg                ; 0: a flag
+        SET  X, 0x40            ; 1: an abort
+        JMP  FLAG0, rep
+        JMP  hunt
+flg:    JMP  FLAG0, rep
+        JMP  seg                ; a flag (or flags, idle): the next segment starts now
+rep:    SET  OSR, 0x7E
         MOV  ISR, OSR
         PUSH                    ; [0x7E]
         MOV  ISR, X
         PUSH                    ; [status]
-        JMP  hunt
+        SET  OSR, 0x40
+        MOV  ISR, X
+        JEQ  hunt               ; after an abort: hunt for the next flag
+        JMP  seg
+fend0:  FLAG 0, CLR             ; a frame end while hunting: read the bit after it
+        JMP  nxt

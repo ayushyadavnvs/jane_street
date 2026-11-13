@@ -76,8 +76,8 @@
 //   0x30+0x10*e   engine e, second page:
 //      +0 LINE       line coder, see pbe_line: [1:0] mode (0 off, 1 NRZ, 2 NRZI, 3 Manchester,
 //                    D90), [3:2] stuffing (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5
-//                    equal; none in Manchester), [4] pair, [5] bytes, [7] Manchester polarity
-//                    (0 IEEE 802.3: a 1 is low then high; 1 the other)
+//                    equal; none in Manchester), [4] pair, [5] bytes, [6] flag-delimited frames
+//                    (HDLC, D94), [7] Manchester polarity (0 IEEE 802.3: a 1 is low then high)
 //      +1 SYNC       frame start pattern (0 = none)
 //      +2 CRC_GOOD_L, +3 CRC_GOOD_H   the CRC value that means "ok" (0 unless the CRC is sent inverted)
 //      +4 LINE2      line coder (D65): [2:0] sample point (0 default, 1 62.5 %, 2 75 %, 3 87.5 %),
@@ -112,8 +112,8 @@
 // FIFO acceptance and flush ordering are in pbe_fifo. An empty FIFO read returns its
 // unqualified head storage (possibly stale/unknown); only a nonempty pop changes count.
 // Unmapped register reads return 0 and unmapped writes do nothing. Only the documented
-// low-width configuration bits are stored/read; other readback bits are 0. LINE[6]
-// is stored but reserved; LINE[7] is reserved outside Manchester mode (3, D90). The CAN counters survive a restart; only reset (or bus-off recovery)
+// low-width configuration bits are stored/read; other readback bits are 0. LINE[7]
+// is reserved outside Manchester mode (3, D90); LINE[6] does nothing in Manchester mode. The CAN counters survive a restart; only reset (or bus-off recovery)
 // clears them.
 module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the name
     input  wire [7:0] ui_in,
