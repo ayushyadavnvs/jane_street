@@ -40,7 +40,10 @@ Programs written and tested so far (in `pbe_v1/programs`):
 - a JTAG controller (IEEE 1149.1: TMS sequences and TDI/TDO scans of any length, TCK up to
   8 MHz) and an ARM SWD host (ADIv5 SW-DP: line reset, JTAG-to-SWD switch, DP/AP reads and
   writes with ACK, WAIT/FAULT handling and parity checking, SWCLK up to 8 MHz). They are
-  42 + 64 words, so both run at once, one per engine.
+  42 + 64 words, so both run at once, one per engine;
+- 10BASE-T Ethernet, transmit and receive (D93): preamble, FCS (CRC-32), TP_IDL and link
+  pulses on one engine, clock recovery, SFD search and FCS check on the other, with the host
+  streaming frames in real time over the quad host port.
 
 The full documentation, register map and design decisions are in the repository: `pbe_v1/README.md`,
 `docs/DESIGN_DECISIONS.md` and `docs/BUG_LOG.md`.
@@ -116,4 +119,23 @@ None needed for the loopback test. Depending on the protocol loaded:
 - for HDLC/SDLC (NRZ): TXD on one engine's pin base and RXD on the other's, through a line
   driver for the physical layer (e.g. RS-422/RS-485 transceivers);
 - for USB low speed: a 1.5 kΩ pull-up on D− (`uio[0]`) and a USB connector. The electrical
-  levels are still to be checked against the I/O pads.
+  levels are still to be checked against the I/O pads;
+- for 10BASE-T Ethernet (D93), a real link needs (not yet built on a board):
+  - **an RJ45 jack with 10/100 magnetics** (1:1 transformers with centre taps, e.g. an integrated
+    "MagJack" such as the HR911105A, or a discrete module such as the Pulse H1102 and a plain
+    jack); TD± on RJ45 pins 1/2, RD± on 3/6 (MDI);
+  - **a transmit driver:** the pads cannot source the ~20 mA a 100 Ω pair needs, so buffer
+    `uio[0]` (TD+) and `uio[1]` (TD−) with two fast CMOS buffers (e.g. a 74LVC2G34 at 3.3 V),
+    each through a series resistor into the transformer's primary, sized with the buffer's
+    output resistance so the differential peak into 100 Ω is 2.2-2.8 V (about 2 × 20-30 Ω
+    total from 3.3 V); a small RC low-pass (or the magnetics' common-mode choke) for the
+    harmonics limits of clause 14.3.1.2. Both pins low is the 0 V idle; the chip's TP_IDL and
+    link pulses are positive (TD+ high);
+  - **a receive comparator:** RD± from the transformer, terminated with 100 Ω, into a fast
+    comparator (a few ns, e.g. TLV3501, LMV7219, ADCMP600) with its output on `uio[2]` (3.3 V).
+    Give it an offset of a few hundred mV (a resistor divider on one input: 10BASE-T's squelch
+    is about 300 mV) and some hysteresis, so that it reads a steady **low** on an idle line:
+    the receiver starts a frame at the first edge, and noise on an idle pair would start
+    false ones (they end silently, but cost the program time);
+  - the link partner set to **10 Mbit/s full duplex** (no auto-negotiation, no collision
+    handling in the programs).

@@ -17,7 +17,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 512-word hex image (engine 0's 256 words, then engine 1's), `prog.pbe@engine:word`; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`) |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`), 10BASE-T Ethernet transmitter and receiver (`eth_tx.pbe`, `eth_rx.pbe`) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
 | `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
@@ -27,6 +27,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_la.sv` | Logic analyser and waveform generator against an independent stimulus and timestamps (D86) |
 | `test/tb_qspi.sv` | Quad SPI controller against `qspi_flash_model.sv` (a NOR flash: 9F, 03, 0B, 6B, EB, 06, 05, 32) (D87) |
 | `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ) (D88) |
+| `test/tb_eth.sv` | 10BASE-T: `eth_tx`/`eth_rx` against `eth_model.sv` (an IEEE 802.3 link partner): frames of 64-1518 bytes both ways, clock offsets, loopback, link pulses, underrun and overrun (D93) |
 | `test/tb_quad.sv` | The quad host port: modes, pins, recovery, burst rates, a program load and a UART loopback in quad mode (D89) |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
@@ -45,6 +46,7 @@ make test-proto                            # only tb_proto (WS2812, SPI peripher
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-proto2                           # only the D84-D88 protocols (PS/2, GPIO expander, logic analyser, QSPI, HDLC)
+make test-eth                               # 10BASE-T (tb_eth, D93)
 make test-quad                              # the quad host port (tb_quad, tb_la +QUAD) and tb_pbe with its host in quad mode (D89)
 make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
 make test-verilator                        # tb_line and 5 more under Verilator and Icarus: both pass, identical logs (D80)
@@ -451,6 +453,26 @@ Both: `CLKDIV` = bit time − 1, `LINE` = 0x09, `SYNC` = 0, LSB first, `CRC_POLY
   "violation ends the frame at either level" option).
 
 Tested by `tb_hdlc` against an HDLC model (no stock sigrok decoder exists).
+
+## 10BASE-T Ethernet host protocol (`programs/eth_tx.pbe`, `programs/eth_rx.pbe`)
+
+IEEE 802.3 clause 14 at 10 Mbit/s, 60 MHz clock (D93): engine 0 transmits (52 words), engine 1
+receives (17 words), full duplex. The host must stream at 1.25 MB/s: use the quad host port
+(`HOSTCFG` = 1, D89).
+- **Engine 0:** TD+ = pin base, TD- = + 1 (to the line driver). `CLKDIV` 5, `LINE` 0x33
+  (Manchester, pair, bytes), `SYNC` 0, `CRC_POLY` 0x04C11DB7 (+9/+A and second page +8/+9),
+  `CRC_CFG2` 1, `CRC_CFG` 0x7F, `TIMEOUT` 60000 (1 ms), `LINE_CFG` 0x41. TX FIFO: per frame
+  `[n][n bytes]...` (n = 1..255) then `[0]`: destination, source, type/length, payload, padded to
+  at least 60 bytes by the host; the engine adds preamble, SFD and FCS. RX FIFO: one status byte
+  per frame (bit 4 underrun, bit 2 aborted after 1 ms without data). Link pulses every 16 ms
+  while idle.
+- **Engine 1:** RD = pin base (the receive comparator). `CLKDIV` 5, `LINE` 0x23 (Manchester,
+  bytes), `SYNC` 0xD5, the same CRC with `CRC_CFG` 0xBF, `CRC_GOOD` 0xC704DD7B (second page
+  +2/+3/+A/+B), `LINE_CFG` 0x40. RX FIFO: the frame's bytes with the FCS (a data 0x7E twice),
+  then `[0x7E][status]`: 0x02 = FCS ok; bit 4 = a byte lost (overrun), bit 3 = the FIFO was full.
+- **Limits:** full duplex only (no CSMA/CD: set the switch port to 10 Mbit/s full duplex), no
+  auto-negotiation, no receive polarity correction. Tested by `tb_eth` against `eth_model.sv`, a
+  link partner written from 802.3 (`make test-eth`).
 
 ## Status
 

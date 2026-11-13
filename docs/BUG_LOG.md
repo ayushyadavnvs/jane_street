@@ -89,6 +89,9 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-130 | Testbench | `tb_crc` (c) compared the CRC units with 32-bit state left over from (b) | `tb_crc` (D91) | Fixed (reset first) |
 | BUG-131 | Testbench, Tooling | The engine unit benches left `crc_wide` unconnected (unknown CRC width); Icarus misreported `$isunknown` on a concatenation | The gate before pushing D91 | Fixed |
 | BUG-132 | Testbench | Benches with 48 MHz constants (USB 32 clocks a bit, a 146 ns SCK check, I2C `CLKDIV` 17, a simulated period rounding fast) failed at 60 MHz | Running every bench at 60 MHz (D92) | Fixed |
+| BUG-133 | Program (10BASE-T) | `eth_tx` sent a link pulse right before a frame | `tb_eth`'s 802.3 model (D93) | Fixed before commit |
+| BUG-134 | Program (10BASE-T) | `eth_tx`'s frame status carried the idle loop's timeouts | `tb_eth` (3) (D93) | Fixed before commit |
+| BUG-135 | Testbench, Tooling | `tb_eth` re-parsed de-escaped bytes of an unfinished frame; Icarus has no `break` | `tb_eth` (3) | Fixed |
 
 ---
 
@@ -3395,3 +3398,64 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   `tb_hdlc`; `tb_ps2`: `CLKDIV` 299; `tb_la`: the 60 MHz rates.
 - **Test:** each bench at 60 MHz: before, the failures above; after, all pass.
 
+## BUG-133 — eth_tx sent a link pulse right before the first frame (design)
+
+- **Where:** `pbe_v1/programs/eth_tx.pbe` (D93), found by `tb_eth` before commit.
+- **Cause:** the program started with a link pulse and went straight to the idle `PULL`; the
+  host's first frame was already queued, so the frame's preamble began about 200 ns after the
+  pulse. 802.3's model (`eth_model.sv`) sees a positive pulse joined to a frame: `FAIL
+  (10BASE-T model): a burst at 315900 ns that starts positive is not a single pulse (853
+  transitions)`, and that frame was lost to the check. The same happened whenever a frame was
+  queued just as a link pulse went out.
+- **Before:**
+  ```
+  nlp:    PIN  tdp, DRV1 [5]
+          PIN  tdp, DRV0
+          SET  X, 15
+  idle:   PULL
+  ...
+  init:   PIN  tdp, DRV0
+          PIN  tdm, DRV0
+          JMP  nlp
+  ```
+- **After:** a link pulse is followed by the inter-frame gap (the frame's own code), and the
+  first pulse comes 16 ms after the start:
+  ```
+          PIN  tdp, DRV1 [5]
+          PIN  tdp, DRV0
+          JMP  gap             ; then the inter-frame gap, as after a frame
+  ...
+  init:   PIN  tdp, DRV0
+          PIN  tdm, DRV0
+          JMP  gap
+  ```
+- **Test:** `tb_eth` (1) and (4): before, 2 of 3 frames decoded and the model's error; after,
+  3 of 3, and link pulses only between frames.
+
+## BUG-134 — eth_tx's frame status reported the idle loop's timeouts (design)
+
+- **Where:** `pbe_v1/programs/eth_tx.pbe` (D93), found by `tb_eth` (3) before commit.
+- **Cause:** "timeout happened" (`STATUS[2]`) is sticky until `STAT`. Idle, the engine times out
+  every 1 ms (the link-pulse clock), so the status byte of the first frame after an idle period
+  had bit 2 set, which the host protocol defines as "the frame was aborted": `engine 0 status
+  04` for a good frame.
+- **Before:** `start:  FLAG 0, SET` then the preamble.
+- **After:** `start:  FLAG 0, SET` / `STAT` (clears the timeout flag; ISR is overwritten later).
+- **Test:** `tb_eth` (3): before, status 0x04 for a good frame; after, 0x00 (and (5)'s abort
+  still reports bit 2).
+
+## BUG-135 — tb_eth re-parsed the de-escaped bytes of an unfinished frame (test), and two Icarus limits (tool)
+
+- **Where:** `pbe_v1/test/tb_eth.sv`, `parse_rx`; `eth_model.sv`.
+- **Cause:** `parse_rx` turned the bytes read from engine 1 into frames, de-escaping 0x7E 0x7E
+  to one 0x7E. When the FIFO had been read in the middle of a frame (the loopback test reads
+  every 2 us), it pushed the bytes of the unfinished frame back for the next call, already
+  de-escaped: a lone 0x7E followed by a data byte was then read as the end-of-frame record. The
+  loopback failed with nonsense frames (`frame 0: 20 bytes, status 36`; byte 20 of every test
+  frame is 0x7E). Also: Icarus 12 has no `break` (`sorry: break statements not supported`) and
+  no `return` from a task (BUG-127), so the first versions did not compile.
+- **Before:** consume every byte, then `rx1.push_front(rf_bytes.pop_back())` for an unfinished
+  frame.
+- **After:** find the end of the first whole record (skipping 0x7E 0x7E pairs) before consuming
+  anything; flags and `disable` of a named block instead of `break` and `return`.
+- **Test:** `tb_eth` (3): before, the loopback failed; after, 3 frames, bytes and status ok.

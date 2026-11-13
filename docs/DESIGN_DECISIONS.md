@@ -3064,3 +3064,67 @@ Known and accepted; each is a choice to keep the hardware small or the program w
 - **Alternatives:** 50 MHz (5 clocks a bit, a 2.5-clock half bit: no) or 80 MHz (8 clocks a bit:
   more receive margin, but about 12.5 ns, under the routed worst path).
 
+## D93. 10BASE-T: eth_tx.pbe and eth_rx.pbe, streamed by the quad host port
+
+- **Asked by the owner:** full 10BASE-T, transmit and receive (the brief's stretch goal), on the
+  general hardware of D89-D92: engine 0 transmits, engine 1 receives (full duplex).
+- **Transmit, `programs/eth_tx.pbe` (52 words, one page):** pair mode, TD+ = pin base, TD- =
+  pin base + 1, Manchester, bytes, `CLKDIV` 5 (6 clocks a bit at 60 MHz).
+  - **Host records:** a frame is chunks `[n][n bytes]` (n = 1..255) and `[0]`, so a frame of any
+    length streams through the 16-byte FIFO with an 8-bit counter (X); the engine adds the
+    preamble (7 x 0x55) and SFD (0xD5, `OUT, NOCRC`), and the FCS (`OSRCRC B0..B3, INV`, D91).
+    The first chunk's length starts the frame; the 8 preamble bytes (6.4 us) give the host time
+    to queue more. *Alternative:* a 16-bit length prefix: the engine has one 8-bit counter.
+  - **Per byte:** `PULL`, `OUT` (the coder takes it at its first bit), the CRC feed (8 clocks),
+    the loop jump: about 11 of the 48 clocks a byte lasts.
+  - **End:** `END` twice: the second returns when the coder takes the first, at the end of the
+    last bit, so the inter-frame gap is timed from the right place: 36 x 17 clocks (10.2 us)
+    plus the coder's 2-bit gap before the next frame. Measured (the model): 10.68 us between
+    back-to-back frames (802.3: at least 9.6 us). TP_IDL is the coder's (D90): measured 300 ns
+    after a final 0, 350 ns after a final 1.
+  - **Link pulses:** while idle the `PULL` for the next frame times out every 1 ms (`TIMEOUT`
+    60000 clocks; the timeout vector counts 16 of them in X), then a 100 ns pulse (TD+ high, by
+    the pin unit under the idle coder), then the same 10.2 us gap as after a frame. Measured
+    16.0 ms apart (802.3 clause 14.2.1.1: 16 +- 8 ms). The first one comes 16 ms after the start,
+    not at once (BUG-133).
+  - **Status:** one byte per frame in engine 0's RX FIFO (`STAT`): bit 4 = the coder ran out of
+    data (an underrun: the frame on the wire is corrupt), bit 2 = the FIFO stayed empty for 1 ms
+    inside the frame (the engine ended it at once: the timeout vector sees FLAG0 "in a frame").
+    `STAT` at the start of each frame clears the idle loop's timeouts (BUG-134).
+- **Receive, `programs/eth_rx.pbe` (17 words):** RD = pin base (the receive comparator's output),
+  Manchester, bytes, `SYNC` 0xD5: the coder finds the SFD, recovers the clock and ends the
+  frame with the carrier (D90); link pulses never reach the program.
+  - **Records:** the bytes (the FCS included), a data 0x7E twice, and `[0x7E][status]` at the
+    end, as `hdlc_rx` (D88): a frame does not fit the FIFO, so its length cannot come first.
+    Status (`STAT`): 0x02 = FCS ok (the CRC unit fed with every byte, the FCS too, at its residue
+    0xC704DD7B, D91); bit 4 = line error (a byte the engine could not take in time), bit 3 = a
+    `PUSH` found the RX FIFO full. Per byte: `IN`, `JLINE`, `JNE`, `PUSH`, `JMP`: about 14 clocks
+    with the CRC feed.
+  - **Parity off** (`LINE_CFG[6]`), or `STAT` bit 0 is a meaningless parity of the frame.
+- **Host rate:** a frame needs 1.25 MB/s with no pause longer than the FIFO covers (16 bytes,
+  12.8 us). In `tb_eth` the host runs the quad port at SCK = clk / 8 (3.75 MB/s): it writes up
+  to 12 bytes per burst, pausing (ending the burst) while the TX-full pin is high, and reads
+  each RX FIFO by `RX_COUNT` and a burst read; transmit, receive and both at once (the loopback,
+  full duplex through one port) run with no underrun or overrun.
+- **Not done (limits):**
+  - *No CSMA/CD:* the transmitter does not defer to a carrier or detect collisions, so the link
+    partner must be full duplex. A switch port that sees only link pulses (no auto-negotiation)
+    falls back to 10 Mbit/s half duplex by parallel detection and may then collide with the
+    chip: the port must be set to 10 Mbit/s full duplex. (A program could defer to engine 1's
+    carrier through a flag; collision detection needs the transmitter to watch the receive pin.)
+  - *No auto-negotiation (fast link pulses)* and no link-integrity state machine (link fail after
+    50-150 ms without pulses): the host can watch the received frames; the coder ignores link
+    pulses by design.
+  - *No polarity correction* on receive (a reversed pair inverts every bit: the SFD is never
+    found); *no jabber* control (the host bounds frame length); dribble bits after the last
+    whole byte are dropped.
+- **Who else benefits:** the record formats are the HDLC ones; Manchester and CRC-32 serve the
+  other users listed in D90 and D91.
+- **Tests:** `tb_eth` against `eth_model.sv`, a link partner written from IEEE 802.3 (its own
+  Manchester decoder by mid-bit windows, CRC-32 byte-wise reflected, preamble/SFD, bit timing
+  100 +- 1 ns, TP_IDL 200-450 ns, gap >= 9.6 us, link pulses 60-200 ns wide and 8-24 ms apart);
+  19 checks: transmit 64/512/1518-byte frames back to back with their status bytes; receive the
+  same sizes, a bad FCS, +-100 ppm, +1000 ppm and -5000 ppm with jitter, three frames 9.6 us
+  apart; the loopback engine 0 -> engine 1 with the host streaming both at once; link pulses
+  while idle and the model's link pulses into engine 1 (no record); a 30 us host underrun (status
+  bit 4), a 1.2 ms one (the engine aborts: bit 2), and an RX overrun (bits 3 and 4).

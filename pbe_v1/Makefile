@@ -76,15 +76,18 @@ test/qspi_image.hex: programs/qspi_flash.pbe tools/pbe_asm.py
 test/hdlc_image.hex: programs/hdlc_tx.pbe programs/hdlc_rx.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/hdlc_tx.pbe@0:0 programs/hdlc_rx.pbe@1:0
 
+test/eth_image.hex: programs/eth_tx.pbe programs/eth_rx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/eth_tx.pbe@0:0 programs/eth_rx.pbe@1:0
+
 test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
-IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc
+IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc eth
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad; do \
-	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
+LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth; do \
+	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) eth_model.sv $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
 
@@ -121,6 +124,7 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp
 	$(MAKE) test-proto2
 	$(MAKE) test-quad-unit
+	$(MAKE) test-eth
 	$(MAKE) test-ff
 	$(PYTHON) $(V)/spec_boundaries/check_spec_boundaries.py
 	$(MAKE) test-model
@@ -166,6 +170,11 @@ test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_ima
 	    || { echo "$$tb: Icarus and Verilator logs differ (a race?)"; exit 1; }; \
 	  tail -1 $(VL_BUILD)/$$tb-icarus.cmp; \
 	done
+
+# 10BASE-T (D93): eth_tx.pbe and eth_rx.pbe against eth_model.sv, a link partner from IEEE 802.3
+.PHONY: test-eth
+test-eth: test/eth_image.hex
+	cd test && iverilog -g2012 -o eth.vvp tb_eth.sv eth_model.sv $(TOP) && vvp -n eth.vvp
 
 # The quad host port (D89): tb_quad (modes, pins, recovery, a program load and a UART loopback),
 # and the logic analyser bench with its whole host side in quad mode (+QUAD, tb_host.svh).
