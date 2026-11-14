@@ -15,7 +15,7 @@
   --ctrl: #2b5f93;   /* control: decoder, host commands, instructions, flags */
   --data: #2e7a52;   /* data: bytes and bits */
   --pin: #b0582a;    /* physical pins */
-  --new: #7a4fa3;    /* added since the first design: CRC, parity, timeout, 8 flags */
+  --new: #7a4fa3;    /* protocol hardware added after the first design */
   --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
@@ -64,7 +64,6 @@ svg .nbox { fill: var(--panel); stroke: var(--new); stroke-width: 1.8; }
 svg .ext { fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 5 4; }
 svg .chip { fill: var(--die); stroke: var(--fg); stroke-width: 2; }
 svg .pad { fill: var(--pin); }
-svg .padoff { fill: none; stroke: var(--muted); stroke-width: 1.2; }
 svg .wc, svg .wd, svg .wp, svg .wn { fill: none; stroke-width: 1.7; }
 svg .wc { stroke: var(--ctrl); } svg .wd { stroke: var(--data); } svg .wp { stroke: var(--pin); } svg .wn { stroke: var(--new); }
 svg .bus { fill: none; stroke: var(--pin); stroke-width: 5; stroke-linecap: round; }
@@ -89,16 +88,16 @@ tr.added td:first-child { color: var(--new); }
 
 <main>
   <header>
-    <div class="eyebrow">Jane Street protocol emulator ASIC · pbe_v1</div>
+    <div class="eyebrow">Jane Street protocol emulator ASIC · pbe_v1 · feature/ethernet</div>
     <h1>Programmable Bit Engine</h1>
-    <p class="lede">Two small engines run short programs that drive, release and read pins. UART, SPI (controller and peripheral), I2C (controller, with SMBus PEC, and target), 1-Wire, Modbus RTU, WS2812 and a USB low-speed device are programs loaded at runtime. Each engine also has a general CRC unit, a parity bit, a WAIT timeout and an optional line coder (NRZI, bit stuffing, differential pair), and sees its own window of 8 shared flags. This matches the RTL as built: 128-word program memory (each engine jumps within its own 64-word window from its START_PC), 16-byte FIFOs, about 36% of the 6×4 tile area.</p>
+    <p class="lede">Two small engines run programs that drive, release and read eight pins. Every protocol is a program loaded at run time: UART, SPI (controller and peripheral), quad SPI, I2C (controller with SMBus PEC, and target), 1-Wire, Modbus RTU, WS2812, a USB low-speed device, a CAN 2.0A node, JTAG, SWD, PS/2, HDLC, a GPIO expander, a logic analyser and 10BASE-T Ethernet. The engines share no protocol blocks, only general helpers: a CRC unit (any polynomial up to 32 bits), parity, timeouts, a line coder (NRZ, NRZI, Manchester, bit stuffing, differential pair) and a bit-synchronous coder for CAN-style buses. Each engine runs from its own 256-word SRAM. 8×4 Tiny Tapeout tiles, IHP 130 nm, 60 MHz.</p>
   </header>
 
   <section>
     <h2>1 · The whole chip</h2>
     <figure>
       <div class="scroll">
-        <svg viewBox="0 0 1012 632" role="img" aria-label="Top-level block diagram: a host loads programs and exchanges bytes over SPI; two engines share program memory, see separate windows of 8 flags, talk to host FIFOs, and drive eight bidirectional pins through a pin mux, reading them back through input synchronizers.">
+        <svg viewBox="0 0 1012 680" role="img" aria-label="Top-level block diagram: a host loads each engine's program SRAM and exchanges bytes over a one- or four-lane SPI port; two engines each run from their own SRAM, see separate windows of 8 shared flags, talk to host FIFOs, and drive eight bidirectional pins through a pin mux, reading them back through input synchronizers.">
           <defs>
             <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mc" d="M0 0L10 5L0 10z"/></marker>
             <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="md" d="M0 0L10 5L0 10z"/></marker>
@@ -107,145 +106,159 @@ tr.added td:first-child { color: var(--new); }
           </defs>
 
           <!-- chip boundary -->
-          <rect class="chip" x="160" y="24" width="680" height="592" rx="6"/>
-          <text class="t" x="178" y="50">Chip · Tiny Tapeout tiles</text>
-          <text class="s" x="178" y="68">IHP CMOS5L, 130 nm · 48 MHz</text>
+          <rect class="chip" x="160" y="24" width="680" height="640" rx="6"/>
+          <text class="t" x="178" y="50">Chip · 8×4 Tiny Tapeout tiles</text>
+          <text class="s" x="178" y="68">IHP CMOS5L, 130 nm · 60 MHz</text>
 
           <!-- host outside -->
-          <rect class="ext" x="16" y="212" width="110" height="116" rx="4"/>
-          <text class="t" x="71" y="256" text-anchor="middle">Host</text>
-          <text class="s" x="71" y="276" text-anchor="middle">MCU or PC</text>
-          <text class="s" x="71" y="292" text-anchor="middle">+ USB-SPI</text>
+          <rect class="ext" x="16" y="212" width="110" height="140" rx="4"/>
+          <text class="t" x="71" y="258" text-anchor="middle">Host</text>
+          <text class="s" x="71" y="278" text-anchor="middle">MCU, RP2040</text>
+          <text class="s" x="71" y="294" text-anchor="middle">or FPGA</text>
 
           <!-- host SPI wires -->
-          <path class="wc" d="M126 232H185" marker-end="url(#ac)"/><text class="xs lc" x="132" y="228">SCK</text>
-          <path class="wc" d="M126 252H185" marker-end="url(#ac)"/><text class="xs lc" x="132" y="248">CS_n</text>
-          <path class="wc" d="M126 272H185" marker-end="url(#ac)"/><text class="xs lc" x="132" y="268">MOSI</text>
-          <path class="wc" d="M185 292H126" marker-end="url(#ac)"/><text class="xs lc" x="132" y="288">MISO</text>
-          <path class="wc" d="M185 312H126" marker-end="url(#ac)"/><text class="xs lc" x="132" y="308">IRQ</text>
+          <path class="wc" d="M126 228H185" marker-end="url(#ac)"/><text class="xs lc" x="130" y="224">SCK·CS</text>
+          <path class="wc" d="M126 252H185" marker-end="url(#ac)"/><text class="xs lc" x="130" y="248">D0</text>
+          <path class="wn" d="M126 276H185" marker-end="url(#an)"/><text class="xs ln" x="130" y="272">D1–3</text>
+          <path class="wc" d="M185 300H126" marker-end="url(#ac)"/><text class="xs lc" x="130" y="296">Q0</text>
+          <path class="wn" d="M185 324H126" marker-end="url(#an)"/><text class="xs ln" x="130" y="320">Q1–3</text>
+          <path class="wc" d="M185 344H126" marker-end="url(#ac)"/><text class="xs lc" x="130" y="340">IRQ</text>
 
           <!-- host interface -->
-          <rect class="box" x="185" y="212" width="150" height="116" rx="4"/>
-          <text class="t" x="260" y="244" text-anchor="middle">Host interface</text>
-          <text class="s" x="260" y="264" text-anchor="middle">SPI peripheral</text>
-          <text class="s" x="260" y="282" text-anchor="middle">ui_in[2:0]</text>
-          <text class="s" x="260" y="298" text-anchor="middle">uo_out[1:0]</text>
+          <rect class="nbox" x="185" y="212" width="150" height="140" rx="4"/>
+          <text class="t" x="260" y="246" text-anchor="middle">Host interface</text>
+          <text class="s" x="260" y="266" text-anchor="middle">SPI, 1 or 4 lanes</text>
+          <text class="s" x="260" y="284" text-anchor="middle">quad: HOSTCFG</text>
+          <text class="s" x="260" y="302" text-anchor="middle">ui_in[5:0]</text>
+          <text class="s" x="260" y="318" text-anchor="middle">uo_out[7:0]</text>
 
           <!-- FIFOs -->
-          <rect class="box" x="365" y="66" width="110" height="96" rx="4"/>
-          <text class="t" x="420" y="96" text-anchor="middle">FIFOs · E0</text>
-          <text class="s" x="420" y="116" text-anchor="middle">TX 16 × 8 b</text>
-          <text class="s" x="420" y="134" text-anchor="middle">RX 16 × 8 b</text>
+          <rect class="box" x="365" y="66" width="110" height="106" rx="4"/>
+          <text class="t" x="420" y="94" text-anchor="middle">FIFOs · E0</text>
+          <text class="s" x="420" y="114" text-anchor="middle">TX 16 × 8 b</text>
+          <text class="s" x="420" y="132" text-anchor="middle">RX 16 × 8 b</text>
+          <text class="s ln" x="420" y="150" text-anchor="middle">TX mark/rewind</text>
 
-          <rect class="box" x="365" y="370" width="110" height="96" rx="4"/>
-          <text class="t" x="420" y="400" text-anchor="middle">FIFOs · E1</text>
-          <text class="s" x="420" y="420" text-anchor="middle">TX 16 × 8 b</text>
-          <text class="s" x="420" y="438" text-anchor="middle">RX 16 × 8 b</text>
+          <rect class="box" x="365" y="430" width="110" height="106" rx="4"/>
+          <text class="t" x="420" y="458" text-anchor="middle">FIFOs · E1</text>
+          <text class="s" x="420" y="478" text-anchor="middle">TX 16 × 8 b</text>
+          <text class="s" x="420" y="496" text-anchor="middle">RX 16 × 8 b</text>
+          <text class="s ln" x="420" y="514" text-anchor="middle">TX mark/rewind</text>
 
           <!-- host <-> FIFOs -->
-          <path class="wd" d="M260 212V114H365" marker-start="url(#ad)" marker-end="url(#ad)"/>
-          <text class="xs ld" x="312" y="107" text-anchor="middle">bytes</text>
-          <path class="wd" d="M260 328V418H365" marker-start="url(#ad)" marker-end="url(#ad)"/>
-          <text class="xs ld" x="312" y="411" text-anchor="middle">bytes</text>
-
-          <!-- host -> program memory -->
-          <path class="wc" d="M335 266H510" marker-end="url(#ac)"/>
-          <text class="xs lc" x="422" y="259" text-anchor="middle">load program</text>
-
-          <!-- host -> registers -->
-          <path class="wc" d="M220 328V564H510" marker-end="url(#ac)"/>
-          <text class="xs lc" x="365" y="557" text-anchor="middle">registers, FLAG_SET/CLR</text>
+          <path class="wd" d="M260 212V118H365" marker-start="url(#ad)" marker-end="url(#ad)"/>
+          <text class="xs ld" x="312" y="111" text-anchor="middle">bytes</text>
+          <path class="wd" d="M260 352V482H365" marker-start="url(#ad)" marker-end="url(#ad)"/>
+          <text class="xs ld" x="312" y="475" text-anchor="middle">bytes</text>
 
           <!-- engines -->
-          <rect class="box" x="510" y="60" width="180" height="108" rx="4"/>
-          <text class="t" x="600" y="92" text-anchor="middle">Engine 0</text>
-          <text class="s" x="600" y="112" text-anchor="middle">PC · decoder · timeout</text>
-          <text class="s" x="600" y="130" text-anchor="middle">OSR/ISR · CRC · line coder</text>
+          <rect class="box" x="510" y="60" width="180" height="120" rx="4"/>
+          <text class="t" x="600" y="88" text-anchor="middle">Engine 0</text>
+          <text class="s" x="600" y="108" text-anchor="middle">PC + PAGE · decoder</text>
+          <text class="s" x="600" y="126" text-anchor="middle">OSR/ISR · timeout</text>
+          <text class="s ln" x="600" y="144" text-anchor="middle">CRC ≤ 32 b · line coder</text>
+          <text class="s ln" x="600" y="162" text-anchor="middle">bit-sync (CAN)</text>
 
-          <rect class="box" x="510" y="364" width="180" height="108" rx="4"/>
-          <text class="t" x="600" y="396" text-anchor="middle">Engine 1</text>
-          <text class="s" x="600" y="416" text-anchor="middle">PC · decoder · timeout</text>
-          <text class="s" x="600" y="434" text-anchor="middle">OSR/ISR · CRC · line coder</text>
+          <rect class="box" x="510" y="424" width="180" height="120" rx="4"/>
+          <text class="t" x="600" y="452" text-anchor="middle">Engine 1</text>
+          <text class="s" x="600" y="472" text-anchor="middle">PC + PAGE · decoder</text>
+          <text class="s" x="600" y="490" text-anchor="middle">OSR/ISR · timeout</text>
+          <text class="s ln" x="600" y="508" text-anchor="middle">CRC ≤ 32 b · line coder</text>
+          <text class="s ln" x="600" y="526" text-anchor="middle">bit-sync (CAN)</text>
 
-          <!-- program memory + flags between the engines -->
-          <rect class="box" x="510" y="230" width="112" height="72" rx="4"/>
-          <text class="t" x="566" y="260" text-anchor="middle">Program</text>
-          <text class="s" x="566" y="280" text-anchor="middle">128 × 16 b</text>
+          <!-- program SRAMs + flags between the engines -->
+          <rect class="nbox" x="510" y="206" width="112" height="70" rx="4"/>
+          <text class="t" x="566" y="234" text-anchor="middle">SRAM · E0</text>
+          <text class="s" x="566" y="254" text-anchor="middle">256 × 16 b</text>
 
-          <rect class="nbox" x="632" y="230" width="58" height="72" rx="4"/>
-          <text class="t" x="661" y="260" text-anchor="middle">Flags</text>
-          <text class="s" x="661" y="280" text-anchor="middle">8 bits</text>
+          <rect class="nbox" x="510" y="328" width="112" height="70" rx="4"/>
+          <text class="t" x="566" y="356" text-anchor="middle">SRAM · E1</text>
+          <text class="s" x="566" y="376" text-anchor="middle">256 × 16 b</text>
 
-          <path class="wc" d="M566 230V168" marker-end="url(#ac)"/><text class="xs lc" x="574" y="204">instr</text>
-          <path class="wc" d="M566 302V364" marker-end="url(#ac)"/><text class="xs lc" x="574" y="338">instr</text>
-          <path class="wn" d="M661 168V230" marker-start="url(#an)" marker-end="url(#an)"/><text class="xs ln" x="655" y="204" text-anchor="end">0–3</text>
-          <path class="wn" d="M661 302V364" marker-start="url(#an)" marker-end="url(#an)"/><text class="xs ln" x="655" y="338" text-anchor="end">4–7</text>
+          <rect class="box" x="632" y="206" width="58" height="192" rx="4"/>
+          <text class="t" x="661" y="296" text-anchor="middle">Flags</text>
+          <text class="s" x="661" y="314" text-anchor="middle">8 bits</text>
+
+          <path class="wc" d="M566 206V180" marker-end="url(#ac)"/><text class="xs lc" x="574" y="198">instr</text>
+          <path class="wc" d="M566 398V424" marker-end="url(#ac)"/><text class="xs lc" x="574" y="416">instr</text>
+          <path class="wc" d="M661 180V206" marker-start="url(#ac)" marker-end="url(#ac)"/><text class="xs lc" x="655" y="198" text-anchor="end">0–3</text>
+          <path class="wc" d="M661 398V424" marker-start="url(#ac)" marker-end="url(#ac)"/><text class="xs lc" x="655" y="416" text-anchor="end">4–7</text>
+
+          <!-- host -> program SRAMs -->
+          <path class="wc" d="M335 282H490V241H510" marker-end="url(#ac)"/>
+          <path class="wc" d="M490 282V363H510" marker-end="url(#ac)"/>
+          <text class="xs lc" x="412" y="275" text-anchor="middle">load program</text>
+          <text class="s" x="412" y="298" text-anchor="middle">PM_ADDR_H: engine</text>
+
+          <!-- host -> registers -->
+          <path class="wc" d="M220 352V614H510" marker-end="url(#ac)"/>
+          <text class="xs lc" x="365" y="607" text-anchor="middle">registers, FLAG_SET/CLR</text>
 
           <!-- engine registers -->
-          <rect class="box" x="510" y="528" width="180" height="72" rx="4"/>
-          <text class="t" x="600" y="556" text-anchor="middle">Engine registers</text>
-          <text class="s" x="600" y="574" text-anchor="middle">div · pins · FLAG_BASE</text>
-          <text class="s" x="600" y="590" text-anchor="middle">CRC · TIMEOUT · parity</text>
-          <path class="wc" d="M600 528V472" marker-end="url(#ac)"/><text class="xs lc" x="608" y="504">config (E0 too)</text>
+          <rect class="box" x="510" y="574" width="180" height="76" rx="4"/>
+          <text class="t" x="600" y="600" text-anchor="middle">Engine registers</text>
+          <text class="s" x="600" y="618" text-anchor="middle">div · pins · CRC · TIMEOUT</text>
+          <text class="s" x="600" y="634" text-anchor="middle">LINE · LINE2 · CAN counters</text>
+          <path class="wc" d="M600 574V544" marker-end="url(#ac)"/><text class="xs lc" x="608" y="564">config (E0 too)</text>
 
           <!-- FIFO <-> engines -->
-          <path class="wd" d="M475 92H510" marker-end="url(#ad)"/><text class="xs ld" x="492" y="86" text-anchor="middle">TX</text>
-          <path class="wd" d="M510 140H475" marker-end="url(#ad)"/><text class="xs ld" x="492" y="134" text-anchor="middle">RX</text>
-          <path class="wd" d="M475 396H510" marker-end="url(#ad)"/><text class="xs ld" x="492" y="390" text-anchor="middle">TX</text>
-          <path class="wd" d="M510 444H475" marker-end="url(#ad)"/><text class="xs ld" x="492" y="438" text-anchor="middle">RX</text>
+          <path class="wd" d="M475 96H510" marker-end="url(#ad)"/><text class="xs ld" x="492" y="90" text-anchor="middle">TX</text>
+          <path class="wd" d="M510 146H475" marker-end="url(#ad)"/><text class="xs ld" x="492" y="140" text-anchor="middle">RX</text>
+          <path class="wd" d="M475 460H510" marker-end="url(#ad)"/><text class="xs ld" x="492" y="454" text-anchor="middle">TX</text>
+          <path class="wd" d="M510 510H475" marker-end="url(#ad)"/><text class="xs ld" x="492" y="504" text-anchor="middle">RX</text>
 
           <!-- pin bus -->
-          <path class="bus" d="M705 100V430"/>
-          <text class="xs lp" x="705" y="452" text-anchor="middle">pin bus</text>
-          <path class="wp" d="M690 114H705"/>
-          <path class="wp" d="M690 418H705"/>
+          <path class="bus" d="M705 100V500"/>
+          <text class="xs lp" x="705" y="522" text-anchor="middle">pin bus</text>
+          <path class="wp" d="M690 120H705"/>
+          <path class="wp" d="M690 484H705"/>
 
           <!-- pin mux + sync -->
-          <rect class="box" x="730" y="140" width="92" height="110" rx="4"/>
-          <text class="t" x="776" y="170" text-anchor="middle">Pin mux</text>
-          <text class="s" x="776" y="190" text-anchor="middle">+ ownership</text>
-          <text class="s" x="776" y="208" text-anchor="middle">out · oe</text>
+          <rect class="box" x="730" y="160" width="92" height="110" rx="4"/>
+          <text class="t" x="776" y="190" text-anchor="middle">Pin mux</text>
+          <text class="s" x="776" y="210" text-anchor="middle">+ ownership</text>
+          <text class="s" x="776" y="228" text-anchor="middle">out · oe</text>
 
-          <rect class="box" x="730" y="290" width="92" height="110" rx="4"/>
-          <text class="t" x="776" y="320" text-anchor="middle">Input sync</text>
-          <text class="s" x="776" y="340" text-anchor="middle">2 flip-flops</text>
-          <text class="s" x="776" y="358" text-anchor="middle">per pin</text>
+          <rect class="box" x="730" y="310" width="92" height="110" rx="4"/>
+          <text class="t" x="776" y="340" text-anchor="middle">Input sync</text>
+          <text class="s" x="776" y="360" text-anchor="middle">2 flip-flops</text>
+          <text class="s" x="776" y="378" text-anchor="middle">per pin</text>
 
-          <path class="wp" d="M705 195H730" marker-end="url(#ap)"/>
-          <path class="wp" d="M730 345H705" marker-end="url(#ap)"/>
-          <path class="wp" d="M822 195H834" marker-end="url(#ap)"/>
-          <path class="wp" d="M834 345H822" marker-end="url(#ap)"/>
+          <path class="wp" d="M705 215H730" marker-end="url(#ap)"/>
+          <path class="wp" d="M730 365H705" marker-end="url(#ap)"/>
+          <path class="wp" d="M822 215H834" marker-end="url(#ap)"/>
+          <path class="wp" d="M834 365H822" marker-end="url(#ap)"/>
 
-          <!-- pads: 0-2 Modbus, 3 free, 4-5 I2C, 6 1-Wire, 7 free -->
-          <text class="xs lp" x="840" y="112" text-anchor="middle">uio[7:0]</text>
-          <rect class="pad" x="834" y="150" width="12" height="12"/>
-          <rect class="pad" x="834" y="184" width="12" height="12"/>
-          <rect class="pad" x="834" y="218" width="12" height="12"/>
-          <rect class="padoff" x="834.6" y="252.6" width="10.8" height="10.8"/>
-          <rect class="pad" x="834" y="286" width="12" height="12"/>
-          <rect class="pad" x="834" y="320" width="12" height="12"/>
-          <rect class="pad" x="834" y="354" width="12" height="12"/>
-          <rect class="padoff" x="834.6" y="388.6" width="10.8" height="10.8"/>
+          <!-- pads -->
+          <text class="xs lp" x="840" y="140" text-anchor="middle">uio[7:0]</text>
+          <rect class="pad" x="834" y="160" width="12" height="12"/>
+          <rect class="pad" x="834" y="194" width="12" height="12"/>
+          <rect class="pad" x="834" y="228" width="12" height="12"/>
+          <rect class="pad" x="834" y="262" width="12" height="12"/>
+          <rect class="pad" x="834" y="296" width="12" height="12"/>
+          <rect class="pad" x="834" y="330" width="12" height="12"/>
+          <rect class="pad" x="834" y="364" width="12" height="12"/>
+          <rect class="pad" x="834" y="398" width="12" height="12"/>
+          <path class="wp" d="M846 166H872M846 200H872M846 234H872M846 268H872M846 302H872M846 336H872M846 370H872M846 404H872"/>
 
-          <path class="wp" d="M846 156H872M846 190H872M846 224H872M846 292H872M846 326H872M846 360H872"/>
-
-          <!-- targets, as in the tests -->
-          <text class="s" x="936" y="112" text-anchor="middle">pin map in the tests</text>
-          <rect class="ext" x="872" y="140" width="128" height="100" rx="4"/>
-          <text class="t" x="936" y="178" text-anchor="middle">RS-485</text>
-          <text class="s" x="936" y="198" text-anchor="middle">Modbus RTU</text>
-          <text class="s" x="936" y="214" text-anchor="middle">TX · RX · DE</text>
-          <text class="s" x="880" y="262">free</text>
-          <rect class="ext" x="872" y="276" width="128" height="64" rx="4"/>
-          <text class="t" x="936" y="304" text-anchor="middle">I2C device</text>
-          <text class="s" x="936" y="324" text-anchor="middle">SDA · SCL</text>
-          <rect class="ext" x="872" y="346" width="128" height="30" rx="4"/>
-          <text class="t" x="936" y="366" text-anchor="middle">1-Wire DQ</text>
-          <text class="s" x="880" y="398">free</text>
+          <!-- devices -->
+          <rect class="ext" x="872" y="150" width="128" height="270" rx="4"/>
+          <text class="t" x="936" y="178" text-anchor="middle">Devices</text>
+          <text class="s" x="936" y="200" text-anchor="middle">any pin, any engine</text>
+          <text class="s" x="936" y="228" text-anchor="middle">USB D− / D+</text>
+          <text class="s" x="936" y="246" text-anchor="middle">CAN TXD / RXD</text>
+          <text class="s" x="936" y="264" text-anchor="middle">Ethernet TD± / RD</text>
+          <text class="s" x="936" y="282" text-anchor="middle">I2C · SMBus</text>
+          <text class="s" x="936" y="300" text-anchor="middle">SPI · quad SPI</text>
+          <text class="s" x="936" y="318" text-anchor="middle">UART · RS-485</text>
+          <text class="s" x="936" y="336" text-anchor="middle">1-Wire · PS/2</text>
+          <text class="s" x="936" y="354" text-anchor="middle">JTAG · SWD</text>
+          <text class="s" x="936" y="372" text-anchor="middle">HDLC · WS2812</text>
+          <text class="s" x="936" y="390" text-anchor="middle">74HC595/165</text>
         </svg>
       </div>
-      <div class="legend"><span><i class="c"></i>control / instructions</span><span><i class="d"></i>data bytes and bits</span><span><i class="p"></i>physical pins</span><span><i class="n"></i>added: 8 flags with per-engine windows</span></div>
-      <figcaption>The host loads the program memory both engines read from, streams bytes through each engine's FIFOs, and sets or clears single flags with <code>FLAG_SET</code> / <code>FLAG_CLR</code>. Each engine sees 4 of the 8 flags from its <code>FLAG_BASE</code> (by default engine 0 has 0–3 and engine 1 has 4–7), so two flag-using protocols run side by side. The pin map is the one the tests use: Modbus on engine 0, I2C on engine 1, 1-Wire on either.</figcaption>
+      <div class="legend"><span><i class="c"></i>control / instructions</span><span><i class="d"></i>data bytes and bits</span><span><i class="p"></i>physical pins</span><span><i class="n"></i>added after the first design: SRAM, CRC-32, line coding, CAN, quad host port</span></div>
+      <figcaption>The host writes each engine's program into that engine's own SRAM (<code>PM_ADDR_H</code> selects the engine), streams bytes through each engine's FIFOs, and sets or clears single flags with <code>FLAG_SET</code> / <code>FLAG_CLR</code>. In quad mode (<code>HOSTCFG</code>) it moves 4 bits per SCK each way, enough to stream 10BASE-T frames. Each engine sees 4 of the 8 flags from its <code>FLAG_BASE</code> (by default engine 0 has 0–3 and engine 1 has 4–7), so two protocols run side by side and can signal each other. Any pin can belong to either engine.</figcaption>
     </figure>
   </section>
 
@@ -253,7 +266,7 @@ tr.added td:first-child { color: var(--new); }
     <h2>2 · Inside one engine</h2>
     <figure>
       <div class="scroll">
-        <svg viewBox="0 0 1000 560" role="img" aria-label="Engine internals: the decoder drives every unit; the timing unit stalls the program counter or makes it jump to the timeout routine; the pin unit feeds pin levels to timing and branch logic and exchanges bits with the shift registers; shifted bits feed the CRC unit, whose ok result drives a branch and whose bytes can be loaded into the OSR; the optional line coder takes bytes from the shift registers, drives the engine's first pin or pair with its own bit timing, and reports the end of a frame to the branch logic.">
+        <svg viewBox="0 0 1000 684" role="img" aria-label="Engine internals: the decoder drives every unit; the timing unit stalls the program counter or makes it jump to the timeout routine; the pin unit feeds pin levels to timing and branch logic and exchanges bits with the shift registers; shifted bits feed the CRC unit, whose ok result drives a branch and whose bytes can be loaded into the OSR; the line coder and the bit-synchronous coder take bytes or bits from the shift registers, drive the engine's pins with their own bit timing, and report frame ends and errors to the branch logic.">
           <defs>
             <marker id="bc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mc" d="M0 0L10 5L0 10z"/></marker>
             <marker id="bd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="md" d="M0 0L10 5L0 10z"/></marker>
@@ -263,9 +276,9 @@ tr.added td:first-child { color: var(--new); }
 
           <!-- instruction in, address out -->
           <path class="wc" d="M500 4V30" marker-end="url(#bc)"/>
-          <text class="xs lc" x="510" y="18">16-bit instruction from program memory</text>
+          <text class="xs lc" x="510" y="18">16-bit instruction register (prefetched from the SRAM)</text>
           <path class="wc" d="M60 130V6" marker-end="url(#bc)"/>
-          <text class="xs lc" x="68" y="18">address to program memory</text>
+          <text class="xs lc" x="68" y="18">next address to the SRAM</text>
 
           <!-- decoder and control bus -->
           <rect class="box" x="330" y="30" width="340" height="50" rx="4"/>
@@ -278,25 +291,26 @@ tr.added td:first-child { color: var(--new); }
 
           <!-- row 2 -->
           <rect class="box" x="40" y="130" width="220" height="100" rx="4"/>
-          <text class="t" x="150" y="158" text-anchor="middle">PC &amp; branch</text>
-          <text class="s" x="150" y="178" text-anchor="middle">7-bit PC · jumps from START_PC</text>
-          <text class="s" x="150" y="196" text-anchor="middle">JMP · JCRCBAD · JEQ/JNE · JLINE</text>
-          <text class="s ln" x="150" y="214" text-anchor="middle">timeout → TIMEOUT_PC</text>
+          <text class="t" x="150" y="156" text-anchor="middle">PC &amp; branch</text>
+          <text class="s" x="150" y="174" text-anchor="middle">8-bit PC from START_PC</text>
+          <text class="s ln" x="150" y="190" text-anchor="middle">PAGE: 256-word programs</text>
+          <text class="s" x="150" y="206" text-anchor="middle">JMP · JCRCBAD · JEQ/JNE · JLINE</text>
+          <text class="s" x="150" y="222" text-anchor="middle">timeout → TIMEOUT_PC</text>
 
-          <rect class="nbox" x="300" y="130" width="200" height="100" rx="4"/>
+          <rect class="box" x="300" y="130" width="200" height="100" rx="4"/>
           <text class="t" x="400" y="158" text-anchor="middle">Timing unit</text>
           <text class="s" x="400" y="178" text-anchor="middle">tick = clk ÷ DIV · delay</text>
           <text class="s" x="400" y="196" text-anchor="middle">WAIT on pin or flag</text>
-          <text class="s ln" x="400" y="214" text-anchor="middle">timeout counter</text>
+          <text class="s" x="400" y="214" text-anchor="middle">timeout counter</text>
 
           <rect class="box" x="660" y="130" width="200" height="100" rx="4"/>
           <text class="t" x="760" y="158" text-anchor="middle">Pin unit</text>
           <text class="s" x="760" y="178" text-anchor="middle">drive · release · read</text>
           <text class="s" x="760" y="196" text-anchor="middle">OUT · OUTOD</text>
-          <text class="s ln" x="760" y="214" text-anchor="middle">OUTPAR</text>
+          <text class="s" x="760" y="214" text-anchor="middle">OUTPAR</text>
 
           <path class="wc" d="M300 180H260" marker-end="url(#bc)"/><text class="xs lc" x="280" y="160" text-anchor="middle">stall</text>
-          <path class="wn" d="M300 205H260" marker-end="url(#bn)"/><text class="xs ln" x="280" y="200" text-anchor="middle">jump</text>
+          <path class="wc" d="M300 205H260" marker-end="url(#bc)"/><text class="xs lc" x="280" y="200" text-anchor="middle">jump</text>
           <path class="wp" d="M660 170H500" marker-end="url(#bp)"/><text class="xs lp" x="580" y="162" text-anchor="middle">level · edge</text>
           <path class="wp" d="M860 180H990" marker-start="url(#bp)"/><text class="xs lp" x="915" y="172" text-anchor="middle">to pin bus</text>
           <path class="wp" d="M680 230V268H245V230" marker-end="url(#bp)"/><text class="xs lp" x="460" y="262" text-anchor="middle">pin level for JMP</text>
@@ -308,15 +322,15 @@ tr.added td:first-child { color: var(--new); }
           <path class="wc" d="M90 310V230" marker-end="url(#bc)"/><text class="xs lc" x="98" y="292">X ≠ 0</text>
 
           <rect class="nbox" x="240" y="310" width="190" height="80" rx="4"/>
-          <text class="t" x="335" y="342" text-anchor="middle">CRC unit</text>
-          <text class="s" x="335" y="362" text-anchor="middle">any poly ≤ 16 bits</text>
-          <text class="s" x="335" y="378" text-anchor="middle">ok = register = CRC_GOOD</text>
+          <text class="t" x="335" y="340" text-anchor="middle">CRC unit</text>
+          <text class="s" x="335" y="360" text-anchor="middle">any poly ≤ 32 bits</text>
+          <text class="s" x="335" y="376" text-anchor="middle">ok = register = CRC_GOOD</text>
           <path class="wn" d="M300 310V286H215V230" marker-end="url(#bn)"/><text class="xs ln" x="306" y="301">CRC ok</text>
 
           <rect class="box" x="560" y="310" width="200" height="80" rx="4"/>
-          <text class="t" x="660" y="342" text-anchor="middle">Shift registers</text>
-          <text class="s" x="660" y="362" text-anchor="middle">OSR out · ISR in · 8-bit</text>
-          <text class="s ln" x="660" y="378" text-anchor="middle">+ send/receive parity</text>
+          <text class="t" x="660" y="340" text-anchor="middle">Shift registers</text>
+          <text class="s" x="660" y="360" text-anchor="middle">OSR out · ISR in · 8-bit</text>
+          <text class="s" x="660" y="376" text-anchor="middle">+ send/receive parity</text>
           <path class="wd" d="M700 310V230" marker-end="url(#bd)"/><text class="xs ld" x="694" y="300" text-anchor="end">bit out</text>
           <path class="wd" d="M740 230V310" marker-end="url(#bd)"/><text class="xs ld" x="748" y="300">bit in</text>
 
@@ -324,26 +338,38 @@ tr.added td:first-child { color: var(--new); }
           <path class="wn" d="M430 372H560" marker-end="url(#bn)"/><text class="xs ln" x="495" y="365" text-anchor="middle">OSRCRC</text>
 
           <rect class="ext" x="820" y="310" width="150" height="80" rx="4"/>
-          <text class="t" x="895" y="342" text-anchor="middle">TX / RX FIFO</text>
-          <text class="s" x="895" y="362" text-anchor="middle">to host</text>
+          <text class="t" x="895" y="338" text-anchor="middle">TX / RX FIFO</text>
+          <text class="s" x="895" y="356" text-anchor="middle">to host</text>
+          <text class="s ln" x="895" y="372" text-anchor="middle">NOWAIT · MARK · REWIND</text>
           <path class="wd" d="M820 332H760" marker-end="url(#bd)"/><text class="xs ld" x="790" y="326" text-anchor="middle">PULL</text>
           <path class="wd" d="M760 370H820" marker-end="url(#bd)"/><text class="xs ld" x="790" y="364" text-anchor="middle">PUSH</text>
 
           <!-- row 4: line coder -->
-          <rect class="nbox" x="530" y="440" width="260" height="80" rx="4"/>
-          <text class="t" x="660" y="468" text-anchor="middle">Line coder (optional)</text>
-          <text class="s" x="660" y="488" text-anchor="middle">NRZ/NRZI · bit stuffing · SYNC</text>
-          <text class="s" x="660" y="504" text-anchor="middle">pair + SE0 · own bit timer</text>
+          <rect class="nbox" x="530" y="440" width="260" height="90" rx="4"/>
+          <text class="t" x="660" y="464" text-anchor="middle">Line coder</text>
+          <text class="s" x="660" y="482" text-anchor="middle">NRZ · NRZI · Manchester · SYNC</text>
+          <text class="s" x="660" y="498" text-anchor="middle">bit stuffing, on/off mid-frame · flags</text>
+          <text class="s" x="660" y="514" text-anchor="middle">pair + SE0 · sample point · own bit timer</text>
           <path class="wd" d="M640 390V440" marker-end="url(#bd)"/><text class="xs ld" x="634" y="420" text-anchor="end">byte out</text>
           <path class="wd" d="M680 440V390" marker-end="url(#bd)"/><text class="xs ld" x="688" y="420">byte in</text>
-          <path class="wp" d="M790 480H990V180" marker-start="url(#bp)"/><text class="xs lp" x="890" y="472" text-anchor="middle">pin base (and base + 1)</text>
-          <path class="wn" d="M530 480H120V230" marker-end="url(#bn)"/><text class="xs ln" x="330" y="472" text-anchor="middle">end of frame → JLINE</text>
+          <path class="wp" d="M790 484H990V180" marker-start="url(#bp)"/><text class="xs lp" x="890" y="476" text-anchor="middle">pin base (and base + 1)</text>
+          <path class="wn" d="M530 484H120V230" marker-end="url(#bn)"/><text class="xs ln" x="330" y="476" text-anchor="middle">end of frame → JLINE</text>
 
-          <text class="s" x="500" y="548" text-anchor="middle">STAT puts {line error, RX overflow, timeout happened, CRC ok, parity error} into the ISR; the host reads the same bits in STATUS</text>
+          <!-- row 5: bit-synchronous coder -->
+          <rect class="nbox" x="530" y="560" width="260" height="70" rx="4"/>
+          <text class="t" x="660" y="584" text-anchor="middle">Bit-sync coder (LINE2 CAN mode)</text>
+          <text class="s" x="660" y="602" text-anchor="middle">one bit timer · readback · arbitration</text>
+          <text class="s" x="660" y="618" text-anchor="middle">error flags · TEC/REC · frame tail</text>
+          <path class="wn" d="M660 530V560" marker-start="url(#bn)" marker-end="url(#bn)"/><text class="xs ln" x="668" y="550">TX + RX in one bit grid</text>
+          <path class="wp" d="M790 595H990V484" marker-start="url(#bp)"/><text class="xs lp" x="890" y="587" text-anchor="middle">TXD / RXD</text>
+          <path class="wn" d="M530 595H90V390" marker-end="url(#bn)"/><text class="xs ln" x="330" y="587" text-anchor="middle">bus errors → JCRCBAD, STAT</text>
+
+          <text class="s" x="500" y="660" text-anchor="middle">STAT puts {frame sent, bit error, arbitration lost, line error, RX overflow,</text>
+          <text class="s" x="500" y="676" text-anchor="middle">timeout, CRC ok, parity error} into the ISR; the host reads the same bits in STATUS</text>
         </svg>
       </div>
-      <div class="legend"><span><i class="c"></i>control</span><span><i class="d"></i>data</span><span><i class="p"></i>pins</span><span><i class="n"></i>added: CRC unit, parity, timeout, line coder</span></div>
-      <figcaption>Each instruction takes one tick plus its delay field. A blocked <code>WAIT</code>, <code>PULL</code> or <code>PUSH</code> is re-checked every clock; if it stays blocked for <code>TIMEOUT</code> ticks it is abandoned and the PC jumps to <code>TIMEOUT_PC</code>. Every bit shifted out or in can feed the CRC unit and the parity bits, which is how the engine adds and checks Modbus CRC and parity by itself. With the line coder on, <code>CLKDIV</code> is the bit time, instructions run every clock, and <code>OUT</code>/<code>IN</code> move whole bytes through the coder, which adds and removes stuff bits without costing the program anything: that is how the engine runs low-speed USB.</figcaption>
+      <div class="legend"><span><i class="c"></i>control</span><span><i class="d"></i>data</span><span><i class="p"></i>pins</span><span><i class="n"></i>general protocol helpers: CRC, line coding, bit-sync, PAGE, FIFO rewind</span></div>
+      <figcaption>Each instruction takes one tick plus its delay field; the next instruction is prefetched from the SRAM, so a taken jump costs one clock. A blocked <code>WAIT</code>, <code>PULL</code> or <code>PUSH</code> is re-checked every clock; if it stays blocked for <code>TIMEOUT</code> ticks it is abandoned and the PC jumps to <code>TIMEOUT_PC</code>. Every bit shifted out or in can feed the CRC unit and the parity bits, which is how the engine adds and checks Modbus, USB, CAN, HDLC and Ethernet checksums by itself. With the line coder on, <code>CLKDIV</code> is the bit time and <code>OUT</code>/<code>IN</code> move whole bytes; the coder adds and removes stuff bits and Manchester half-bits, and recovers the receive clock, without costing the program anything. The bit-synchronous coder sends and receives in the same bit slots, which CAN arbitration and ACK need.</figcaption>
     </figure>
   </section>
 
@@ -370,59 +396,77 @@ tr.added td:first-child { color: var(--new); }
           <text class="lp" x="536" y="94" text-anchor="middle">DELAY · 4</text>
         </svg>
       </div>
-      <figcaption>Every instruction carries a 0 to 15 tick delay, so most protocol timing needs no separate wait instruction.</figcaption>
+      <figcaption>Every instruction carries a 0 to 15 tick delay, so most protocol timing needs no separate wait instruction. Jump targets are 6 bits, relative to <code>START_PC</code>; a <code>PAGE</code> prefix (inserted by the assembler) reaches any of the 256 words.</figcaption>
     </figure>
 
     <div class="tablewrap">
       <table>
         <thead><tr><th>OP</th><th>Mnemonic</th><th>Does</th></tr></thead>
         <tbody>
-          <tr><td>000</td><td>PIN p, act [, NOCRC]</td><td>Drive 0, drive 1, release, toggle, send the next OSR bit (OUT), open-drain send (OUTOD), or send the parity bit (OUTPAR); END ends a line-coder frame<span class="tag">OUTPAR, END, NOCRC new</span></td></tr>
-          <tr><td>001</td><td>IN p [, NOCRC]</td><td>Sample a pin into the ISR, the receive parity and the CRC (unless NOCRC)</td></tr>
+          <tr><td>000</td><td>PIN p, act [, NOCRC]</td><td>Drive 0, drive 1, release, toggle, send the next OSR bit (OUT), open-drain send (OUTOD), or send the parity bit (OUTPAR); END ends a line-coder frame</td></tr>
+          <tr><td>001</td><td>IN p [, NOCRC]</td><td>Sample a pin (or take a byte from the line coder) into the ISR, the receive parity and the CRC (unless NOCRC)</td></tr>
           <tr><td>010</td><td>WAIT p, cond</td><td>Wait for a pin or flag to be low, high, rising or falling; checked every clock, gives up after TIMEOUT ticks if set</td></tr>
           <tr><td>011</td><td>JMP cond, addr</td><td>Always, X-- ≠ 0, pin high, pin low, TX FIFO empty, TX FIFO has data, FLAG0, FLAG1</td></tr>
           <tr><td>100</td><td>SET X/OSR, n</td><td>Load the loop counter or the OSR</td></tr>
-          <tr><td>101</td><td>PULL / PUSH</td><td>TX FIFO to OSR, or ISR to RX FIFO; waits if empty or full</td></tr>
-          <tr><td>110</td><td>FLAG n, act</td><td>Set or clear one of this engine's 4 flags, or interrupt the host; action 3 is MOV between X, OSR and ISR, and with no destination the assembler's NOP<span class="tag">MOV new</span></td></tr>
-          <tr class="added"><td>111</td><td>CRCRST · OSRCRC · STAT · JCRCBAD · JEQ · JNE · JLINE</td><td>Restart the CRC; load a CRC byte (optionally inverted) into the OSR; ISR ← status; jump if the CRC is not ok; jump if ISR equals / differs from OSR; jump at the end of a line-coder frame. Sub-op 7 free<span class="tag">new</span></td></tr>
+          <tr><td>101</td><td>PULL / PUSH</td><td>TX FIFO to OSR, or ISR to RX FIFO, waiting if empty or full; PULL NOWAIT (empty gives 0xFF), MARK and REWIND resend a queued frame<span class="tag">NOWAIT, MARK, REWIND</span></td></tr>
+          <tr><td>110</td><td>FLAG n, act</td><td>Set or clear one of this engine's 4 flags, or interrupt the host; action 3 is MOV between X, OSR and ISR, and with no destination the assembler's NOP</td></tr>
+          <tr class="added"><td>111</td><td>CRCRST · OSRCRC · STAT · JCRCBAD · JEQ · JNE · JLINE · LINECTL / PAGE</td><td>Restart the CRC; load a CRC byte (any of 4, optionally inverted or left-aligned) into the OSR; ISR ← status; jump if the packet is bad (CRC or line error); jump if ISR equals / differs from OSR; jump at the end of a line-coder frame; sub-op 7: LINECTL (stuffing on/off, unit width, arbitration window, error now) or PAGE p (the next jump's page)<span class="tag">LINECTL, PAGE</span></td></tr>
         </tbody>
       </table>
     </div>
   </section>
 
   <section>
-    <h2>4 · Engine registers</h2>
-    <p>Each engine has 16 registers: engine 0 at 0x10–0x1F, engine 1 at 0x20–0x2F. All 16 slots except +7 are now in use.</p>
+    <h2>4 · Registers</h2>
+    <p>Each engine has 16 registers: engine 0 at 0x10–0x1F, engine 1 at 0x20–0x2F.</p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Slot</th><th>Register</th><th>Holds</th></tr></thead>
         <tbody>
-          <tr><td>+0, +1</td><td>CLKDIV</td><td>Tick = one clock every CLKDIV + 1 clocks</td></tr>
+          <tr><td>+0, +1</td><td>CLKDIV</td><td>Tick = one clock every CLKDIV + 1 clocks (with a line coder on: the bit time)</td></tr>
           <tr><td>+2</td><td>PIN_BASE</td><td>First pin this engine's programs use</td></tr>
           <tr><td>+3</td><td>JMP_PIN</td><td>Pin tested by JMP PIN_HI / PIN_LO</td></tr>
           <tr><td>+4</td><td>SHIFT</td><td>OSR and ISR bit order (LSB or MSB first)</td></tr>
-          <tr><td>+5</td><td>START_PC</td><td>The program's first word (0–127); all its jumps are relative to it</td></tr>
+          <tr><td>+5</td><td>START_PC</td><td>The program's first word in this engine's SRAM (0–255); its jumps are relative to it</td></tr>
           <tr><td>+6</td><td>FIFO data</td><td>Write: TX FIFO; read: RX FIFO</td></tr>
           <tr class="reserved"><td>+7</td><td>—</td><td>Free</td></tr>
-          <tr class="added"><td>+8</td><td>FLAG_BASE</td><td>First of the 8 flags this engine sees (reset: 0 for engine 0, 4 for engine 1)</td></tr>
-          <tr class="added"><td>+9, +A</td><td>CRC_POLY</td><td>Write: CRC polynomial, top term implied. Read: the CRC's current value (for CRCs sent inverted)</td></tr>
-          <tr class="added"><td>+B</td><td>CRC_CFG</td><td>Width − 1, initial value all ones, reversed output, fed by OUT bits, fed by IN bits</td></tr>
-          <tr class="added"><td>+C, +D</td><td>TIMEOUT</td><td>Ticks a blocked WAIT / PULL / PUSH may wait; 0 = forever</td></tr>
-          <tr class="added"><td>+E</td><td>LINE_CFG</td><td>TIMEOUT_PC (where a timeout jumps), no parity (8N2), odd parity</td></tr>
-          <tr class="added"><td>+F</td><td>STATUS</td><td>Read: parity error, CRC ok, timeout happened, RX overflow, line error. Write: restart the CRC, clear the timeout, overflow or line-error flag</td></tr>
+          <tr><td>+8</td><td>FLAG_BASE</td><td>First of the 8 flags this engine sees (reset: 0 for engine 0, 4 for engine 1)</td></tr>
+          <tr><td>+9, +A</td><td>CRC_POLY</td><td>Write: CRC polynomial bits 15..0, top term implied. Read: the CRC's current value</td></tr>
+          <tr><td>+B</td><td>CRC_CFG</td><td>Width − 1, initial value all ones, reversed output, fed by OUT bits, fed by IN bits</td></tr>
+          <tr><td>+C, +D</td><td>TIMEOUT</td><td>Ticks a blocked WAIT / PULL / PUSH may wait; 0 = forever</td></tr>
+          <tr><td>+E</td><td>LINE_CFG</td><td>TIMEOUT_PC (where a timeout jumps), no parity (8N2), odd parity</td></tr>
+          <tr><td>+F</td><td>STATUS</td><td>Read: parity error, CRC ok, timeout, RX overflow, line error, arbitration lost, bit error, frame sent. Write: restart the CRC or clear any of the sticky bits</td></tr>
         </tbody>
       </table>
     </div>
-    <p>A second page per engine (engine 0 at 0x30, engine 1 at 0x40) holds the line coder's settings. Global registers 0x0A–0x0E give the FIFO fill levels and a TX-only flush.</p>
+    <p>A second page per engine (engine 0 at 0x30, engine 1 at 0x40) holds the line coder, CAN and wide-CRC settings.</p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Slot</th><th>Register</th><th>Holds</th></tr></thead>
         <tbody>
-          <tr class="added"><td>page 2, +0</td><td>LINE</td><td>Line coder: mode (off, NRZ, NRZI), stuffing (none, after 6 ones, after 5 ones, after 5 equal bits), pair mode, byte transfers</td></tr>
-          <tr class="added"><td>page 2, +1</td><td>SYNC</td><td>Frame start pattern sent and hunted for (USB: 0x80)</td></tr>
-          <tr class="added"><td>page 2, +2, +3</td><td>CRC_GOOD</td><td>The CRC value that means ok (0, or USB's residual 0x800D)</td></tr>
-          <tr class="added"><td>0x0A–0x0D</td><td>RX_COUNT, TX_COUNT</td><td>Bytes in each engine's RX and TX FIFO; read RX FIFOs in bursts of at most RX_COUNT</td></tr>
-          <tr class="added"><td>0x0E</td><td>TX_FLUSH</td><td>Empty one engine's TX FIFO, leaving its RX FIFO alone</td></tr>
+          <tr class="added"><td>page 2, +0</td><td>LINE</td><td>Line coder: mode (off, NRZ, NRZI, Manchester), stuffing (none, after 6 ones, after 5 ones, after 5 equal bits), pair mode, byte transfers, flag-delimited frames, Manchester polarity</td></tr>
+          <tr class="added"><td>page 2, +1</td><td>SYNC</td><td>Frame start pattern sent and hunted for (USB 0x80, Ethernet 0xD5)</td></tr>
+          <tr class="added"><td>page 2, +2, +3</td><td>CRC_GOOD</td><td>The CRC value that means ok, bits 15..0 (0, or a residual such as USB's 0x800D)</td></tr>
+          <tr class="added"><td>page 2, +4</td><td>LINE2</td><td>Sample point, resync on falling edges only, receive on pin base + 1, bit-synchronous (CAN) mode, wait for bus idle, CAN frame follower</td></tr>
+          <tr class="added"><td>page 2, +5 – +7</td><td>CAN_TEC, CAN_REC, CAN_STATE</td><td>CAN error counters; error-passive and bus-off</td></tr>
+          <tr class="added"><td>page 2, +8 – +C</td><td>CRC_POLY_2/3, CRC_GOOD_2/3, CRC_CFG2</td><td>Bits 31..16 of the polynomial, the CRC value and CRC_GOOD, and the fifth width bit: CRCs of 17–32 bits (Ethernet's CRC-32)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Chip-wide registers.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Address</th><th>Register</th><th>Holds</th></tr></thead>
+        <tbody>
+          <tr><td>0x00</td><td>CTRL</td><td>Run, restart and flush each engine</td></tr>
+          <tr><td>0x01, 0x02</td><td>STATUS, IRQ</td><td>FIFO empty/full for both engines; pending interrupts (write 1 to clear)</td></tr>
+          <tr><td>0x03</td><td>PIN_OWN</td><td>Which engine owns each pin</td></tr>
+          <tr><td>0x04, 0x08, 0x09</td><td>FLAGS, FLAG_SET, FLAG_CLR</td><td>The 8 shared flags</td></tr>
+          <tr><td>0x05</td><td>PINS</td><td>Synchronized pin levels</td></tr>
+          <tr class="added"><td>0x06, 0x0F, 0x07</td><td>PM_ADDR, PM_ADDR_H, PM_DATA</td><td>Program loading: a byte pointer {engine, word, byte} and a streaming data port</td></tr>
+          <tr><td>0x0A–0x0D</td><td>RX_COUNT, TX_COUNT</td><td>Bytes in each engine's RX and TX FIFO</td></tr>
+          <tr><td>0x0E</td><td>TX_FLUSH</td><td>Empty one engine's TX FIFO, leaving its RX FIFO alone</td></tr>
+          <tr class="added"><td>0x50</td><td>HOSTCFG</td><td>Quad host mode; back to single lane by writing 0, or 8 SCK edges with CS_n high</td></tr>
         </tbody>
       </table>
     </div>
