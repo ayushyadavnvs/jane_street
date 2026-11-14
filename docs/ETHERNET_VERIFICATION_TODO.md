@@ -57,7 +57,9 @@ says which `verify/` targets must be extended for the new one.
 - **Spec:** `src/pbe_line.sv` header (Manchester paragraph), IEEE 802.3 clause 7.3.1.1 (the
   encoding), 14.3.1.2.1 and Figure 14-10 (TP_IDL), 14.3.1.3 (receiver jitter: the design was
   tuned to ±13.3 ns per edge; confirm the standard's figure, commonly quoted as 13.5 ns, and
-  whether it is per edge or per interval), D90.
+  whether it is per edge or per interval), D90. **Update (D101, BUG-151):** the verifier
+  confirmed ±13.5 ns per crossing; the receive loop was redesigned (delayed decision,
+  ISI-following threshold) and now passes the full envelope.
 - **To verify:**
   - Transmit: halves floor(period_m1/2)+1 and the rest, for odd and even periods; polarity
     (`LINE[7]`); bytes and bits, LSB/MSB first; the SYNC byte; the 3-bit-time high tail after
@@ -80,9 +82,10 @@ says which `verify/` targets must be extended for the new one.
     with LINE2[6] set a Manchester transmitter would never start. Untested; document or gate it.
   - A pulse shorter than half a clock (a_d == a_in != a_early) is not an edge.
   - `mcnt` saturates at the carrier-loss threshold; the bit timer is 24-bit signed: check
-    `CLKDIV` near 0xFFFF (16 x 65536 + 8 eighths must fit: it does, 21 bits).
+    `CLKDIV` near 0xFFFF (16 x 65536 + 8 eighths must fit: it does, 21 bits; D101's 20N
+    threshold and a pending edge's sum stay below 2^23 too).
   - Jitter tolerance was measured with independent uniform per-edge jitter (`tb_line` M7: error
-    free to ±0.8 clock, failures from ±0.9). Real 10BASE-T jitter is data dependent (ISI): a
+    free to ±0.8 clock, failures from ±0.9; with D101 error free to ±1.0 clock). Real 10BASE-T jitter is data dependent (ISI): a
     cable model (e.g. the 802.3 twisted-pair model) would be a better stimulus. Clock offset was
     tested to ±1 % (`tb_line`) and -0.5 % (`tb_eth`).
 - **Targets:** golden model (`LineModel` mode 3, `a_early`; `top_model.py` negedge samples);

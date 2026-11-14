@@ -165,7 +165,7 @@ class Harness:
                 if int(r.l_err.value) != e.line.err:
                     self.mismatch('diagnostic coder error '+str(dict(engine=i,model=vars(e.line),
                       config=e.config,rtl={k:str(getattr(r.u_line,k).value) for k in
-                       ('ts','tcnt','q_valid','q_end','tbits','tstuff','rs','rcnt','mcnt','m_thr','a_d','rbits','rx_valid','err')})))
+                       ('ts','tcnt','q_valid','q_end','tbits','tstuff','rs','rcnt','mcnt','m_t','p_v','a_d','rbits','rx_valid','err')})))
         # Catch silent divergences before a late visible symptom.
         if int(d.flags.value) != self.model.flags: self.mismatch('flags')
         if int(d.run.value) != self.model.run: self.mismatch('run')

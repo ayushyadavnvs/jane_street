@@ -432,7 +432,13 @@ class LineModel:
         self.rx_bits = []
         self.stuff_enabled = True
         self.tx_unit_stuff = True
-        self.mc_elapsed = 0
+        self.mc_elapsed = 0          # D101: eighths since the reference (RTL mcnt + 8)
+        self.mc_pending = False      # p_v, p_tau, p_force: the undecided edge E1
+        self.mc_p_tau = 0
+        self.mc_p_force = False
+        self.mc_b = 0                # m_b, m_gear: the after-boundary class mean (RTL: + 8N - 8)
+        self.mc_gear = 0
+        self.mc_t = 0                # m_t: the registered threshold
         self.mc_second = 0
         self.mc_tail_left = 0
 
@@ -465,6 +471,9 @@ class LineModel:
             self.__init__()
             return
         manchester = cfg & 3 == 3
+        # D101 registers that update every clock: T = 20N while hunting, else 16N + m_b
+        old_mc_t = self.mc_t
+        self.mc_t = 16 * (period_m1 + 1) + (4 * (period_m1 + 1) if self.hunting else self.mc_b)
         old_stuff_enabled = self.stuff_enabled
         if ctl and ctl_param & 16:
             if ctl_param & 2: self.stuff_enabled = True
@@ -556,12 +565,14 @@ class LineModel:
         se0 = pair and not a_in and not b_in
         if rx_take:
             self.rx_valid = False
+        if not manchester:   # the RTL holds its D101 loop reset outside Manchester
+            self._mc_reset(changed and (a_in if a_early is None else a_early) == a_in)
         if old_phase != 'idle':
             self.rx_phase = 'idle'
         elif manchester:
             self._manchester_receive(a_in, a_in if a_early is None else a_early, changed,
                                      period_m1, cfg >> 7, sync, width, in_msb_first,
-                                     old_rx_valid, rx_take)
+                                     old_rx_valid, rx_take, old_mc_t)
         elif self.rx_phase == 'idle':
             if se0:
                 self.rx_phase = 'se0'
@@ -625,30 +636,59 @@ class LineModel:
             self.rx_valid = False
 
     def _manchester_receive(self, level, early, changed, period_m1, polarity,
-                            sync, width, msb, old_valid, take):
-        """D90 edge loop in eighth clocks, without an HDL shift-register model.
+                            sync, width, msb, old_valid, take, threshold):
+        """D101 delayed-decision loop in eighth clocks (the RTL's cycle contract).
 
-        elapsed is the reference age BEFORE the next rising-edge increment.
-        An edge present at the preceding falling sample is four eighths earlier.
-        A first edge establishes phase and is deliberately not delivered.
+        mc_elapsed is the time since the reference at this clock edge (the RTL's mcnt
+        holds it minus 8, so its constants are shifts of CLKDIV). An edge
+        whose new level was already at the preceding falling sample came four eighths
+        earlier. The first edge of a frame is the reference and is not delivered. The
+        edge after a mid-bit transition is pending (E1) until the sum of its time and
+        the current time reaches the threshold (E1 was mid-bit) or another edge comes
+        first (E1 was a boundary; that edge is mid-bit). threshold is the registered T.
         """
-        offset = 4 if early == level else 0
-        limit = 16 * period_m1 + 8
-        old_age = self.mc_elapsed
-        self.mc_elapsed = old_age + 8 if old_age < limit else old_age
+        n = period_m1 + 1
+        early_edge = changed and early == level
+        mcnt = self.mc_elapsed
         if self.rx_phase == 'idle':
-            self.mc_elapsed = 0
+            self._mc_reset(early_edge)
             if changed:
                 self.rx_phase = 'data'
-                self.mc_elapsed = 0
                 self.hunting = bool(sync)
                 self.sync_window.clear()
                 self.rx_bits.clear()
             return
-        if changed and old_age - offset >= 6 * period_m1:
-            error = old_age - offset - 8 * period_m1
-            self.mc_elapsed = old_age - 8 * period_m1 - (error // 4)
-            bit = level ^ polarity
+        tau = mcnt - (4 if early_edge else 0)
+        resolved = self.mc_pending and (self.mc_p_force or self.mc_p_tau + tau >= threshold)
+        junk = resolved and not self.mc_p_force and self.mc_p_tau < 5 * n   # a lone early edge
+        fire = resolved and not junk
+        last = (1 - level if changed else level) ^ polarity      # a_d: E1's level after it
+        pairs = [(sync >> i) & 3 for i in range(7)]
+        repeat_ok = (3 in pairs) if last else (0 in pairs)
+        once = self.hunting and not repeat_ok
+        b_mid = not resolved and changed and self.mc_pending
+        a_mid = not resolved and changed and not self.mc_pending and once
+        lost = not fire and not self.mc_pending and mcnt >= 16 * n
+        err = (self.mc_p_tau if fire else tau) - 8 * n
+        corr = (err + 4) >> 3
+        if fire or b_mid or a_mid:
+            self.mc_elapsed = mcnt + 8 - 8 * n - corr
+        elif not lost:
+            self.mc_elapsed = mcnt + 8
+        if fire:
+            self.mc_pending, self.mc_p_tau, self.mc_p_force = changed, tau - 8 * n - corr, once
+        elif junk:
+            self.mc_pending, self.mc_p_tau, self.mc_p_force = changed, tau, False
+        elif b_mid:
+            self.mc_pending = False
+        elif changed and not a_mid:
+            self.mc_pending, self.mc_p_tau, self.mc_p_force = True, tau, False
+        if b_mid:
+            shift = self.mc_gear + 1
+            self.mc_b += (err - self.mc_b + (1 << (shift - 1))) >> shift
+            self.mc_gear = min(self.mc_gear + 1, 3)
+        if fire or b_mid or a_mid:
+            bit = last if fire else level ^ polarity
             if self.hunting:
                 self.sync_window.append(bit)
                 window = [0]*(8-len(self.sync_window)) + list(self.sync_window)
@@ -660,9 +700,15 @@ class LineModel:
                     self.rx_bits.clear()
                     self.rx_valid = True
                     if old_valid and not take: self.err = True
-        elif old_age >= limit:
+        elif lost:
             self.frame_end = not self.hunting
             self.rx_phase = 'idle'
+
+    def _mc_reset(self, early_edge=False):
+        """The receiver's D101 state outside a Manchester frame (rs != R_RUN or not Manchester)."""
+        self.mc_elapsed = 12 if early_edge else 8
+        self.mc_pending, self.mc_p_tau, self.mc_p_force = False, 0, False
+        self.mc_b, self.mc_gear = 0, 0
 
 
 

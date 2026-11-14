@@ -60,16 +60,22 @@ class EthernetModelContracts(unittest.TestCase):
             self.assertEqual(m.osr,(0xcbf43926 >> (8*b))&255)
 
     def test_first_manchester_reference_and_carrier_deadline(self):
+        # D101 contract (D90's single-edge version changed with BUG-151). Bit mode, 4 clocks
+        # a bit. The first edge (clock 6) is the reference and is not delivered; the edge one
+        # bit later (clock 10) is the mid-bit transition, decided when no further edge comes
+        # within the threshold and delivered at clock 11. A lone edge half a bit after it
+        # (clock 12) waits as a candidate and is dropped, delivering nothing: it is under 5/8
+        # bit after the reference. The carrier ends 2 bits after the reference: clock 18.
         m=LineModel()
-        q=dict(cfg=0xb3,period_m1=3,in_msb_first=1,out_msb_first=1)
+        q=dict(cfg=0x93,period_m1=3,in_msb_first=1,out_msb_first=1)
         m.step(clear=True,**q)
-        # The first early edge establishes the rising-clock reference. A later
-        # short interval is a boundary, not a new mid-bit; carrier ends at 13.
-        sequence=[(0,0)]*6+[(1,0),(1,1),(0,0)]+[(0,0)]*5
-        ends=[]
+        sequence=[(1,1)]*6+[(0,0)]*4+[(1,1)]*2+[(0,0)]*12
+        ends=[];bits=[]
         for i,(level,early) in enumerate(sequence):
-            m.step(a_in=level,a_early=early,b_in=1-level,**q)
+            m.step(a_in=level,a_early=early,b_in=1-level,rx_take=1,**q)
+            if m.rx_valid: bits.append((i,m.rx_data))
             if m.frame_end: ends.append(i)
-        self.assertEqual(ends,[13])
+        self.assertEqual(bits,[(11,0)])
+        self.assertEqual(ends,[18])
 
 if __name__=='__main__':unittest.main()

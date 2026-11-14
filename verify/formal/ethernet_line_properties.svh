@@ -36,7 +36,11 @@
 
 `ifdef ETH_TIMER
   always @(posedge clk) if(e_past && rst_n) begin
-    assert($signed(mcnt)>=-24'sd524288 && $signed(mcnt)<=24'sd1048575);
-    assert(!m_end[23] && !m_2n[23] && !m_thr[23]);
+    // D101: 7/8 of each error stays, so mcnt > -56 x CLKDIV; up to ~96 x CLKDIV with a pending edge
+    assert($signed(mcnt)>=-24'sd3800000 && $signed(mcnt)<=24'sd6400000);
+    // p_tau is mcnt (or 4 or 12 less); m_b' averages mcnt values: the same range (induction)
+    assert($signed(p_tau)>=-24'sd3800016 && $signed(p_tau)<=24'sd6400000);
+    assert($signed(m_b)>=-24'sd3800000 && $signed(m_b)<=24'sd6400000);
+    assert(!m_8p[23] && !m_16p[23] && !m_end[23] && !m_5n[23]);
   end
 `endif

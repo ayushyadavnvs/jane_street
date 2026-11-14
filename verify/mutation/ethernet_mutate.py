@@ -9,8 +9,8 @@ MUTANTS=[
  ('E01','quad nibble order','src/pbe_host_spi.sv','{rx_sh[3:0], mosi_hi, mosi}','{mosi_hi, mosi, rx_sh[3:0]}','directed'),
  ('E02','quad latch while selected','src/pbe_host_spi.sv','if (cs_n) begin\n        quad     <= quad_req;','quad <= quad_req;\n      if (cs_n) begin','directed'),
  ('E03','Manchester polarity','src/pbe_line.sv','minv  = cfg[7]','minv  = ~cfg[7]','line'),
- ('E04','Manchester lock threshold','src/pbe_line.sv',"{6'b0, period_m1, 2'b0} + {7'b0, period_m1, 1'b0}","{6'b0, period_m1, 2'b0} + {7'b0, period_m1, 1'b0} + {8'b0, period_m1}",'line'),
- ('E05','Manchester early offset','src/pbe_line.sv',"m_tau  = mcnt - (m_early ? 24'sd4 : 24'sd0)","m_tau  = mcnt - (m_early ? 24'sd0 : 24'sd0)",'line'),
+ ('E04','Manchester decision threshold (D101: no ISI following)','src/pbe_line.sv',"m_t <= hunting ? m_16p + {6'b0, period_m1, 2'b00} + 24'd4 : m_8p + m_b;","m_t <= hunting ? m_16p + {6'b0, period_m1, 2'b00} + 24'd4 : m_16p;",'jitter'),
+ ('E05','Manchester early offset (D101: an early pending edge)','src/pbe_line.sv',"m_t4    = mcnt - 24'sd4;","m_t4    = mcnt - 24'sd0;",'line'),
  ('E06','wide CRC top decode','src/pbe_crc.sv',"32'h0000_0001 << width_m1","32'h0000_0001 << width_m1[3:0]",'crc'),
  ('E07','CRC reflection','src/pbe_crc.sv','out_rev ? rev : crc','out_rev ? crc : crc','crc'),
  ('E08','queued stuffing tag','src/pbe_line.sv','q_ns    <= ns_mode;','q_ns    <= !ns_mode;','line'),
@@ -43,6 +43,7 @@ def main():
    if check=='directed':cmd=[python,str(scratch/'verify/ethernet/run_directed.py')]
    elif check=='line_corners':cmd=[python,str(scratch/'verify/ethernet/run_line_corners.py')]
    elif check=='line':cmd=['make','diff-line',f'PYTHON={python}']
+   elif check=='jitter':cmd=[python,str(scratch/'verify/ethernet/run_wire.py'),'--test-module','test_jitter_reproducer']  # BUG-151 isi frame
    elif check=='program_corner':cmd=[python,str(scratch/'verify/ethernet/run_wire.py'),'--sim','verilator','--test-module','test_program_corners']
    elif check=='crc':cmd=[python,str(scratch/'verify/vectors/crc/run.py'),'--wide','--random-cases','1']
    else:

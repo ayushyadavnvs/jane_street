@@ -2907,7 +2907,9 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
   zero are left to the external driver's network and are for the verifier to check against
   the template (`docs/ETHERNET_VERIFICATION_TODO.md`). A transmit underrun holds the level (no
   transitions: the far end sees the carrier end) and pulses the line error, as in other modes.
-- **Receive, clock recovery:** a bit timer holds the expected mid-bit point; a transition at
+- **Receive, clock recovery — Changed by D101** (10BASE-T: the verifier's wire stress at the
+  full ±13.5 ns per-crossing limit, BUG-151; the single-edge threshold below cannot meet it).
+  As first built: a bit timer holds the expected mid-bit point; a transition at
   least 3/4 of a bit (+ 1/4 clock) after it is the next mid-bit transition, and the level after
   it is the bit; earlier transitions (bit boundaries, only between equal bits) are skipped.
   - **The first transition** after idle starts a frame and is the reference; its bit is not
@@ -3351,3 +3353,149 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
   is removed from the normal extended recipe after gap closure. The quad formal observer
   explicitly checks Q3..Q1 as well as Q0; full internal word equality alone is not substituted
   for checking the externally specified lane mapping (BUG-160).
+
+## D101. Manchester receive: decide each edge from the next one, with a threshold that follows inter-symbol interference (BUG-151)
+
+- **Why:** the verifier's independent wire stress (D99) drives every crossing exactly at the
+  802.3 limit, ±13.5 ns from its ideal position (clause 14.3.1.3.1), at ±100 ppm. D90's loop
+  passed 6 of the 12 required cases. It failed both data-dependent ("isi": a crossing after a
+  short interval is late, after a long one early) and the fast-source alternating cases
+  (BUG-151). This decision **changes D90's receive clock recovery**; its transmit side,
+  both-edge sampling, carrier rules and every other mode are unchanged. The cause is
+  10BASE-T's jitter limit.
+- **Margins on paper (D90).** Times are relative to the reference (the learned mid-bit
+  position) at 60 MHz. Sampling on both clock edges times an edge to 8.33 ns, so an edge is
+  seen 0 to 8.33 ns late; the reference averages, so relative to it an edge is within ±4.2 ns.
+  After a mid-bit transition the next edge is a boundary (nominal 50 ns) or the next mid-bit
+  transition (100 ns), and D90 decides on that one edge against a threshold at 75 ns.
+  - With an unbiased reference: boundaries at most 50 + 13.5 + 4.2 = 67.7 ns, mid-bit
+    transitions at least 100 - 13.5 - 4.2 = 82.3 ns. That leaves 7.3 ns either side of the
+    threshold.
+  - *Alternating* extremes (consecutive crossings ±13.5 ns): the loop at gain 1/4 ripples by
+    13.5 x 1/7 ≈ 1.9 ns, so a mid-bit transition can be seen at 80.4 ns.
+  - *isi*: the preamble (all mid-bit transitions after mid-bit ones) is uniformly 13.5 ns
+    early, so the reference learns that position; data boundaries are 13.5 ns late, which is
+    27 ns relative to it: 77 + 4.2 = 81.2 ns.
+  - So a single threshold must sit above 81.2 ns and below 80.4 ns. No threshold works, which
+    matches what was measured. The deficit (about 1 ns) is less than one clock edge's
+    resolution, so retuning the gain or the threshold cannot fix it. The decision itself has
+    to use more information.
+- **Chosen:**
+  - **Wait for the next edge.** The edge E1 after a mid-bit transition stays pending. If
+    another edge E2 comes while τ1 + τ2 < T, E1 was a boundary and E2 is the mid-bit
+    transition. Once τ1 + (time now) reaches T, E1 was the mid-bit transition, and E2, if
+    any, is the next pending edge.
+    - Nominal sums: a boundary then mid-bit is 50 + 100 = 150 ns; a mid-bit then the next
+      edge is 100 + 150 = 250 ns (or 300 ns).
+    - E1 is usually resolved at the time T - τ1, before E2, so the bit is late by at most
+      about a bit. A boundary's E2 is the mid-bit transition itself.
+  - **T = 200 ns + m_b (16N + m_b in eighths).** m_b is the mean phase error of the mid-bit
+    transitions that follow a boundary.
+    - With isi, those are late by the interference offset δ against the ones that follow a
+      mid-bit transition; a boundary pair's sum moves by about 2δ and a mid-bit pair's by
+      about δ, so the threshold moves with m_b ≈ δ.
+    - m_b is learnt from the start of each frame with gains 1/2, 1/4, 1/8, then 1/16.
+    - The reference itself moves 1/8 of each mid-bit transition's error (D90: 1/4). The
+      threshold now carries the bias, and the lower gain averages more.
+  - **While hunting for SYNC:** T = 250 ns (20N), and a repeated bit that SYNC never repeats
+    is impossible, so the edge after it is taken as a mid-bit transition at once.
+    - For Ethernet (0xD5 never repeats a 0), the edge after every preamble 0 is decided
+      without a threshold. The only decision with E2 a boundary before the SFD's end is the
+      SFD's own "11".
+    - The rule is derived from the SYNC register, not from Ethernet; with SYNC = 0 nothing
+      is hunted.
+  - **A lone early edge is dropped.** A pending edge that came under 5/8 bit (5N) after the
+    reference, with nothing after it in time, delivers no bit and leaves the reference alone.
+    - Examples: the rise into TP_IDL after a final 0, or a stray edge.
+    - Within the jitter limit no mid-bit transition is that early: about 35 eighths or more at
+      6 clocks a bit, against 5N = 30.
+    - D90 skipped such edges with its single threshold. Without this rule, bit mode would get
+      an extra bit after frames that end in a 0, and the carrier end would come later
+      (BUG-163).
+  - Carrier end, first-edge lock, both-edge timing and SYNC are unchanged (2 bit times without
+    a mid-bit transition or a pending edge end the carrier).
+- **Margins on paper (D101), the same quantization:**
+
+  | Case | Boundary pair sum | Mid-bit pair sum | T | Margin |
+  |---|---|---|---|---|
+  | Unbiased, extremes | ≤ 150 + 27 + 8.3 = 185.3 | ≥ 250 - 27 - 8.3 = 214.7 | 200 | ±14.7 ns of sum |
+  | Alternating | 150 ± 3.8 (E1 and E2 have opposite jitter and cancel) | 250 ± 3.8 | 200 | ≈ 46 ns |
+  | isi, reference on the preamble | ≤ 204 + 8.3 = 212.3 | ≥ 277 | ≈ 227 (m_b ≈ δ = 27) | 15 / 50 ns |
+  | isi, reference settled between classes | ≤ 185.3 | ≥ 250 | ≈ 213.5 | 28 / 36 ns |
+  | SFD (hunting) | isi ≤ 212.3 | after a 1: ≥ 265 | 250 | 38 / 15 ns |
+
+  - The sum doubles the separation of the hypotheses and adds two edges' jitter. Against
+    independent worst-case extremes it gives the same per-edge margin as a single edge with
+    a perfect reference.
+  - What it adds is robustness to the two structured cases that broke D90. Alternating
+    jitter cancels within a pair, and the data-dependent offset is measured and followed.
+  - Two independent uniform crossings reach their extremes together far more rarely than one.
+- **Measured** (model in eighths, the verifier's generator, 16 clock phases, 256-byte frames,
+  both seeds):
+  - All 12 required cases pass at all 16 phases (192/192). The worst data decision is 3
+    eighths (6.3 ns) from the threshold on the boundary side and 1 eighth on the mid-bit side.
+    The hunting decisions are 15 or more eighths away.
+  - The whole required matrix also passes at ±16 ns per crossing (192/192), 186/192 at
+    ±17 ns, 158/192 at ±18 ns.
+  - D90 under the same model: 3 of 12 at all phases.
+  - Every phase of the 60-byte minimum frame and of ±1 % / ±0.1 % 1514-byte frames passes.
+- **Alternatives tried** (the same model):
+  - *Retuning D90's threshold and gain:* at most 8 of 12 at one phase; the paper margin says
+    it cannot close.
+  - *Class-balancing the reference with a single-edge decision:* fixes isi, breaks uniform
+    and alternating, because the balance estimate's noise lands on a margin that is already
+    near zero.
+  - *Delayed decision with a fixed threshold:* 180/192. All the failures are isi at the SFD
+    and the first data boundaries, before anything learns δ.
+  - *A first m_b gain of 1:* noisier, 140-190 depending on the other gains.
+  - *m_b's final gain 1/8 instead of 1/16:* the same 192/192 at 13.5 ns but only to ±16 ns,
+    with less margin.
+  - *Including the mean of the other class:* no gain.
+- **Timing structure** (BUG-162): the first version had the pin's edge feeding a chain of
+  about seven adders and measured 9.61 ns. The final version keeps three properties.
+  - `mcnt` and `p_tau` are kept 8 eighths low, as in D90, so 8N - 8, 16N - 8 and 16N - 16
+    are shifts of CLKDIV, and m_b is stored with 8N - 8 added.
+  - Every arithmetic result is computed from registers for both possible edge times (on the
+    clock or half a clock early): the next `mcnt`, the pending time and the new m_b. The pins
+    only select among them.
+  - Each threshold compare is one three-operand sum (p_tau + mcnt - T); its sign is the
+    result. Rounded shifts become the next adder's carry.
+  - The SYNC compare is done for both possible bits (E1's level or the pin's) and selected
+    after.
+- **Cost** (`make synth` / `make timing`, the same tools on both trees):
+
+  | | Before (D90) | After (D101) |
+  |---|---|---|
+  | Logic path | 4.475 ns | 4.00 ns |
+  | Chip area | 235,563 µm² | 277,617 µm² (+42,054, +17.9 %; about 28 % of the 8x4 tiles) |
+
+  - Per engine: the pending edge (a 24-bit time and two flags), m_b (24 bits) with a 2-bit
+    gear, a registered 24-bit threshold, a registered 5N, and the duplicated
+    (early / on-time) adders. D90's registered 6N threshold is gone.
+  - The owner's reference figure for the logic path was 4.62 ns. Both trees were measured
+    here, and the after figure is below both.
+- **Contract change:** the golden model's Manchester receive (`verify/golden-model/model/
+  pbe_model.py`) now mirrors D101 cycle for cycle.
+  - Bits are delivered when E1 resolves, up to about one bit later than D90.
+  - `mc_elapsed` is the true time since the reference; the RTL's `mcnt` is it minus 8.
+  - The model contract test `test_first_manchester_reference_and_carrier_deadline` now states
+    D101's contract with an in-spec sequence: the first edge is the reference, the mid-bit
+    edge is delivered, a lone edge half a bit later is dropped, and the carrier ends 2 bits
+    after the reference. D90's version drove a "mid-bit" edge 0.6 bit late.
+  - The 240-configuration line differential passes against the RTL.
+- **Tests:**
+  - `tb_line` M4-M7: M7's jitter sweep now decodes up to ±1.0 clock (±16.7 ns); D90 reached
+    ±0.8 clock.
+  - `make stress-ethernet` (`receive_jitter`): all 12 required cases. Beyond the limit:
+    14 and 15 ns pass in all three patterns; 18 ns passes uniform only; 20 ns fails.
+  - The ±0.1 % / ±1 % 1514-byte cases pass.
+  - `tb_eth` passes, and so does the 240-configuration line differential (192241 clocks,
+    model = RTL).
+  - Mutants: E05 (early offset) is caught by the differential; E04 (threshold ignoring m_b) is
+    caught by the 60-byte isi reproducer (BUG-164).
+  - The bounded Manchester round trip (`ethernet.sby` manchester_p0/p1) was run with
+    yosys-smtbmc and z3, because SymbiYosys is not installed here.
+    - Polarity 1: PASSED to depth 260.
+    - Polarity 0: no failure through step 235, where the 7000 s limit stopped it; not a full
+      pass.
+  - The timer-range task's 8-step base case passes; its induction is open (BUG-165).

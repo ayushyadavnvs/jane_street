@@ -3701,7 +3701,7 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Regression:** the unrestricted property must still produce an assertion counterexample;
   the restricted and modern comparisons are separate checks. Preserve pilot timeout receipts.
 
-## BUG-151 — Manchester recovery does not meet the full tested ±13.5 ns edge envelope (RTL, open)
+## BUG-151 — Manchester recovery does not meet the full tested ±13.5 ns edge envelope (RTL, fixed by D101)
 
 - **Before:** the D90 recovery loop accepts edges using `m_tau >= m_thr`, with threshold
   `6*period_m1` eighth clocks, early correction four eighths and loop gain one quarter.
@@ -3721,6 +3721,60 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   nonzero for required-envelope failures. Do not call this Ethernet compliance or a pass.
 - **Regression:** `make stress-ethernet` (`receive_jitter`); ordinary no-jitter vectors and
   the model differential can pass while this independent timing requirement fails.
+- **Cause (D101):** D90 decides each edge alone against a threshold 3/4 bit after the
+  reference. On paper, alternating extremes put a mid-bit transition at 80.4 ns, and isi puts
+  a boundary at 81.2 ns relative to a reference that learned the early preamble. No threshold
+  separates them at 8.33 ns resolution, so no retune could fix it.
+- **Fix (RTL, D101):** each edge after a mid-bit transition waits for the next one. The sum of
+  the two times is compared with T = 16N + m_b, where m_b is the learnt mean error of
+  mid-bit transitions after a boundary. While hunting, T = 20N, and repeats that SYNC never
+  has are impossible.
+  - Code before (`src/pbe_line.sv`):
+    ```systemverilog
+    wire               m_mid  = m_edge && m_tau >= $signed(m_thr);   // m_thr = 6 period_m1
+    wire               m_lost = mcnt >= $signed(m_end);
+    wire signed [23:0] m_err  = m_tau - $signed(m_2n);
+    ...
+    else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);
+    ```
+  - Code after (the final, timing-restructured form: BUG-162):
+    ```systemverilog
+    wire signed [24:0] m_d0   = {p_tau[23], p_tau} + {mcnt[23], mcnt} - {m_t[23], m_t};
+    wire               m_res  = p_v && (p_force || (m_early ? m_c4 : m_c0));  // E1 resolved
+    wire               m_junk = m_res && !p_force && p_tau < $signed(m_5n);  // lone early edge
+    wire               m_fire = m_res && !m_junk;                // E1 was mid-bit
+    wire               m_once = hunting && !(m_lastb ? m_rep1 : m_rep0);  // no repeat possible
+    wire               m_bmid = !m_res && m_edge && p_v;         // E1 was a boundary: a mid
+    wire               m_amid = !m_res && m_edge && !p_v && m_once;
+    wire               m_mid  = m_fire || m_bmid || m_amid;      // a bit is delivered
+    wire signed [23:0] m_next = m_fire ? m_np : m_early ? m_n4 : m_n0;  // reference moves err/8
+    ...
+    m_t <= hunting ? m_16p + {6'b0, period_m1, 2'b00} + 24'd4 : m_8p + m_b;  // T - 16
+    if (m_mid) mcnt <= m_next;
+    if (m_bmid) m_b <= m_early ? m_b4 : m_b0;   // gains 1/2, 1/4, 1/8, 1/16
+    ```
+- **Test, fails before and passes after:**
+  - `make stress-ethernet` (run here under Icarus: `run_wire.py --stress`; the local Verilator
+    5.020 lacks cocotb 2's `--output-groups`).
+    - Before: `receive_jitter` FAIL. Required cases: uniform 4/4, alternating 2/4 (+100 ppm
+      fails), isi 0/4; 6/12.
+    - After: 12/12 and TESTS=4 PASS=4.
+  - Beyond the limit (+100 ppm, seed 0x8023):
+
+    | Jitter | Before (uniform / alternating / isi) | After (uniform / alternating / isi) |
+    |---|---|---|
+    | 14 ns | pass / FAIL / FAIL | pass / pass / pass |
+    | 15 ns | pass / FAIL / FAIL | pass / pass / pass |
+    | 18 ns | FAIL / FAIL / FAIL | pass / FAIL / FAIL |
+    | 20 ns | FAIL / FAIL / FAIL | FAIL / FAIL / FAIL |
+
+  - ±0.1 % and ±1 % 1514-byte frames pass before and after.
+  - `test_jitter_reproducer` (60-byte frame, isi, -100 ppm): before 30 bytes, status 0; after
+    PASS.
+  - `tb_line` M7: before ±0.8 clock, after ±1.0 clock (±16.7 ns).
+  - Logic path 4.475 → 4.00 ns; area 235,563 → 277,617 µm² (D101).
+  - The golden model's Manchester receive follows D101. The 240-configuration line
+    differential (`PBE_LINE_ETHERNET=1 check_line_model.py`) passes: 192241 clocks.
 
 ## BUG-152 — draft pin-vector expectations contradicted documented host records (test)
 
@@ -3843,3 +3897,93 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **Regression:** the strict summarizer passes the actual 219/219 data after directed
   closure. The Ethernet formal block passes all 13 jobs with all four read lanes asserted; retain
   the earlier, narrower observer receipts separately. No DUT assumption or RTL repair is added.
+
+## BUG-161 — D101 restructure: a logical shift where an arithmetic one was meant (RTL, found before commit)
+
+- **Before:**
+  ```systemverilog
+  wire signed [23:0] m_np = m_e0 - (m_ep >>> 3) - {23'b0, m_ep[2]};
+  ```
+  The unsigned concatenation makes the whole expression unsigned in Verilog, so `>>>`
+  becomes a logical shift. A negative phase error then moved the reference by about 2^21
+  eighths.
+- **Failure:** `tb_line` M4/M7 decoded nothing (M7 "up to ±0.00 clock"). The 240-configuration
+  line differential failed at cycle 4830: the model ended the carrier and the RTL did not.
+- **After:** the shifts get their own signed wires:
+  ```systemverilog
+  wire signed [23:0] m_ep3 = m_ep >>> 3;
+  wire signed [23:0] m_np  = m_e0 - m_ep3 - {23'b0, m_ep[2]};
+  ```
+- **Regression:** `tb_line` (M7 ±1.0 clock) and `PBE_LINE_ETHERNET=1 check_line_model.py`
+  (240 configurations) pass.
+
+## BUG-162 — the first D101 receiver doubled the logic path (RTL timing, found before commit)
+
+- **Before:** the pin's edge selected an adder input (`m_tau = mcnt - (m_early ? 4 : 0)`),
+  and the result fed a sum, a compare, the decision, an error mux, the 1/8 correction and the
+  next-state adders in series. N = period_m1 + 1 also needed an adder before every
+  constant.
+- **Failure:** `make timing`: 9.61 ns (D90: 4.475 ns), start point `pin_base[0]`.
+- **After** (D101's timing structure):
+  - offset counters, so the constants are shifts of CLKDIV;
+  - every candidate computed from registers for both edge times, with the pins only
+    selecting;
+  - three-operand compares;
+  - rounding folded into carries;
+  - the SYNC compare done for both bits.
+  - Intermediate steps measured 5.62, 5.74, 5.49, 4.79, 4.62 and 4.79 ns; the final is
+    4.00 ns.
+- **Regression:** `make timing` ≤ the D90 figure; the line differential shows the restructure
+  is cycle-identical to the model.
+
+## BUG-163 — a lone edge after the last mid-bit transition was delivered as a bit (RTL/model contract)
+
+- **Before:** in the first D101 version, every pending edge that was not followed in time was
+  taken as a mid-bit transition.
+- **Failure:** `make test` (golden model unit tests):
+  `test_first_manchester_reference_and_carrier_deadline` expected the carrier end at
+  clock 13 and saw none. The model's lone half-bit edge became a bit, and the deadline moved
+  2 bits later.
+  - In a frame that ends in a 0, the rise into TP_IDL is such an edge. Bit mode (DALI)
+    would get an extra bit; D90 skipped it.
+- **After:** a pending edge under 5/8 bit after the reference that resolves with nothing after
+  it is dropped (no bit, no reference change):
+  ```systemverilog
+  wire m_junk = m_res && !p_force && p_tau < $signed(m_5n);
+  ```
+  The contract test was rewritten for D101 with an in-spec sequence. D90's version drove a
+  "mid-bit" edge 0.6 bit late, outside the jitter the receiver is specified for. The new
+  test checks: one bit delivered, the lone edge dropped, the carrier end at clock 18.
+- **Regression:** `make test` (model unit tests 34/34), the line differential, `tb_line` M5
+  (link pulses and a stray edge), and the stress suite.
+
+## BUG-164 — the random line differential cannot see the ISI-following threshold (test gap)
+
+- **Before:** mutants E04 and E05 were anchored on D90 source text, so the runner would have
+  refused them. Re-anchored to D101, E04 (`m_t <= ... : m_8p + m_b` changed to `... : m_16p`,
+  a threshold that ignores m_b) was checked by the 240-configuration line differential.
+- **Failure:** `ethernet_mutate.py --only E04 E05`: E05 (early offset) caught, **E04 survived**.
+  The random stimulus rarely builds up m_b and then makes a decision that depends on it.
+- **After:** E04 is checked by `test_jitter_reproducer` (the verifier's 60-byte isi frame at
+  ±13.5 ns), a new check kind `jitter` in `verify/mutation/ethernet_mutate.py`.
+- **Regression:** `ethernet_mutate.py --only E04` → caught (`('BUG-151', [(64, 0)])`: the frame
+  arrives with a bad FCS). E05 → caught by the line differential at cycle 8236.
+
+## BUG-165 — the Manchester timer-range proof no longer closes by induction under D101 (formal, open)
+
+- **Before:** `ethernet.sby` task `manchester_timer` (`ETH_TIMER`) asserted D90's
+  `mcnt` range [-524288, 1048575] and named D90's constants `m_end`, `m_2n`, `m_thr`.
+- **Failure:** under D101 the names no longer exist. With CLKDIV near 0xE000 and an edge just
+  after the reference, the base case also finds `mcnt` = -752666 below D90's bound, a real
+  D101 value. Each mid-bit transition keeps 7/8 of a negative error, so the fixed point is
+  about -56 x CLKDIV.
+- **After:** the property names D101's constants (`m_8p`, `m_16p`, `m_end`, `m_5n`). It bounds
+  `mcnt`, `p_tau` and `m_b` to [-3.8M, 6.4M]: -56 x 65535 and about 96 x 65535 with a pending
+  edge, both inside the 24-bit signed range.
+  - The 8-step base case passes (yosys-smtbmc with z3; SymbiYosys is not installed here).
+  - **Induction fails:** unconstrained induction states with `mcnt` and `m_b` at opposite
+    ends make `mcnt - m_b` overflow. Closing it needs a tighter joint invariant (m_b within
+    a few N of the reachable `mcnt` range). Left open for the verifier; the range argument
+    is on paper in D101.
+- **Regression:** `yosys-smtbmc -t 8` on the `ETH_TIMER` model: PASSED; `-i -t 8`: FAILED
+  (open).
