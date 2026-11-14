@@ -27,6 +27,7 @@
 //      active, from 17 passive (checked on the chip's TXD), bus-off when TEC passes 255 (no
 //      more drive), recovery after 128 x 11 recessive bits, then the frame goes out.
 //   7. Engines 0 and 1 as two nodes: frames both ways and arbitration between them.
+//   8. The host clears STATUS bits 5-7 through the STATUS write bits (D102's coverage items).
 module tb_can;
   localparam real CLK_NS = 16.6672;   // 60 MHz
   localparam int HOST_HALF = 3;
@@ -677,6 +678,69 @@ module tb_can;
     $display("7: extended (CAN 2.0B) frames and r0 recessive: received passively, ACKed, no error frames; standard 0x123 beats extended 0x123");
   endtask
 
+  // 8. The host clears STATUS bits 5-7 (arbitration lost, bit error, frame sent) through the
+  // STATUS write bits 4-6 (COVERAGE.md: the host-clear bodies in pbe_engine were reachable but
+  // never run, because can_node's CRCRST at idle clears them first). Engine 0's CRCRST (word 1)
+  // is patched to a NOP, so each bit stays latched until the host clears it; the engine is
+  // stopped before a latched bit could make it retransmit forever.
+  task automatic st_clear(input logic [7:0] wbits, input int bitn, input string what);
+    logic [7:0] st, st2;
+    reg_read(7'h1F, st);
+    check(st[bitn], $sformatf("host clear: %s: STATUS %02x, bit %0d not set", what, st, bitn));
+    reg_write(7'h1F, wbits);
+    reg_read(7'h1F, st2);
+    check(!st2[bitn], $sformatf("host clear: %s: STATUS %02x after writing %02x", what, st2, wbits));
+    st[bitn] = 1'b0;
+    check(st2 == st, $sformatf("host clear: %s: other bits changed: %02x, expected %02x", what, st2, st));
+  endtask
+  task automatic scenario_host_clear();
+    frame_t f, fa, fb, f0;
+    setup(96, 8'h72);
+    ref_cfg(96 * CLK_NS);
+    ra.enabled = 1; rb.enabled = 1;
+    pm_write(0, 1, 16'hD800);       // CRCRST -> NOP (after a good frame the CRC is 0 anyway)
+    run_engines(2'b01);
+    wait_bits(24);
+    // frame sent
+    f = mkf(11'h321, 0, 4'd2, 3);
+    chip_send(0, f);
+    wait_flag_clear(0, "host clear: sent");
+    st_clear(8'h40, 7, "frame sent");
+    $display("8: frame sent: cleared");
+    // arbitration lost: as scenario 2, then stop engine 0 once it has A's record
+    fb = mkf(11'h050, 0, 4'd8, 7);
+    fa = mkf(11'h100, 0, 4'd4, 8);
+    f0 = mkf(11'h200, 0, 4'd6, 9);
+    recs0.delete();
+    rb.tx_q.push_back(fb);
+    wait_bits(10);
+    ra.tx_q.push_back(fa);
+    chip_send(0, f0);
+    wait_recs(0, 3);                // f's own record, B's, A's
+    run_engines(2'b00);
+    st_clear(8'h10, 5, "arbitration lost");
+    $display("8: arbitration lost: cleared");
+    // bit error: restart (status clear), flush, send with the disturber; stop at the error
+    reg_write(7'h00, 8'h50);
+    flag_clear(0, 0);               // FLAG0 of the aborted frame (a restart keeps the flags)
+    wait_bits(40);
+    ra.tx_q.delete(); rb.tx_q.delete();
+    run_engines(2'b01);
+    wait_bits(24);
+    n_disturbed = 0;
+    disturb = 1;
+    chip_send(0, mkf(11'h0FF, 0, 4'd8, 4));
+    begin
+      int t = 0;
+      while (n_disturbed == 0 && t < 400 * bit_clk) begin @(posedge clk); t++; end
+    end
+    disturb = 0;
+    check(n_disturbed > 0, "host clear: the disturber never hit engine 0's frame");
+    run_engines(2'b00);
+    st_clear(8'h20, 6, "bit error");
+    $display("8: the host cleared STATUS bits 7 (sent), 5 (arbitration lost) and 6 (bit error) one at a time");
+  endtask
+
   initial begin
     string only;
     repeat (5) @(posedge clk);
@@ -691,6 +755,7 @@ module tb_can;
     if (only == "" || only == "busoff") scenario_passive_busoff();
     if (only == "" || only == "two") scenario_two_engines();
     if (only == "" || only == "ext") scenario_extended();
+    if (only == "" || only == "hostclr") scenario_host_clear();
     if (errors == 0) begin
       $display("PASS: CAN node");
       $finish;

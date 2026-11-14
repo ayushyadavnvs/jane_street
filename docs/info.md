@@ -22,7 +22,10 @@ Each engine has:
 - an optional line coder: NRZ/NRZI, bit stuffing and a differential pair with SE0, as
   low-speed USB needs; or a bit-synchronous coder for CAN (readback, arbitration, error
   frames and error counters in hardware);
-- 16-byte TX and RX FIFOs to the host, and a window of 4 of 8 shared flags.
+- 16-byte TX and RX FIFOs to the host, and a window of 4 of 8 shared flags;
+- an engine-to-engine link: either engine's RX FIFO can feed the other's TX FIFO, so the two
+  engines form a protocol converter (a UART <-> I2C bridge, for example) with no host in the
+  data path.
 
 Each engine has its own 256 × 16-bit program memory, an IHP SRAM macro (512 words in all), so
 two protocols can run at once, each with up to 256 words.
@@ -43,7 +46,10 @@ Programs written and tested so far (in `pbe_v1/programs`):
   42 + 64 words, so both run at once, one per engine;
 - 10BASE-T Ethernet, transmit and receive (D93): preamble, FCS (CRC-32), TP_IDL and link
   pulses on one engine, clock recovery, SFD search and FCS check on the other, with the host
-  streaming frames in real time over the quad host port.
+  streaming frames in real time over the quad host port;
+- a UART <-> I2C bridge (D103): engine 0 a UART, engine 1 an I2C controller, joined both ways by
+  the engine-to-engine link; commands `W A n data...` and `R A n` over the UART run the I2C
+  transaction and return its status and data, with no host in the data path.
 
 The full documentation, register map and design decisions are in the repository: `pbe_v1/README.md`,
 `docs/DESIGN_DECISIONS.md` and `docs/BUG_LOG.md`.
@@ -67,6 +73,11 @@ The host talks to the chip over SPI mode 0. Use `ui[0]` SCK (at most clk/8), `ui
 - **Transaction:** a command byte (bit 7 = write, bits 6..0 = register address), then data bytes.
 - **Burst:** the address auto-increments, except for the program memory and the FIFO data
   registers, which can be streamed.
+- **Engine-to-engine link:** `0x17` / `0x27` `LINK` (engine e's +7): write [0] = 1 to connect
+  engine e's RX FIFO to the other engine's TX FIFO, [1] = 1 to flush that path; read [0] on,
+  [1] path empty, [2] e's RX FIFO full, [3] the other's TX FIFO full. `0x3D` / `0x4D`
+  `LINK_FILL`: bytes in the path (0-32). Off at reset. A full path blocks the producing
+  engine's `PUSH`; switching the link off leaves every byte where it is.
 - **Program memory:** a 10-bit byte pointer {engine, word[7:0], byte}: `0x06` `PM_ADDR` holds
   [7:1] word[6:0] and [0] the byte (0 high), `0x0F` `PM_ADDR_H` holds [0] word[7] and [1] the
   engine. Each byte written to `0x07` `PM_DATA` advances {word, byte}; word 255 wraps to word 0

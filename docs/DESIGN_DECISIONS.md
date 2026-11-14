@@ -3499,3 +3499,125 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
     - Polarity 0: no failure through step 235, where the 7000 s limit stopped it; not a full
       pass.
   - The timer-range task's 8-step base case passes; its induction is open (BUG-165).
+
+## D102. Engine-to-engine link: the two existing FIFOs chained, one bit per direction, off by default
+
+- **Why:** protocol converters (a UART <-> I2C bridge, a CAN gateway) need one engine's output
+  to reach the other engine's input without the host in the data path. Until now each engine's
+  FIFOs connected only to the host port. The link is general: any program that `PUSH`es can
+  feed any program that `PULL`s, whatever the two protocols are.
+- **Chosen:**
+  - **Registers.** `LINK` at engine e's free slot +7 (`0x17`, `0x27`), bit 0: engine e's RX
+    FIFO drains into the other engine's TX FIFO. Write bit 1: flush that path (e's RX FIFO and
+    the other's TX FIFO, self-clearing). Read: [0] on, [1] path empty, [2] e's RX FIFO full
+    (e's `PUSH` blocks), [3] the other's TX FIFO full. `LINK_FILL` at the free second-page slot
+    +D (`0x3D`, `0x4D`): bytes in the path, 0-32. Reset: off.
+    - *Alternative:* one global register at `0x51`. Rejected: `verify/ethernet`'s directed test
+      bursts writes through `0x51`/`0x52` and expects them to read 0, and a per-engine register
+      reads naturally ("engine e's output goes to the other engine").
+  - **The FIFOs in a chain, no new storage.** A mover pops e's RX FIFO and pushes the other's
+    TX FIFO in the same clock whenever the RX FIFO has a byte, the TX FIFO has room (counted
+    from its mark, D70, so a held mark is respected) and neither end is being flushed or
+    pushed by the host. The path holds 32 bytes, one byte a clock, latency one clock.
+    - *Alternative:* redirect the engine's `PUSH` straight into the other TX FIFO. It needs no
+      mover, but holds only 16 bytes, and leaves e's RX FIFO unused. 32 bytes hold two whole
+      CAN frames, or a whole I2C command and its reply, at no cost in storage.
+    - Added depth: none. Cost: a flip-flop per direction, a 6-bit adder per direction for
+      `LINK_FILL`, an 8-bit 2:1 mux on each TX FIFO's input and a few gates.
+      `make synth`: 277,617 -> 278,632 um2 of standard cells (+1,015 um2, +0.37 %). `make
+      timing`: 4155 ps, unchanged (the worst path is still in the Manchester receiver).
+  - **Flow control unchanged at the engine.** The producing engine's `PUSH` blocks exactly when
+    its own RX FIFO is full, as it always did (and still sets the RX overflow status and IRQ
+    when it finds it full). With the link on that happens when the whole 32-byte path is full.
+    The engine (`pbe_engine.sv`) and the FIFO (`pbe_fifo.sv`) are not changed at all.
+  - **Host access while the link is on.**
+    - A host write to the consumer's TX FIFO data register keeps working; in a clock where
+      both would push, the host's byte goes first and the link's moves a clock later. Each
+      source keeps its order; nothing is lost.
+      - *Alternative:* ignore host writes while linked. Rejected: a host injecting a command
+        between messages is useful, and a silently ignored write is worse than an interleaved one.
+    - A host read of the producer's RX FIFO data register does not pop: the link owns the
+      head. Without this a read and a move in the same clock would both pop one byte (one of
+      them duplicated, the next one lost). The register still reads the head byte, which the
+      link may move at any moment: read the counts, not the data, while linked.
+  - **Switching off at any time:** nothing moves after the write's clock; a byte is either in
+    e's RX FIFO (the host can read it again) or in the other TX FIFO (its engine `PULL`s it).
+    A move is a single clock, so no byte is ever half-moved.
+  - **Flushes:** CTRL flush (both FIFOs of an engine), `TX_FLUSH` and the `LINK` flush each
+    empty their FIFOs; no byte moves in a clock in which either end is flushed (so a flush of
+    one end never drops a byte that was just leaving the other). A restart touches neither
+    the FIFOs nor the link. Reset turns both links off.
+  - With both links off every signal is exactly as before: the mover is off, the TX FIFO input
+    mux selects the host, and the RX FIFO pop is the host's.
+- **Tests:** `tb_link` (cases a-g, see its header): streams of 200 bytes in each direction;
+  backpressure in each direction (path full at 32, the producer's `PUSH` blocked with RX
+  overflow status and IRQ, 49 bytes out in order); the host pushing the consumer's TX FIFO in
+  the same clock as a link move (found by a sweep, observed by a monitor; host byte first,
+  both orders kept); host reads with the link on do not pop; the link switched off
+  mid-stream; a ring of both links cut open; restart, CTRL flush, `TX_FLUSH`, `LINK` flush and
+  reset. `tb_bridge` (D103) uses both links end to end.
+- **Verification hand-off:** `docs/BRIDGE_VERIFICATION_TODO.md`.
+
+## D103. UART <-> I2C bridge: a half-duplex UART on engine 0, a command-driven I2C controller on engine 1
+
+- **Asked for:** a protocol-converter demo on the link (D102): UART commands run I2C
+  transactions; read data and ACK/NACK status come back over the UART; no host in the data path.
+- **Command format** (`bridge_i2c.pbe` header): `'W' A n d1..dn` and `'R' A n`; A is the
+  address byte as it goes on the bus. Replies: `00` (all ACKed), `01` (address NACK), `02`
+  (data NACK; the rest dropped), a read's `00` followed by its data, `FF` for an unknown
+  command.
+  - *Alternative:* `[addr|R][len]` with the R/W bit as the command. The engine has no AND, so a
+    program can only branch on a byte by comparing it with whole constants: one explicit
+    command byte compared with `'W'` and `'R'` is simpler and leaves room for more commands.
+- **Engine 0 (`bridge_uart.pbe`, 18 words):** one program for both directions, at a tick of
+  1/16 bit (CLKDIV 32 at 115200 baud: -1.4 %). It polls RXD and its TX FIFO; it receives a
+  byte (start bit checked in its middle, samples at 1.5 bits + 16 ticks a bit) and `PUSH`es it,
+  or `PULL`s a reply byte and sends it. It is half-duplex: while it sends it does not listen.
+  - *Alternative:* the UART TX and RX on separate engines (as `uart_tx`/`uart_rx`). Then the
+    I2C controller would need a third engine.
+  - The stop bit's time is spent before each start bit (`PULL [15]`), and the program returns
+    to listening as soon as the stop bit begins, so a terminal may start its next byte the
+    moment it has sampled the reply's stop bit (BUG-168).
+- **Engine 1 (`bridge_i2c.pbe`, 161 words):** I2C as `i2c_ctrl.pbe` (open drain, clock
+  stretching by `WAIT scl, HIGH`), with the byte loops unrolled: X counts the command's data
+  bytes, so it cannot also count bits. The ACK slot is tested with `JMP PIN_HI` (JMP_PIN =
+  SDA) while SCL is high. Engine-private FLAG0 (a read) and FLAG1 (the address was ACKed) let
+  the address and data bytes share one send loop. SCL is low at least 4 ticks (1.47 us) and
+  high 2 ticks (0.73 us) at CLKDIV 21 (fast mode, 390 kHz) (BUG-167).
+  - A reply goes out only after the whole command has been consumed: after a NACK the rest of
+    the command is read and dropped first, with the reply held in ISR (BUG-166). With engine 0
+    half-duplex this is what makes the protocol "command, then reply" safe.
+- **Host setup** (both headers): CLKDIVs, pin bases, JMP_PINs, SHIFT, `PIN_OWN` 0x0C, `LINK0` =
+  `LINK1` = 1, restart and run. Then the host does nothing.
+- **Tests:** `tb_bridge` with a UART terminal (115200 8N1, start and stop bits checked) and an
+  I2C register device at 0x50 (registers 0xF0-0xFF write-protected, SCL stretched after bits 4
+  and 8): writes, reads, address NACK for a write (its data dropped) and a read, a data NACK
+  mid-write, probes, a 0-byte read, an unknown command, a 12-byte write and an 8-byte read, a
+  command typed with 30-bit gaps (SCL held low between its bytes), a command sent the moment a
+  reply ended. Replies, target memory and START/STOP counts checked; SCL low >= 1.3 us and high
+  >= 0.6 us; no host transaction after setup.
+- **Limits:** half-duplex (the terminal waits for each reply before its next command). A UART
+  cannot be paused, so engine 0 must never block in `PUSH`: at 115200 baud a byte takes 87 us
+  and engine 1 sends an I2C byte in about 23 us at 390 kHz (plus the target's stretching), so
+  the 32-byte path never fills unless the target stretches SCL by more than about 60 us a byte
+  for a whole command. A target that slow needs a slower baud rate.
+
+## D104. Coverage follow-ups: host clears of CAN STATUS 5-7, a write to unused second-page addresses
+
+- **From** `verify/golden-model/COVERAGE.md` and `REPORT.md`: the host-clear bodies for
+  arbitration lost, bit error and frame sent (`pbe_engine.sv`, `host_arb_clr`/`host_berr_clr`/
+  `host_sent_clr`) were reachable but never run, because `can_node.pbe`'s `CRCRST` at idle
+  clears those bits first; and the no-op default for unused second-page register writes in
+  `tt_um_pbe.sv` was never hit.
+- **Chosen:** tests only, no RTL change.
+  - `tb_can` scenario 8 (`ONLY=hostclr`): engine 0's `CRCRST` (word 1) is patched to a NOP over
+    the host port, so each bit stays latched. A sent frame (bit 7), a lost arbitration as in
+    scenario 2 (bit 5) and a bit error from the disturber (bit 6); each time the host reads
+    `STATUS`, writes its clear bit (6, 4, 5) and checks that bit alone cleared. The engine is
+    stopped before a latched bit could make `can_node` retransmit forever (it compares the
+    status with 0x82).
+  - `tb_link` case g: `0xFF` written to second-page +5..+7 and +D..+F of both engines (the
+    read-only CAN counters, the new read-only `LINK_FILL` and the unused slots), and every
+    readable register compared before and after (FIFO data and PINS excluded).
+- **CAN-to-CAN gateway (asked for with D102): deferred by the owner.** The design worked out
+  for it is in `docs/BRIDGE_VERIFICATION_TODO.md` so it can be picked up later.

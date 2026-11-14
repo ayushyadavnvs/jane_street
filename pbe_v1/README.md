@@ -17,7 +17,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 512-word hex image (engine 0's 256 words, then engine 1's), `prog.pbe@engine:word`; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`), 10BASE-T Ethernet transmitter and receiver (`eth_tx.pbe`, `eth_rx.pbe`) |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`), 10BASE-T Ethernet transmitter and receiver (`eth_tx.pbe`, `eth_rx.pbe`), UART <-> I2C bridge (`bridge_uart.pbe` + `bridge_i2c.pbe`, over the engine-to-engine link) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
 | `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
@@ -28,6 +28,8 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_qspi.sv` | Quad SPI controller against `qspi_flash_model.sv` (a NOR flash: 9F, 03, 0B, 6B, EB, 06, 05, 32) (D87) |
 | `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ and NRZI) (D88, D94) |
 | `test/tb_eth.sv` | 10BASE-T: `eth_tx`/`eth_rx` against `eth_model.sv` (an IEEE 802.3 link partner): frames of 64-1518 bytes both ways, clock offsets, loopback, link pulses, underrun and overrun (D93) |
+| `test/tb_link.sv` | The engine-to-engine link (D102): streams both ways, backpressure, host writes in the same clock as a link move, the link switched off mid-stream, a ring of both links, restart and flushes, unused second-page writes |
+| `test/tb_bridge.sv` | UART <-> I2C bridge (D103): a UART terminal and an I2C target model, no host after setup |
 | `test/tb_quad.sv` | The quad host port: modes, pins, recovery, burst rates, a program load and a UART loopback in quad mode (D89) |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
@@ -47,6 +49,7 @@ make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-proto2                           # only the D84-D88 protocols (PS/2, GPIO expander, logic analyser, QSPI, HDLC)
 make test-eth                               # 10BASE-T (tb_eth, D93)
+make test-link                              # the engine-to-engine link (tb_link) and the UART <-> I2C bridge (tb_bridge)
 make test-quad                              # the quad host port (tb_quad, tb_la +QUAD) and tb_pbe with its host in quad mode (D89)
 make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
 make test-verilator                        # tb_line and 5 more under Verilator and Icarus: both pass, identical logs (D80)
@@ -186,6 +189,28 @@ arbitration lost / bit error / frame sent.
 - `RX_COUNT` (0x0A, 0x0B) and `TX_COUNT` (0x0C, 0x0D) give the bytes in each engine's FIFOs.
   Read RX FIFOs in bursts of at most `RX_COUNT` bytes.
 - `TX_FLUSH` (0x0E, bit e) empties one TX FIFO and leaves the RX FIFOs alone.
+
+**Engine-to-engine link (D102).** `LINK` at engine e's +7 (`0x17`, `0x27`): bit 0 = 1 connects
+engine e's RX FIFO to the other engine's TX FIFO, so e's `PUSH` reaches the other's `PULL`
+without the host. Off at reset; with both links off every FIFO behaves exactly as before.
+
+| | Bits |
+|---|---|
+| `LINK` W | [0] on, [1] = 1 flush the path (e's RX FIFO and the other's TX FIFO) |
+| `LINK` R | [0] on, [1] path empty, [2] e's RX FIFO full (its `PUSH` blocks), [3] the other's TX FIFO full |
+| `LINK_FILL` (second page +D: `0x3D`, `0x4D`) R | bytes in the path, 0-32 |
+
+- The two existing FIFOs form a 32-byte chain: one byte a clock moves while the RX FIFO has one
+  and the TX FIFO has room. No new storage. A `PUSH` blocks only when e's RX FIFO is full, as
+  it always did (RX overflow status and IRQ included). Nothing is lost, doubled or reordered.
+- The host may still write the other engine's TX FIFO: in a clock where both push it, the
+  host's byte goes first and the link's waits a clock. A host read of e's FIFO data register
+  does not pop while the link is on.
+- Switching the link off (any time) moves nothing further: bytes in e's RX FIFO stay there for
+  the host, bytes in the other's TX FIFO stay there for its engine. Flushes, `TX_FLUSH` and the
+  `LINK` flush empty their FIFOs; a restart touches neither the link nor the FIFOs; reset turns
+  it off.
+- Uses: `bridge_uart.pbe` + `bridge_i2c.pbe` (a UART <-> I2C bridge, both links, D103).
 
 ## Flags
 

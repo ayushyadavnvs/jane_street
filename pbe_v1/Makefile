@@ -82,11 +82,19 @@ test/eth_image.hex: programs/eth_tx.pbe programs/eth_rx.pbe tools/pbe_asm.py
 test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
-IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc eth
+# the engine-to-engine link (D102): echo on both engines, a timed burst on engine 0
+test/link_image.hex: test/link_echo.pbe test/link_burst.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ test/link_echo.pbe@0:0 test/link_burst.pbe@0:16 test/link_echo.pbe@1:0
+
+# the UART <-> I2C bridge (D103): bridge_uart on engine 0, bridge_i2c on engine 1, linked
+test/bridge_image.hex: programs/bridge_uart.pbe programs/bridge_i2c.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/bridge_uart.pbe@0:0 programs/bridge_i2c.pbe@1:0
+
+IMAGES := link bridge conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc eth
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth; do \
+LINT = cd test && for tb in tb_link tb_bridge tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) eth_model.sv $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
@@ -123,6 +131,7 @@ test: test-manchester-idle $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(TOP) && vvp -n sim.vvp
 	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(TOP) && vvp -n can.vvp
 	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp
+	$(MAKE) test-link
 	$(MAKE) test-proto2
 	$(MAKE) test-quad-unit
 	$(MAKE) test-eth
@@ -177,6 +186,13 @@ test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_ima
 test-eth: test/eth_image.hex
 	cd test && iverilog -g2012 -o eth.vvp tb_eth.sv eth_model.sv $(TOP) && vvp -n eth.vvp
 
+# The engine-to-engine link (D102): tb_link (unit tests through the pins) and the UART <-> I2C
+# bridge built on it (tb_bridge, D103)
+.PHONY: test-link
+test-link: test/link_image.hex test/bridge_image.hex
+	cd test && iverilog -g2012 -o link.vvp tb_link.sv $(TOP) && vvp -n link.vvp
+	cd test && iverilog -g2012 -o bridge.vvp tb_bridge.sv $(TOP) && vvp -n bridge.vvp
+
 # The quad host port (D89): tb_quad (modes, pins, recovery, a program load and a UART loopback),
 # and the logic analyser bench with its whole host side in quad mode (+QUAD, tb_host.svh).
 .PHONY: test-quad-unit test-quad
@@ -212,7 +228,7 @@ test-gpio: test/gpio_image.hex
 test-ps2: test/ps2_image.hex
 	cd test && iverilog -g2012 -o ps2.vvp tb_ps2.sv ps2_dev.sv $(TOP) && vvp -n ps2.vvp
 
-# only CAN (tb_can); ONLY=rates|arb|ack|inject|biterr|busoff|two runs one scenario
+# only CAN (tb_can); ONLY=rates|arb|ack|inject|biterr|busoff|two|ext|hostclr runs one scenario
 test-can: $(IMAGES:%=test/%_image.hex)
 	$(LINT)
 	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(TOP) && vvp -n can.vvp $(if $(ONLY),+ONLY=$(ONLY))

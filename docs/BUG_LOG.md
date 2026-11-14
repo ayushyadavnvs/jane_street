@@ -3987,3 +3987,148 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
     is on paper in D101.
 - **Regression:** `yosys-smtbmc -t 8` on the `ETH_TIMER` model: PASSED; `-i -t 8`: FAILED
   (open).
+
+## BUG-166 — bridge_i2c (D103) replied to an address NACK before the command's data had arrived (design)
+
+- **Where:** `pbe_v1/programs/bridge_i2c.pbe`, first version, before commit.
+- **Cause:** after a NACKed address the program pushed its `01` reply at once and then dropped
+  the command's remaining bytes. Engine 0 (`bridge_uart.pbe`) is half-duplex: it began sending
+  the reply while the terminal was still sending those bytes, and lost them. `tb_bridge` 3:
+  `DE AD` arrived as one byte `D6` (sampled mid-transmission), the next command was read out of
+  step: `3 read from 0x52 (absent): reply ff ff, expected 01`, and the later replies were wrong.
+  A trace of engine 1's `PULL`s/`PUSH`es showed the reply before the dropped bytes.
+- **Before:**
+  ```
+          PULL                 ; the address NACKed: n, then n bytes to drop
+          MOV  X, OSR
+          SET  OSR, 0x01
+          MOV  ISR, OSR
+          PUSH
+          JMP  FLAG0, cmd
+          JMP  drop
+  wdn:    SET  OSR, 0x02
+          MOV  ISR, OSR
+          PUSH
+  drop:   JMP  X--, dr1
+          JMP  cmd
+  ```
+- **After:** the reply waits in ISR (the drop loop's `PULL`s use only OSR) and is pushed after
+  the last byte of the command:
+  ```
+          PULL
+          MOV  X, OSR
+          SET  OSR, 0x01
+          MOV  ISR, OSR
+          JMP  FLAG0, reply
+          JMP  drop
+  wdn:    SET  OSR, 0x02
+          MOV  ISR, OSR
+  drop:   JMP  X--, dr1
+  reply:  PUSH
+          JMP  cmd
+  ```
+- **Test:** `tb_bridge` 3 and 4: before, 4 failures; after, `PASS`.
+
+## BUG-167 — bridge_i2c (D103) drove SCL low for 2-3 ticks (733 ns), below fast mode's 1.3 us (design)
+
+- **Where:** `bridge_i2c.pbe`, first version. Unrolling `i2c_ctrl.pbe`'s bit loop removed the
+  `JMP X--` tick that made its low phase 4 ticks; the read bits and the START had 2.
+- **Before:** `PIN scl, DRV0 [1]` after every bit and ACK slot; `PIN scl, DRV0` in the START.
+- **After:** `PIN scl, DRV0 [2]` (3 ticks + the next `OUTOD`/`REL`), `[3]` in the read bits, `[2]`
+  in the START: low >= 4 ticks = 1.47 us at CLKDIV 21.
+- **Test:** `tb_bridge`'s SCL monitor: before `I2C: SCL low 733 ns < 1.3 us`; after, low >= 1467 ns.
+
+## BUG-168 — bridge_uart (D103) listened again only after its whole stop bit (design)
+
+- **Where:** `bridge_uart.pbe`, first version.
+- **Cause:** after a reply byte the program drove the stop bit for 16 ticks before polling RXD.
+  A terminal that sends its next command as soon as it has sampled the reply's stop bit (its
+  middle) starts it half a bit before the engine listens; the engine then saw the start bit
+  late and read `FF FF` (`tb_bridge` 7: `reply ff ff, expected 00`).
+- **Before:**
+  ```
+  send:   PULL
+          PIN  tx, DRV0 [14]
+          ...
+          PIN  tx, DRV1 [15]   ; stop bit
+          JMP  w
+  ```
+- **After:** the idle bit is spent before each start bit, and the stop bit only starts:
+  ```
+  send:   PULL [15]            ; a whole bit of idle (the previous byte's stop bit) first
+          PIN  tx, DRV0 [14]
+          ...
+          PIN  tx, DRV1        ; back to listening at once
+          JMP  w
+  ```
+- **Test:** `tb_bridge` 7 (the next command sent the moment the reply's stop bit is sampled):
+  before, 2 failures; after, `PASS`.
+
+## BUG-169 — tb_link case d never reached a host push in the clock of a link move (test)
+
+- **Where:** `pbe_v1/test/tb_link.sv`, before commit.
+- **Cause:** two errors. (1) The first version used engine 0's slow echo, whose moves are
+  rare; 40 rounds hit none. (2) The second used `link_burst.pbe` (a byte every 3 clocks after
+  FLAG 0) but stepped the host's delay k by 3 (the burst's own period: the phase never changed)
+  and the burst started 2 clocks after the flag, while the host's next write lands at least one
+  SPI transaction (over 100 clocks) later. `FAIL: d: no clock with a host push and a link move
+  together was reached`.
+- **Before:** `for (int k = 0; k < 400 && collide == 0; k += 3)`; the burst right after `FLAG 0, CLR`.
+- **After:** `k++`, and `link_burst.pbe` waits about 160 clocks first (`SET X, 9` / `JMP X--, dly [15]`).
+  The sweep now hits at k = 69, and the monitor counts the clock.
+- **Test:** `tb_link` d: before `FAIL`, after `1 clocks with a host push and a link move together`.
+
+## BUG-170 — tb_link case e read engine 1's RX FIFO once, while its echo still held 5 bytes (test)
+
+- **Where:** `tb_link.sv` case e (the link switched off mid-stream), before commit.
+- **Cause:** engine 1 (slow) had filled its 16-byte RX FIFO and was blocked with more bytes in
+  its TX FIFO; the bench read `RX_COUNT` once, drained 16 and then read engine 0's FIFO, so
+  `11..15` came out later and were missed: `got 01 .. 10 16 .. 1e, expected 01 .. 1e`.
+- **Before:** `rd(7'h0B, n); drain(1, n);`
+- **After:** drain engine 1 six times, 2500 clocks apart, before engine 0's FIFO.
+- **Test:** `tb_link` e: before `FAIL`, after `PASS`.
+
+## BUG-171 — tb_link's ring check injected bytes into a ring that was already closed (test)
+
+- **Where:** `tb_link.sv` case e (both links on), before commit.
+- **Cause:** with both links on, the first bytes went round the ring while the host was still
+  writing the later ones, so the cyclic order was the interleaving (`53 50 52 51 54`), not the
+  order sent. The design was right; the expectation (a rotation of the sent order) assumed the
+  ring closed after the injection.
+- **After:** inject with `LINK1` off (the bytes collect in engine 1's RX FIFO), then close the
+  ring, then cut it.
+- **Test:** `tb_link` e: before 3 `ring order` failures, after `PASS`.
+
+## BUG-172 — Icarus 12: queue arguments and array elements as task outputs (tool)
+
+- **Where:** `tb_link.sv`, first version. A function with a queue argument crashed the compiler
+  (`draw_eval_function_argument: Assertion '0' failed`); `reg_read(a, snap[a])` (an array
+  element as an output argument, the `tb_can` note) left `snap` all `x`, so case g reported every
+  register as changed.
+- **After:** module-level queues (`sent`, `got`, `ga`, `gb`, `a_q`, `b_q`) and a `which`
+  argument to `same_q`; reads go to a local variable first.
+- **Test:** `tb_link` compiles; case g: before `FAIL` (128 registers `xx -> ..`), after `PASS`.
+
+## BUG-173 — tb_can's host-clear scenario (D104) ran engine 0 with a stale FLAG0 (test)
+
+- **Where:** `pbe_v1/test/tb_can.sv` scenario 8, the bit-error phase, before commit.
+- **Cause:** the arbitration phase stops engine 0 before its frame goes out, so `can_node`'s
+  FLAG0 ("a frame to send") stays set; a restart does not clear the flags. When engine 0 ran
+  again it went straight to `txs` with an empty TX FIFO: `PULL NOWAIT` gave 0xFF, a first unit
+  whose first bit is recessive, which never starts a frame, and the next `OUT` blocked for
+  good (pc 9, `TX_COUNT` 12, bus idle). `FAIL: host clear: the disturber never hit engine 0's
+  frame`. (The first version also waited for the disturber without a bound: the run hung.)
+- **Before:** `reg_write(7'h00, 8'h50); wait_bits(40);` and `while (n_disturbed == 0) @(posedge clk);`
+- **After:** `flag_clear(0, 0)` after the restart; the wait is bounded (400 bit times) and
+  checked.
+- **Test:** `make test-can ONLY=hostclr`: before, hang (then 2 failures with the bound); after `PASS`.
+
+## BUG-174 — tb_link under Verilator 5.020 segfaults at start (tool)
+
+- **Where:** `make test-verilator VL_BENCHES="tb_link tb_bridge"` with the CI's Verilator 5.020.
+- **Cause:** the model builds, and `obj_tb_link/sim` dies with a segmentation fault before
+  its first `$display`; Icarus runs the same bench to `PASS`. It uses module-level queues
+  and automatic tasks with `fork`/`join`, the constructs BUG-103 found fragile in 5.020.
+- **After:** `tb_link` and `tb_bridge` are not in `VL_BENCHES` (as `tb_engine_ops` and `tb_proto`,
+  BUG-103); they run under Icarus in `make test` (`test-link`). To retry with Verilator >= 5.05x.
+- **Test:** the default `make test-verilator` list passes (identical logs).
