@@ -1,0 +1,74 @@
+; LIN 2.x commander (master task): break, sync, protected ID, then a transmitted or a received
+; response. Blind generality benchmark, protocol 3 (docs/GENERALITY.md).
+; Pins (relative to pin base): TXD = 0, RXD = 1 (a LIN transceiver; RXD also echoes what the
+;   commander sends, which the program ignores). JMP_PIN = 1 (RXD).
+; Engine settings: CLKDIV = 60 MHz / (4 * baud) - 1 (a tick is 1/4 bit: 780 for 19200 baud,
+;   1561 for 9600), SHIFT = 0x00 (LSB first), CRC off, LINE_CFG = 0x41 (no parity, timeout
+;   vector at word 1), TIMEOUT = 56 ticks (14 bit times without a start bit: no response).
+; Host protocol (queue a whole record at once; it is at most 12 bytes):
+;   TX FIFO: [t] [PID] [t - 1 bytes] [r]
+;            t = bytes the commander sends after the sync byte: the protected ID, then for a
+;                frame the commander publishes its data bytes and the checksum (t = 1: header only)
+;            r = bytes to receive after that (data + checksum of a responder's frame; 0: none)
+;   RX FIFO: the r bytes received, then one byte: 0x00 = all received, 0xFF = timeout (the
+;            bytes before it are those that arrived). Then the engine sets FLAG0. Clear FLAG0
+;            before queuing the next record (the engine clears it too, 3 ticks into the record).
+; The engine makes the break (13.5 bits), the delimiter (2 bits), the 0x55 sync and the 8N1
+;   bytes, and times the response out.
+; LIMIT: the protected ID's two parity bits and the checksum (an 8-bit sum with end-around
+;   carry, inverted; classic or enhanced) are computed and checked by the HOST. The engine has
+;   no adder, and its parity unit gives the parity of all bits, not of chosen ones. The engine
+;   also does not compare the echo with what it sent (no bit-error detection).
+.equ tx 0
+.equ rx 1
+
+        JMP  init
+; timeout vector (word 1): no start bit for 14 bit times
+tmo:    SET  OSR, 0xFF
+        MOV  ISR, OSR
+        PUSH                    ; [0xFF]
+        FLAG 0, SET
+        JMP  cmd
+init:   PIN  tx, DRV1
+cmd:    JMP  TX_EMPTY, cmd      ; (a poll: a blocked PULL would run into the timeout)
+        PULL                    ; t
+        MOV  X, OSR
+        FLAG 0, CLR
+        PIN  tx, DRV0 [15]      ; break: 16 + 16 + 16 + 6 = 54 ticks = 13.5 bits
+        NOP  [15]
+        NOP  [15]
+        NOP  [5]
+        PIN  tx, DRV1 [6]       ; break delimiter: 8 ticks = 2 bits
+        SET  OSR, 0x55          ; sync
+        JMP  sb
+nb:     PULL                    ; the protected ID, then data and checksum
+sb:     PIN  tx, DRV0 [3]       ; start bit
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, OUT [3]
+        PIN  tx, DRV1 [3]       ; stop bit (and 2 ticks of inter-byte space)
+        JMP  X--, nb
+        PULL                    ; r
+        MOV  X, OSR
+rl:     JMP  X--, rb
+        PUSH                    ; [0x00] (ISR is 0 after the last PUSH, or after the restart)
+        FLAG 0, SET
+        JMP  cmd
+rb:     WAIT rx, LOW [1]        ; a start bit, or the timeout
+        JMP  PIN_HI, rb         ; a glitch
+        NOP  [2]
+        IN   rx [3]             ; mid-bit, 1.5 bits after the edge
+        IN   rx [3]
+        IN   rx [3]
+        IN   rx [3]
+        IN   rx [3]
+        IN   rx [3]
+        IN   rx [3]
+        IN   rx
+        PUSH
+        JMP  rl

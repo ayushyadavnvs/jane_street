@@ -1,0 +1,115 @@
+; Wiegand reader, 26-bit and 34-bit formats, with both parity checks. Blind generality
+; benchmark, protocol 5 (docs/GENERALITY.md). It uses BOTH engines: this program on engine 0 and
+; wiegand_watch.pbe on engine 1 (see there for why).
+; Pins (relative to pin base, the same base for both engines): D0 = 0, D1 = 1 (open-drain lines
+;   from the reader, idle high, pull-ups; a 20-100 us low pulse on D0 is a 0, on D1 a 1).
+; Engine settings (engine 0): CLKDIV = 119 (a tick is 2 us at 60 MHz), SHIFT = 0x02 (IN MSB
+;   first), FLAG_BASE = 0 for BOTH engines (they share flag 0), LINE_CFG = 0x01 (even parity,
+;   timeout vector at word 1), CRC off and CRC_GOOD = 0xFFFF (STAT bit 1 reads 0),
+;   TIMEOUT = 12500 ticks (25 ms without a pulse inside a frame).
+; Flags: FLAG0 = a pulse has started (set by the watcher, cleared here);
+;   FLAG1 (host) = 0 for 26-bit cards, 1 for 34-bit; FLAG3 = a frame stopped part-way
+;   (timeout): the host flushes the RX FIFO and clears it.
+; Host protocol: RX FIFO, MSB first:
+;   26 bits: [bits 1-8] [p1] [bits 9-16] [bits 17-24] [bits 25-26 in bits 1..0] [p2]
+;   34 bits: [bits 1-8] [bits 9-16] [p1] [bits 17-24] [bits 25-32] [bits 33-34] [p2]
+;   p1 = 0x00: the first half (13 or 17 bits, with its leading parity bit) has even parity;
+;   p2 = 0x01: the second half (with its trailing parity bit) has odd parity. Anything else
+;   is a parity error (bit 2 would mean a timeout, bit 3 an RX overflow).
+.equ d0 0
+
+        JMP  idle
+; timeout vector (word 1): the frame stopped
+        FLAG 3, SET
+idle:   STAT                    ; clear the parity
+        MOV  ISR, 0
+poll:   JMP  FLAG0, go          ; (a poll: the wait for a card must not time out)
+        JMP  poll
+go:     JMP  FLAG1, w34         ; (the first bit is read 4 ticks after its pulse is flagged)
+; ---- 26 bits: 8, 5 (first half ends), 3, 8, 2 ----
+        SET  X, 7
+a1:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, a1
+        PUSH                    ; bits 1-8
+        SET  X, 4
+a2:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, a2
+        MOV  X, ISR             ; the first half's parity: keep the data bits,
+        STAT                    ;   ISR bit 0 = the parity of the bits so far (even: 0)
+        PUSH                    ; [p1]
+        MOV  ISR, X
+        SET  X, 2
+a3:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, a3
+        PUSH                    ; bits 9-16
+        SET  X, 7
+a4:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, a4
+        PUSH                    ; bits 17-24
+        SET  X, 1
+a5:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, a5
+        MOV  X, ISR
+        STAT                    ; the second half's parity (odd: 1)
+        MOV  OSR, ISR
+        MOV  ISR, X
+        PUSH                    ; the last 2 bits
+        MOV  ISR, OSR
+        PUSH                    ; [p2]
+        JMP  idle
+; ---- 34 bits: 8, 8, 1 (first half ends), 7, 8, 2 ----
+w34:
+        SET  X, 7
+b1:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, b1
+        PUSH                    ; bits 1-8
+        SET  X, 7
+b2:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, b2
+        PUSH                    ; bits 9-16
+b3:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        MOV  X, ISR             ; the first half's parity: keep the data bits,
+        STAT                    ;   ISR bit 0 = the parity of the bits so far (even: 0)
+        PUSH                    ; [p1]
+        MOV  ISR, X
+        SET  X, 6
+b4:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, b4
+        PUSH                    ; bits 17-24
+        SET  X, 7
+b5:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, b5
+        PUSH                    ; bits 25-32
+        SET  X, 1
+b6:     WAIT FLAG 0, HIGH       ; a pulse (or the timeout)
+        IN   d0                 ; D0 low: a 0; D0 high (the pulse is on D1): a 1
+        FLAG 0, CLR
+        JMP  X--, b6
+        MOV  X, ISR
+        STAT                    ; the second half's parity (odd: 1)
+        MOV  OSR, ISR
+        MOV  ISR, X
+        PUSH                    ; the last 2 bits
+        MOV  ISR, OSR
+        PUSH                    ; [p2]
+        JMP  idle

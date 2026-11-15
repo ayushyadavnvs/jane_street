@@ -1,0 +1,101 @@
+; MIDI receiver (MIDI 1.0: 31.25 kbaud 8N1) that expands running status.
+; Blind generality benchmark, protocol 2 (docs/GENERALITY.md). MIDI out is uart_tx.pbe,
+; unchanged, at CLKDIV = 959 (31.25 kbaud).
+; Pin (relative to pin base): RX = 0 (from the opto-isolator: idle high). JMP_PIN = 0.
+; Engine settings: CLKDIV = 119 (a tick is 1/16 bit at 60 MHz), SHIFT = 0x00 (LSB first),
+;   CRC off, TIMEOUT 0, LINE_CFG 0x40.
+; How it works: the instruction set cannot test a bit of a register, but it can test a pin.
+;   While bits 3..7 of a byte arrive, a JMP PIN_HI one tick after each sample walks a decision
+;   tree, so when the byte is complete the program is at the handler for its class:
+;     data (bit 7 = 0); channel status with 2 data bytes (8n 9n An Bn En); with 1 (Cn Dn);
+;     system common and exclusive (F0-F7); real time (F8-FF).
+;   Every tree node takes exactly one bit time on both branches, so sampling stays mid-bit.
+; Host protocol: RX FIFO: a valid MIDI stream with every channel message complete:
+;   [status] [data 1] ([data 2]), the status repeated where the sender used running status.
+;   A channel status byte is kept (OSR) and sent in front of the first data byte of each
+;   message. Real-time bytes are passed at once, wherever they arrive, and change nothing.
+;   F0-F7 are passed and cancel running status; data bytes with no running status (system
+;   exclusive and system common data) are passed as they are.
+; Flags (the engine's own state; the host must leave them): FLAG0 = one more data byte of the
+;   current message is expected, FLAG1 = the running status takes 1 data byte.
+; Limits: the stop bit is not checked; a status byte never followed by data is not reported.
+.equ rx 0
+
+start:  WAIT rx, LOW [7]        ; start bit; half a bit later:
+        JMP  PIN_HI, start      ; high again: a glitch
+        NOP  [14]               ; first sample at 1.5 bits
+        IN   rx [15]            ; bit 0
+        IN   rx [15]            ; bit 1
+        IN   rx [15]            ; bit 2
+; the tree: each node is IN, a test of the same bit one tick later, and 16 ticks in all
+        IN   rx                 ; bit 3
+        JMP  PIN_HI, n4h [13]
+        JMP  n4l
+n4l:    IN   rx                 ; bit 4 (bit 3 = 0)
+        JMP  PIN_HI, n5b [13]
+        JMP  n5a
+n4h:    IN   rx                 ; bit 4 (bit 3 = 1)
+        JMP  PIN_HI, n5c [13]
+        JMP  n5a
+n5a:    IN   rx                 ; bit 5 (bit 4 = 0)
+        JMP  PIN_HI, n6t [13]   ; x10x: An or En, 2 data bytes whatever bit 6 is
+        JMP  n6c
+n5b:    IN   rx                 ; bit 5 (bits 4, 3 = 1, 0)
+        JMP  PIN_HI, n6s [13]   ; x110: Bn, or F0-F7
+        JMP  n6c
+n5c:    IN   rx                 ; bit 5 (bits 4, 3 = 1, 1)
+        JMP  PIN_HI, n6r [13]   ; x111: Bn, or F8-FF
+        JMP  n6c
+n6t:    IN   rx                 ; bit 6: no decision
+        JMP  n7t [14]
+n6c:    IN   rx                 ; bit 6 (bit 5 = 0): 1 = Cn or Dn, 0 = 8n or 9n
+        JMP  PIN_HI, n7c [13]
+        JMP  n7t
+n6s:    IN   rx                 ; bit 6: 1 = F0-F7, 0 = Bn
+        JMP  PIN_HI, n7s [13]
+        JMP  n7t
+n6r:    IN   rx                 ; bit 6: 1 = F8-FF, 0 = Bn
+        JMP  PIN_HI, n7r [13]
+        JMP  n7t
+n7t:    IN   rx                 ; bit 7: 1 = a status of that class, 0 = a data byte
+        JMP  PIN_HI, st2
+        JMP  data
+n7c:    IN   rx
+        JMP  PIN_HI, st1
+        JMP  data
+n7s:    IN   rx
+        JMP  PIN_HI, sys
+        JMP  data
+n7r:    IN   rx
+        JMP  PIN_HI, rt
+        JMP  data
+; handlers: all are back at `start` well inside the stop bit
+data:   JMP  FLAG0, d2          ; the second data byte of a message
+        MOV  X, ISR
+        MOV  ISR, 0
+        JEQ  raw                ; no running status: pass the byte
+        MOV  ISR, OSR
+        PUSH                    ; the status
+        MOV  ISR, X
+        PUSH                    ; data 1
+        JMP  FLAG1, start       ; a 1-data message is complete
+        FLAG 0, SET
+        JMP  start
+raw:    MOV  ISR, X
+d2:     PUSH
+        FLAG 0, CLR
+        JMP  start
+st2:    MOV  OSR, ISR           ; a new running status with 2 data bytes
+        FLAG 1, CLR
+        FLAG 0, CLR
+        JMP  start
+st1:    MOV  OSR, ISR           ; ... with 1 data byte
+        FLAG 1, SET
+        FLAG 0, CLR
+        JMP  start
+sys:    PUSH                    ; F0-F7: passed; running status cancelled
+        MOV  OSR, 0
+        FLAG 0, CLR
+        JMP  start
+rt:     PUSH                    ; F8-FF: passed, nothing changes
+        JMP  start

@@ -1,0 +1,27 @@
+; Wiegand pulse watcher: engine 1's half of the Wiegand reader (wiegand.pbe, benchmark 5).
+; Why a second engine: a Wiegand bit is a pulse on one of two lines, and an engine can wait on
+;   one pin. This program watches both: it waits on D0 with a 2-tick timeout, and the timeout
+;   vector tests D1 (JMP PIN_LO). D0 is seen at once, D1 within 10 us. Either pulse sets FLAG0,
+;   on which the reader waits (with its own, long, timeout and its own counter and parity).
+;   One engine has one X counter and one timeout: not enough for the pulse watch, the bit
+;   count and the frame timeout together.
+; Pins (relative to pin base, the same as the reader's): D0 = 0, D1 = 1. JMP_PIN = 1 (D1).
+; Engine settings: CLKDIV = 119 (2 us tick), SHIFT = 0x00, FLAG_BASE = 0 (shared with the
+;   reader), LINE_CFG = 0x41 (timeout vector at word 1), TIMEOUT = 2 ticks.
+; A pulse is over when its line has read high 8 ticks in a row (D0) or on a poll (D1).
+.equ d0 0
+.equ d1 1
+
+        JMP  init
+; timeout vector (word 1): every 2 ticks while D0 is high
+        JMP  PIN_LO, h1         ; a pulse on D1
+        JMP  w
+init:   SET  OSR, 0xFF
+w:      WAIT d0, LOW            ; a pulse on D0 (or the timeout)
+        FLAG 0, SET
+e0:     IN   d0                 ; until D0 has been high for 8 ticks
+        JNE  e0
+        JMP  w
+h1:     FLAG 0, SET
+e1:     JMP  PIN_LO, e1         ; until D1 is high
+        JMP  w

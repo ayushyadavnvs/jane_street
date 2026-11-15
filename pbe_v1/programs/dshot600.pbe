@@ -1,0 +1,85 @@
+; DShot600 transmitter: 16-bit frames (11-bit throttle, telemetry request, 4-bit checksum),
+; 600 kbit/s. Blind generality benchmark, protocol 7 (docs/GENERALITY.md).
+; Pin (relative to pin base): D = 0 (to the ESC's signal input).
+; Engine settings: CLKDIV = 0, SHIFT = 0x01 (OUT MSB first), CRC_POLY = 0x0001 and
+;   CRC_CFG = 0x43 (4 bits, init 0, fed by OUT), TIMEOUT 0, LINE_CFG 0x40.
+; The checksum is the XOR of the frame's three 4-bit groups. That is the remainder of the 12
+;   bits modulo x^4 + 1 (x^4 = 1, so every nibble simply adds), which the CRC unit computes
+;   with polynomial 0x1 and width 4: the engine appends it, the host does not compute it.
+; Timing at 60 MHz: a bit is exactly 100 clocks (1.6667 us) on every path; a 0 is high for 37
+;   clocks (617 ns; nominal 625), a 1 for 75 (1250 ns). At CLKDIV 0 an instruction takes
+;   DLY + 1 clocks and a taken jump one more; the delays are chosen to add up.
+; Host protocol: TX FIFO: 2 bytes per frame, queued together: [throttle bits 10..3]
+;   [throttle bits 2..0, telemetry bit, 0000]. The engine sends the 12 bits, then the checksum,
+;   and the line stays low until the next frame: at least 20 us (the gap an ESC needs to
+;   find the frame start), so frames queued together go out 46.7 us apart (21 kHz); the host
+;   sets a slower frame rate by when it writes. Nothing is returned.
+.equ d 0
+
+        PIN  d, DRV0
+idle:   PULL                    ; throttle bits 10..3
+        CRCRST
+        SET  X, 6
+; ---- 8 bits ----
+g0:     PIN  d, DRV1 [15]       ; high: 37 clocks (617 ns) for a 0 ...
+        NOP  [15]
+        NOP  [4]
+        PIN  d, OUT [15]       ; ... the bit itself: a 1 stays high to 75 clocks (1250 ns)
+        NOP  [15]
+        NOP  [5]
+        PIN  d, DRV0 [15]       ; low to clock 100
+        NOP  [6]
+        JMP  X--, g0
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  d, DRV1 [15]       ; high: 37 clocks (617 ns) for a 0 ...
+        NOP  [15]
+        NOP  [4]
+        PIN  d, OUT [15]       ; ... the bit itself: a 1 stays high to 75 clocks (1250 ns)
+        NOP  [15]
+        NOP  [5]
+        PIN  d, DRV0 [15]
+        NOP  [6]
+        PULL                    ; throttle bits 2..0 and the telemetry bit
+        SET  X, 2
+; ---- 4 bits ----
+g1:     PIN  d, DRV1 [15]       ; high: 37 clocks (617 ns) for a 0 ...
+        NOP  [15]
+        NOP  [4]
+        PIN  d, OUT [15]       ; ... the bit itself: a 1 stays high to 75 clocks (1250 ns)
+        NOP  [15]
+        NOP  [5]
+        PIN  d, DRV0 [15]       ; low to clock 100
+        NOP  [6]
+        JMP  X--, g1
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  d, DRV1 [15]       ; high: 37 clocks (617 ns) for a 0 ...
+        NOP  [15]
+        NOP  [4]
+        PIN  d, OUT [15]       ; ... the bit itself: a 1 stays high to 75 clocks (1250 ns)
+        NOP  [15]
+        NOP  [5]
+        PIN  d, DRV0 [15]
+        NOP  [6]
+        OSRCRC HI, LEFT         ; the checksum, in the top 4 bits
+        SET  X, 2
+; ---- the checksum ----
+g2:     PIN  d, DRV1 [15]       ; high: 37 clocks (617 ns) for a 0 ...
+        NOP  [15]
+        NOP  [4]
+        PIN  d, OUT, NOCRC [15]; ... the bit itself: a 1 stays high to 75 clocks (1250 ns)
+        NOP  [15]
+        NOP  [5]
+        PIN  d, DRV0 [15]       ; low to clock 100
+        NOP  [6]
+        JMP  X--, g2
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  d, DRV1 [15]       ; high: 37 clocks (617 ns) for a 0 ...
+        NOP  [15]
+        NOP  [4]
+        PIN  d, OUT, NOCRC [15]; ... the bit itself: a 1 stays high to 75 clocks (1250 ns)
+        NOP  [15]
+        NOP  [5]
+        PIN  d, DRV0
+        SET  X, 149             ; the gap that ends a frame: 20 us low before the next one
+gap:    JMP  X--, gap [6]
+        JMP  idle
