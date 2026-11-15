@@ -25,3 +25,4 @@ pbe_v1/results.xml
 verify/golden-model/model/results.xml
 verify/golden-model/bus_models/sim_build/
 pbe_v1/test/sigrok_results/
+_site/

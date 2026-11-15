@@ -38,14 +38,5 @@ jobs:
       - name: GL test
         uses: TinyTapeout/tt-gds-action/gl_test@ttihp27a
 
-  viewer:
-    needs: gds
-    # Publishes the layout viewer to GitHub Pages; fails until Pages is enabled for the repo
-    # (Settings, Pages, Source: GitHub Actions). Optional, so it does not fail the workflow.
-    continue-on-error: true
-    runs-on: ubuntu-24.04
-    permissions:
-      pages: write # to deploy to Pages
-      id-token: write # to verify the deployment originates from an appropriate source
-    steps:
-      - uses: TinyTapeout/tt-gds-action/viewer@ttihp27a
+  # No `viewer` job: the pages workflow (D105) runs after each gds run and publishes the 3D
+  # layout viewer at viewer/ as part of the project website.

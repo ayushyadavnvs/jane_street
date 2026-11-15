@@ -61,7 +61,7 @@ Nothing is waiting to be merged.
 - **Coverage:** the 4 unhit RTL lines (the host clearing CAN status bits 5–7 and an unused register
   address) are now covered (D104). Branch/expression/toggle misses still need a review pass before
   the freeze.
-- **Not yet done:** FPGA prototype with real devices; the GitHub Pages site; the final
+- **Not yet done:** FPGA prototype with real devices; the final
   submission package.
 
 ## Plan, in order (one background session at a time)

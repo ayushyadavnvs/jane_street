@@ -3621,3 +3621,37 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
     readable register compared before and after (FIFO data and PINS excluded).
 - **CAN-to-CAN gateway (asked for with D102): deferred by the owner.** The design worked out
   for it is in `docs/BRIDGE_VERIFICATION_TODO.md` so it can be picked up later.
+
+## D105. Project website: one static page built from the repository, deployed with the 3D viewer
+
+**Decision.** `site/build.py` builds a one-page website (`site/template.html`) and the
+`pages` workflow deploys it to GitHub Pages on every push to `main` that touches what it shows,
+and after every `gds` run. Every number on the page is read at build time, not typed in:
+protocols and verification layers from the tables in `README.md`; decision, bug and testbench
+counts from `docs/` and `pbe_v1/test/`; the block diagrams and the instruction table from
+`diagrams/pbe-diagrams.html`; timing, area and check counts from `metrics.csv` of the latest
+successful `gds` run. The layout render and the OASIS file for Tiny Tapeout's 3D viewer come
+from the same run; the viewer is published at `viewer/`.
+
+**Alternatives.**
+- A hand-written page (like the first `diagrams/` page): goes out of date with every protocol,
+  decision and GDS run. Rejected: the numbers are the point of the page.
+- A static-site generator (Jekyll, MkDocs): more pages and theming, but another toolchain and
+  Markdown that does not hold the SVG diagrams well. Rejected for one page; Python and the
+  standard library (plus Pillow to shrink the render) are already in use.
+- Keep the `gds` workflow's `viewer` job: it deploys only the viewer to the same Pages site, so
+  each `gds` run would erase the website. **Changed:** the job is removed from `gds.yaml`, and
+  the `pages` workflow publishes the viewer with the site.
+
+**Details.**
+- Each protocol card shows how it uses the hardware: (a) a program only, added after the engine
+  existed with no RTL change; (b) a program on the general hardware; (c) a program using later
+  but general hardware; (d) protocol-specific hardware (CAN). The groups are a table in
+  `site/build.py` (`GROUP`), by protocol number; a new protocol defaults to (b) until added.
+- Artifacts expire after 90 days. Without them the site still builds: `site/build.py` holds the
+  numbers of GDS run 43698688003 and `site/assets/gds_render.jpg` the render of that run; the
+  viewer link is left out.
+- One dark theme with the diagrams' colour tokens (control blue, data green, pin copper,
+  added-hardware purple); no horizontal scroll at phone width (the diagrams scroll inside their
+  own panels).
+- Pages must be set to deploy from GitHub Actions (Settings, Pages, Source).

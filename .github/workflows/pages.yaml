@@ -1,0 +1,104 @@
+name: pages
+# The project website (D105): site/build.py turns the repository (README tables, decision and
+# bug counts, diagrams/pbe-diagrams.html) and the latest successful gds run (metrics.csv, the
+# layout render, the OASIS file for the 3D viewer) into one static site on GitHub Pages.
+# It replaces the gds workflow's `viewer` job, which deployed only the viewer to the same Pages
+# site and would erase the website on every gds run.
+# Needs Settings, Pages, Source: GitHub Actions.
+on:
+  push:
+    branches: [main]
+    paths: [site/**, diagrams/**, README.md, docs/DESIGN_DECISIONS.md, docs/BUG_LOG.md, pbe_v1/test/**, .github/workflows/pages.yaml]
+  workflow_run:
+    workflows: [gds]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Find the latest successful gds run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN=$(gh run list -R "${{ github.repository }}" --workflow gds.yaml --status success --limit 1 \
+                  --json databaseId,headSha,url --jq '.[0] // empty | "\(.databaseId) \(.headSha) \(.url)"')
+          if [ -n "$RUN" ]; then
+            read -r ID SHA URL <<< "$RUN"
+            echo "GDS_RUN=$ID" >> $GITHUB_ENV; echo "GDS_SHA=$SHA" >> $GITHUB_ENV; echo "GDS_URL=$URL" >> $GITHUB_ENV
+            echo "Layout from gds run $ID ($SHA)"
+          else
+            echo "No successful gds run: the site uses the numbers built into site/build.py"
+          fi
+
+      # Artifacts expire after 90 days; the site still builds without them (fallback numbers and image).
+      - name: Download the layout files
+        if: env.GDS_RUN != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: tt_submission
+          run-id: ${{ env.GDS_RUN }}
+          github-token: ${{ github.token }}
+
+      - name: Download the layout render
+        if: env.GDS_RUN != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: gds_render
+          path: render
+          run-id: ${{ env.GDS_RUN }}
+          github-token: ${{ github.token }}
+
+      - name: Build the site
+        run: |
+          set -euo pipefail
+          pip install --quiet pillow
+          ARGS=(--out _site)
+          M=tt_submission/stats/metrics.csv
+          [ -f "$M" ] && ARGS+=(--metrics "$M" --commit "$GDS_SHA" --run-url "$GDS_URL")
+          R=$(find render -name '*.png' 2>/dev/null | head -1 || true)
+          [ -n "$R" ] && ARGS+=(--render "$R")
+          O=$(find tt_submission -maxdepth 1 -name '*.oas' 2>/dev/null | head -1 || true)
+          [ -n "$O" ] && ARGS+=(--viewer)
+          python3 site/build.py "${ARGS[@]}"
+          if [ -n "$O" ]; then
+            mkdir -p _site/viewer
+            cp "$O" _site/viewer/tinytapeout.oas
+            cat > _site/viewer/index.html <<'EOF'
+          <!doctype html><meta charset="utf-8"><title>3D layout viewer</title>
+          <script>location.href = "https://gds-viewer.tinytapeout.com/?pdk=ihp-sg13cmos5l&model=" + encodeURIComponent(new URL("tinytapeout.oas", location.href).href);</script>
+          EOF
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

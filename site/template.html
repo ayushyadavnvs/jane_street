@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Programmable Bit Engine</title>
+<meta name="description" content="A Tiny Tapeout chip for the Jane Street protocol emulator competition: two programmable bit engines run {{N_PROTOS}} protocols, from UART to USB and 10BASE-T Ethernet, as software.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  /* one dark theme: a die under the microscope. Metal-layer colours carry meaning: */
+  --bg: #080b0e;
+  --bg2: #0c1115;
+  --panel: #11171c;
+  --die: #0e1418;
+  --fg: #e4ebee;
+  --muted: #8d9ba4;
+  --rule: #233038;
+  --ctrl: #74a8dc;   /* control */
+  --data: #5cc08d;   /* data */
+  --pin: #e28c5a;    /* pins, copper */
+  --new: #b48be0;    /* hardware added after the first design */
+  --gold: #e6b450;
+  --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans);
+  font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  background-image:
+    linear-gradient(rgba(116,168,220,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116,168,220,.035) 1px, transparent 1px);
+  background-size: 28px 28px, 28px 28px;
+}
+a { color: var(--ctrl); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--mono); font-size: .88em; color: var(--gold); }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)); }
+
+/* nav */
+nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px); background: rgba(8,11,14,.78); border-bottom: 1px solid var(--rule); }
+nav .wrap { display: flex; align-items: center; gap: 24px; height: 58px; }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--fg); letter-spacing: .02em; }
+.logo:hover { text-decoration: none; }
+.logo svg { width: 26px; height: 26px; }
+nav .links { display: flex; gap: 20px; margin-left: auto; font-size: 14px; }
+nav .links a { color: var(--muted); }
+nav .links a:hover { color: var(--fg); text-decoration: none; }
+@media (max-width: 760px) { nav .links a:not(.gh) { display: none; } }
+
+/* hero */
+.hero { position: relative; padding: 72px 0 56px; overflow: hidden; }
+.hero::before { content: ""; position: absolute; inset: -20% -10% auto auto; width: 70%; height: 140%;
+  background: radial-gradient(closest-side, rgba(230,180,80,.13), transparent 70%); pointer-events: none; }
+.hero .wrap { display: grid; gap: 40px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+h1 { font-size: clamp(36px, 5.4vw, 64px); line-height: 1.02; margin: 14px 0 18px; font-weight: 800; letter-spacing: -.02em; text-wrap: balance; }
+h1 em { font-style: normal; background: linear-gradient(90deg, var(--gold), var(--pin)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { color: var(--muted); font-size: 18px; max-width: 58ch; margin: 0; }
+.btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 8px; border: 1px solid var(--rule);
+  background: var(--panel); color: var(--fg); font-weight: 600; font-size: 15px; }
+.btn:hover { border-color: var(--gold); text-decoration: none; }
+.btn.primary { background: linear-gradient(180deg, #f0c060, #c98f2c); color: #1a1205; border-color: transparent; }
+.die { position: relative; border-radius: 10px; padding: 18px; background: linear-gradient(145deg, #151d23, #0b1014);
+  border: 1px solid var(--rule); box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.03); }
+.die img { display: block; width: 100%; height: auto; border-radius: 4px; image-rendering: auto; }
+.die .pads { position: absolute; inset: 6px; pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, var(--pin) 0 6px, transparent 6px 22px) top/100% 4px no-repeat,
+    repeating-linear-gradient(90deg, var(--pin) 0 6px, transparent 6px 22px) bottom/100% 4px no-repeat;
+  opacity: .55; }
+.die .scan { position: absolute; left: 18px; right: 18px; height: 2px; top: 18px; background: linear-gradient(90deg, transparent, rgba(230,180,80,.8), transparent);
+  animation: scan 6s ease-in-out infinite; }
+@keyframes scan { 0%,100% { top: 18px; opacity: 0; } 10% { opacity: 1; } 50% { top: calc(100% - 20px); opacity: .9; } 60% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .die .scan { display: none; } html { scroll-behavior: auto; } }
+.diecap { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 10px; text-align: center; }
+
+/* stats */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+@media (max-width: 760px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--panel); padding: 22px 20px; }
+.stat b { display: block; font-family: var(--mono); font-size: clamp(26px, 3.4vw, 36px); font-weight: 600; color: var(--fg); line-height: 1.1; }
+.stat b small { font-size: .5em; color: var(--muted); font-weight: 500; margin-left: 4px; }
+.stat span { color: var(--muted); font-size: 14px; }
+.stat:nth-child(1) b { color: var(--gold); } .stat:nth-child(5) b { color: var(--data); }
+
+/* sections */
+section { padding: 80px 0 0; scroll-margin-top: 60px; }
+.sh { display: grid; gap: 10px; margin-bottom: 28px; }
+.sh .eyebrow { color: var(--ctrl); }
+h2 { font-size: clamp(26px, 3.4vw, 38px); line-height: 1.12; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.sh p { color: var(--muted); max-width: 72ch; margin: 0; }
+h3 { margin: 0; font-size: 17px; }
+
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .three { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 22px; display: grid; gap: 10px; align-content: start; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card .ic { font-family: var(--mono); font-size: 12px; color: var(--gold); letter-spacing: .08em; }
+
+/* diagrams */
+.tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.tab { font: 600 14px var(--sans); color: var(--muted); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 7px 16px; cursor: pointer; }
+.tab[aria-selected="true"] { color: #1a1205; background: var(--gold); border-color: var(--gold); }
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; }
+.scroll svg { display: block; width: 100%; height: auto; min-width: 760px; }
+.scroll.narrow svg { min-width: 520px; max-width: 700px; margin: 0 auto; }
+.fig[hidden] { display: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend .c { background: var(--ctrl); } .legend .d { background: var(--data); } .legend .p { background: var(--pin); }
+.legend .n { background: var(--new); height: 12px; width: 16px; border-radius: 3px; opacity: .45; }
+{{SVG_CSS}}
+
+details { margin-top: 18px; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; }
+summary { cursor: pointer; padding: 14px 18px; font-weight: 600; }
+details .inner { padding: 0 18px 18px; display: grid; gap: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-family: var(--mono); white-space: nowrap; }
+.tag { display: inline-block; margin-left: 8px; font-family: var(--mono); font-size: 11px; color: var(--new); border: 1px solid var(--new); border-radius: 4px; padding: 0 5px; }
+
+/* protocols */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.filters button { font: 500 13px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--rule); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.filters button[aria-pressed="true"] { color: var(--fg); border-color: var(--fg); }
+.filters button i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.proto { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; display: grid; gap: 8px; align-content: start; position: relative; overflow: hidden; }
+.proto::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.proto.ga::before { background: var(--data); } .proto.gb::before { background: var(--ctrl); }
+.proto.gc::before { background: var(--new); } .proto.gd::before { background: var(--pin); }
+.proto[hidden] { display: none; }
+.ptop { display: flex; justify-content: space-between; align-items: center; }
+.pnum { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.badge { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid; }
+.ba { color: var(--data); } .bb { color: var(--ctrl); } .bc { color: var(--new); } .bd { color: var(--pin); }
+.dot-a { background: var(--data); } .dot-b { background: var(--ctrl); } .dot-c { background: var(--new); } .dot-d { background: var(--pin); }
+.psize { margin: 0; font-family: var(--mono); font-size: 13px; color: var(--gold); }
+.ptest { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.note { margin-top: 16px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+/* verification */
+.layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+@media (max-width: 400px) { .layers { grid-template-columns: 1fr; } }
+.layer { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; display: grid; gap: 6px; align-content: start; }
+.layer h3 { font-size: 15px; }
+.layer p { margin: 0; color: var(--muted); font-size: 14px; }
+.callout { margin-top: 18px; display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; background: linear-gradient(90deg, rgba(230,180,80,.09), transparent); border: 1px solid var(--rule); border-left: 3px solid var(--gold); border-radius: 10px; padding: 18px 20px; }
+.callout b { font-family: var(--mono); font-size: 28px; color: var(--gold); }
+.callout p { margin: 0; color: var(--muted); }
+@media (max-width: 600px) { .callout { grid-template-columns: 1fr; } }
+
+/* silicon */
+.silicon { display: grid; grid-template-columns: .9fr 1.1fr; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .silicon { grid-template-columns: 1fr; } }
+.checks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.checks span { font-family: var(--mono); font-size: 12px; color: var(--data); border: 1px solid rgba(92,192,141,.4); border-radius: 6px; padding: 4px 10px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; font-size: 14px; margin-top: 16px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); }
+.pos { color: var(--data); }
+
+footer { margin-top: 96px; border-top: 1px solid var(--rule); padding: 28px 0 48px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="logo" href="#top"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="7" width="18" height="18" rx="2" fill="none" stroke="#e6b450" stroke-width="2"/><rect x="12" y="12" width="8" height="8" fill="#e6b450"/><path d="M11 2v5M16 2v5M21 2v5M11 25v5M16 25v5M21 25v5M2 11h5M2 16h5M2 21h5M25 11h5M25 16h5M25 21h5" stroke="#e28c5a" stroke-width="2"/></svg>PBE</a>
+  <div class="links">
+    <a href="#architecture">Architecture</a><a href="#protocols">Protocols</a><a href="#verification">Verification</a><a href="#silicon">Silicon</a>
+    <a class="gh" href="{{REPO}}">GitHub ↗</a>
+  </div>
+</div></nav>
+
+<header class="hero" id="top"><div class="wrap">
+  <div>
+    <div class="eyebrow">Jane Street protocol emulator ASIC · Tiny Tapeout 8×4 · IHP 130 nm</div>
+    <h1>A chip where every protocol is <em>software</em>.</h1>
+    <p class="lede">The Programmable Bit Engine has two small bit-level processors with a 16-bit instruction set. They run {{N_PROTOS}} protocols, from UART and I2C to USB and 10BASE-T Ethernet, as programs loaded at run time, two at a time. Line coding, CRC and timing live in shared hardware that any program can use.</p>
+    <div class="btns">
+      <a class="btn primary" href="{{REPO}}">View the repository</a>
+      {{VIEWER_BTN}}
+      <a class="btn" href="diagrams.html">Diagrams &amp; registers</a>
+    </div>
+  </div>
+  <div>
+    <div class="die"><img src="assets/gds_render.jpg" alt="Rendered layout of the chip: two SRAM macros and about 100,000 standard cells on 8 by 4 Tiny Tapeout tiles" width="2200" height="907"><div class="pads"></div><div class="scan"></div></div>
+    <div class="diecap">tt_um_ayushyadavnvs_pbe · {{CELLS}} cells · 2 SRAM macros</div>
+  </div>
+</div></header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat"><b>{{N_PROTOS}}</b><span>protocols, all as programs</span></div>
+    <div class="stat"><b>2</b><span>engines, running two protocols at once</span></div>
+    <div class="stat"><b>60<small>MHz</small></b><span>clock, 6 clocks per Ethernet bit</span></div>
+    <div class="stat"><b>256<small>× 16 b</small></b><span>SRAM program memory per engine</span></div>
+    <div class="stat"><b>{{SETUP_SLOW}}</b><span>setup slack, slow corner, routed</span></div>
+    <div class="stat"><b>{{N_BENCHES}}</b><span>end-to-end testbenches, also at gate level</span></div>
+    <div class="stat"><b>{{N_DECISIONS}}</b><span>design decisions, with alternatives</span></div>
+    <div class="stat"><b>{{N_BUGS}}</b><span>bugs logged, each with its failing test</span></div>
+  </div>
+</div>
+
+<section id="idea"><div class="wrap">
+  <div class="sh"><div class="eyebrow">The idea</div><h2>General hardware, protocol-specific software</h2>
+    <p>A protocol is a short program, {{MIN_WORDS}} to {{MAX_WORDS}} words. The hardware does the work that software can't do fast enough on a 60 MHz chip, and does it generally, so each new block serves several protocols.</p></div>
+  <div class="three">
+    <div class="card"><div class="ic">01 · PROGRAMS</div><h3>Every instruction carries a delay</h3><p>Each 16-bit instruction has a 0–15 tick delay field, so most bit timing needs no extra wait instructions. Pin, wait, jump, shift, FIFO and flag operations describe a protocol cycle by cycle.</p></div>
+    <div class="card"><div class="ic">02 · SHARED HARDWARE</div><h3>Helpers any protocol can use</h3><p>A CRC unit for any polynomial up to 32 bits; a line coder for NRZ, NRZI and Manchester with bit stuffing and clock recovery; parity, timeouts, 16-byte FIFOs with mark and rewind.</p></div>
+    <div class="card"><div class="ic">03 · TWO ENGINES</div><h3>Two protocols at once, or one feeding the other</h3><p>Each engine has its own 256-word SRAM. They share flags, and an optional FIFO link lets one engine pass its bytes straight to the other, e.g. a UART-to-I2C bridge with no host in the loop.</p></div>
+  </div>
+</div></section>
+
+<section id="architecture"><div class="wrap">
+  <div class="sh"><div class="eyebrow">Architecture</div><h2>Block diagrams</h2>
+    <p>The host (the demo board's microcontroller) loads each engine's program over SPI with 1 or 4 data lanes, then exchanges bytes through the FIFOs. Purple marks hardware added after the first design for USB, CAN and Ethernet.</p></div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-fig="f1">The chip</button>
+    <button class="tab" role="tab" aria-selected="false" data-fig="f2">Inside one engine</button>
+    <button class="tab" role="tab" aria-selected="false" data-fig="f3">Instruction word</button>
+  </div>
+  <div class="fig scroll" id="f1">{{FIG1}}</div>
+  <div class="fig scroll" id="f2" hidden>{{FIG2}}</div>
+  <div class="fig scroll narrow" id="f3" hidden>{{FIG3}}</div>
+  <div class="legend"><span><i class="c"></i>control</span><span><i class="d"></i>data</span><span><i class="p"></i>pins</span><span><i class="n"></i>added for USB, CAN, Ethernet</span></div>
+  <details><summary>The instruction set</summary><div class="inner"><div class="tablewrap"><table>{{ISA}}</table></div>
+    <p class="note" style="margin:0">Registers, host commands and the full diagrams: <a href="diagrams.html">diagrams &amp; registers</a>. Assembler: <code>pbe_v1/tools/pbe_asm.py</code>.</p></div></details>
+</div></section>
+
+<section id="protocols"><div class="wrap">
+  <div class="sh"><div class="eyebrow">Protocols</div><h2>{{N_PROTOS}} protocols, tested end to end</h2>
+    <p>{{N_AB}} of {{N_PROTOS}} run on the general hardware alone, and {{N_A}} of those were added after the engine was built, with no RTL change. Every one has a testbench against a model of the device on the other side of the wire.</p></div>
+  <div class="filters" role="group" aria-label="Filter by how the protocol uses the hardware">
+    <button aria-pressed="true" data-f="all">All · {{N_PROTOS}}</button>
+    <button aria-pressed="false" data-f="a"><i class="dot-a"></i>Program only · {{N_A}}</button>
+    <button aria-pressed="false" data-f="b"><i class="dot-b"></i>General hardware · {{N_B}}</button>
+    <button aria-pressed="false" data-f="c"><i class="dot-c"></i>New, general hardware · {{N_C}}</button>
+    <button aria-pressed="false" data-f="d"><i class="dot-d"></i>Protocol hardware · {{N_D}}</button>
+  </div>
+  <div class="grid">
+{{PROTOS}}
+  </div>
+  <p class="note"><b style="color:var(--data)">Program only</b>: written after the engine existed, no RTL change. <b style="color:var(--ctrl)">General hardware</b>: the first protocols, which shaped the shared hardware. <b style="color:var(--new)">New, general hardware</b>: uses blocks added later that other protocols share. <b style="color:var(--pin)">Protocol hardware</b>: CAN's bit-synchronous block, the one protocol-specific unit.</p>
+</div></section>
+
+<section id="verification"><div class="wrap">
+  <div class="sh"><div class="eyebrow">Verification</div><h2>Independent layers, each catching what the others miss</h2>
+    <p>Directed testbenches against device models, a golden model compared every clock, third-party decoders, formal proofs, mutation testing and gate-level simulation on the routed netlist, under two simulators.</p></div>
+  <div class="layers">{{LAYERS}}</div>
+  <div class="callout"><b>{{N_DECISIONS}} · {{N_BUGS}}</b><p>Every design decision is written down with its alternatives, and every bug with the code before and after and the test that fails before the fix. <a href="{{REPO}}/blob/main/docs/DESIGN_DECISIONS.md">Decisions</a> · <a href="{{REPO}}/blob/main/docs/BUG_LOG.md">Bug log</a> · <a href="{{REPO}}/blob/main/verify/README.md">Verification</a></p></div>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <div class="sh"><div class="eyebrow">Silicon</div><h2>Through the Tiny Tapeout flow at 60 MHz</h2>
+    <p>LibreLane place and route on IHP SG13CMOS5L, the Tiny Tapeout precheck, and the full testbenches re-run on the routed gate-level netlist.</p></div>
+  <div class="silicon">
+    <div class="card">
+      <h3>Layout</h3>
+      <dl class="kv">
+        <dt>Tiles</dt><dd>8 × 4 (1,225,257 µm²)</dd>
+        <dt>Standard cells</dt><dd>{{STDCELL}} µm² · {{CELLS}} instances</dd>
+        <dt>SRAM macros</dt><dd>2 × 256 × 16 b · {{MACROS}} µm²</dd>
+        <dt>Utilization</dt><dd>{{UTIL}} %</dd>
+        <dt>Clock</dt><dd>60 MHz (16.667 ns)</dd>
+      </dl>
+      <div class="checks"><span>DRC {{DRC}}</span><span>LVS {{LVS}}</span><span>antenna {{ANTENNA}}</span><span>precheck ✓</span><span>gate-level ✓</span></div>
+    </div>
+    <div class="card">
+      <h3>Timing slack, routed</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Corner</th><th>Setup</th><th>Hold</th></tr></thead>
+        <tbody>
+          <tr><td>slow · 1.08 V · 125 °C</td><td class="pos">{{SETUP_SLOW}}</td><td class="pos">{{HOLD_SLOW}}</td></tr>
+          <tr><td>typical · 1.20 V · 25 °C</td><td class="pos">{{SETUP_TYP}}</td><td class="pos">{{HOLD_TYP}}</td></tr>
+          <tr><td>fast · 1.32 V · −40 °C</td><td class="pos">{{SETUP_FAST}}</td><td class="pos">{{HOLD_FAST}}</td></tr>
+        </tbody>
+      </table></div>
+      <p>Positive at every corner. Numbers from the latest gds run, read when this page was built.</p>
+      <div class="btns" style="margin-top:6px">{{VIEWER_BTN}}</div>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>Programmable Bit Engine · Ayush Yadav · Jane Street protocol emulator ASIC competition, Tiny Tapeout on IHP SG13CMOS5L</span>
+  <span>Built {{BUILT}} from {{COMMIT}}{{RUN_LINK}} · <a href="{{REPO}}">GitHub</a></span>
+</div></footer>
+
+<script>
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  document.querySelectorAll('.fig').forEach(f => f.hidden = f.id !== t.dataset.fig);
+}));
+document.querySelectorAll('.filters button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.filters button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.querySelectorAll('.proto').forEach(p => p.hidden = b.dataset.f !== 'all' && p.dataset.group !== b.dataset.f);
+}));
+</script>
+</body>
+</html>

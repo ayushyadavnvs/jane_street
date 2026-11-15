@@ -7,9 +7,10 @@ Entry for the Jane Street protocol emulator ASIC competition (Tiny Tapeout, IHP 
 |---|---|
 | `src/` | The RTL (SystemVerilog) and the Tiny Tapeout flow configuration `config.json`; `pbe_v1/src` links here |
 | `info.yaml`, `docs/info.md`, `test/` | Tiny Tapeout project description, datasheet page, and the cocotb test that also runs on the gate-level netlist |
-| `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test`, a Verilator lint and `make test-verilator`) |
+| `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `pages` (the website), `regression` (`pbe_v1` `make test`, a Verilator lint and `make test-verilator`) |
 | `pbe_v1/` | Programmable Bit Engine: two engines with CRC (up to 32 bits), parity, timeout and line-coder (NRZ, NRZI, Manchester) hardware, the protocol programs (see Protocols below), the testbenches and the assembler |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
+| `site/` | The project website (D105): `site/build.py` builds it from this repository and the latest GDS run; the `pages` workflow publishes it to GitHub Pages with the 3D layout viewer |
 | `verify/` | Independent verification (D63, D64): the golden model, differential, sigrok and bus-model checks (`verify/golden-model/`, with the reports and evidence), formal properties, reference vectors, coverage, stress and mutation testing; run from `pbe_v1/` with `make` |
 | `macros/` | The program memory's SRAM macro (D62, D82): IHP's views and simulation model; the flow steps are in `docs/SRAM_8x4_FLOW_STEPS.md` |
 | `docs/STATUS.md` | Where the project stands: what `main` contains, open branches and issues, the plan |
