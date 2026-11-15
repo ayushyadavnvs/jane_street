@@ -1,0 +1,36 @@
+; UART <-> I2C bridge, engine 0: a half-duplex UART, 8N1, with the engine-to-engine link (D102).
+; Every byte received on RXD is pushed (and the link carries it to engine 1, bridge_i2c.pbe);
+; every byte in the TX FIFO (engine 1's replies, carried by the link) is sent on TXD. While it
+; sends it does not receive (half-duplex): the terminal sends a command, waits for its whole
+; reply, then sends the next (bridge_i2c.pbe sends a reply only after the whole command is in).
+;
+; Pins: TXD = pin base, RXD = pin base + 1.
+; Config: tick = 1/16 bit: CLKDIV = clk / (16 * baud) - 1 (60 MHz, 115200 baud: 32, -1.4 %);
+;   SHIFT = 0x00 (OUT and IN LSB first); JMP_PIN = 1 (RXD).
+;
+; Host setup (once; the host is not in the data path afterwards), with bridge_i2c.pbe on engine 1:
+;   engine 0: CLKDIV 32, PIN_BASE 0, JMP_PIN 1, SHIFT 0x00, START_PC = this program's word
+;   engine 1: see bridge_i2c.pbe; PIN_OWN = 0x0C (pins 2, 3 to engine 1)
+;   LINK0 (0x17) = 1 and LINK1 (0x27) = 1: E0's RX FIFO -> E1's TX FIFO, E1's RX FIFO -> E0's TX FIFO
+;   CTRL = 0x30 (restart both), then CTRL = 0x03 (run both)
+.equ tx 0
+.equ rx 1
+
+        PIN  tx, DRV1        ; idle high
+w:      JMP  TX_READY, send  ; a reply byte to send
+        JMP  PIN_LO, recv    ; a start bit (seen 0..3 ticks late)
+        JMP  w
+recv:   NOP  [5]
+        JMP  PIN_HI, w       ; high again in the middle of the start bit: a glitch
+        SET  X, 7 [15]       ; first data sample 24 ticks (1.5 bits) after the edge
+rbit:   IN   rx [14]         ; 16 ticks a bit, LSB first
+        JMP  X--, rbit
+        PUSH                 ; to engine 1 (back to the loop at 8.7 bits, inside the stop bit)
+        JMP  w
+send:   PULL [15]            ; a whole bit of idle (the previous byte's stop bit) first
+        PIN  tx, DRV0 [14]   ; start bit: 15 ticks + SET = 16
+        SET  X, 7
+sbit:   PIN  tx, OUT [14]    ; 15 ticks + JMP = 16
+        JMP  X--, sbit
+        PIN  tx, DRV1        ; the stop bit: back to listening at once, so a terminal may start
+        JMP  w               ;   its next byte as soon as it has sampled this stop bit

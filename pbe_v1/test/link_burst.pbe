@@ -1,0 +1,43 @@
+; tb_link (D102), case d: at FLAG 0 push 1..12, a byte every 3 clocks (CLKDIV 0), so the link
+; moves a byte in 12 known clocks (about 160 clocks after the flag); the host aims a write to the other TX FIFO at one of them.
+        WAIT FLAG 0, HIGH
+        FLAG 0, CLR
+        SET  X, 9            ; ~160 clocks: the host's next write is at least one transaction away
+dly:    JMP  X--, dly [15]
+        SET  X, 1
+        MOV  ISR, X
+        PUSH
+        SET  X, 2
+        MOV  ISR, X
+        PUSH
+        SET  X, 3
+        MOV  ISR, X
+        PUSH
+        SET  X, 4
+        MOV  ISR, X
+        PUSH
+        SET  X, 5
+        MOV  ISR, X
+        PUSH
+        SET  X, 6
+        MOV  ISR, X
+        PUSH
+        SET  X, 7
+        MOV  ISR, X
+        PUSH
+        SET  X, 8
+        MOV  ISR, X
+        PUSH
+        SET  X, 9
+        MOV  ISR, X
+        PUSH
+        SET  X, 10
+        MOV  ISR, X
+        PUSH
+        SET  X, 11
+        MOV  ISR, X
+        PUSH
+        SET  X, 12
+        MOV  ISR, X
+        PUSH
+end:    JMP  end

@@ -73,6 +73,21 @@
 //                       [4] = 1 clears "arbitration lost", [5] = 1 clears "bit error",
 //                       [6] = 1 clears "frame sent"
 //      +6 FIFO data: W pushes the TX FIFO, R pops the RX FIFO (each FIFO holds 16 bytes)
+//      +7 LINK      engine-to-engine link (D102): engine e's RX FIFO feeds the other engine's
+//                   TX FIFO (e's PUSH -> the other's PULL). W: [0] on; [1] = 1 flushes the path
+//                   (e's RX FIFO and the other's TX FIFO; self-clearing). R: [0] on, [1] path
+//                   empty (both FIFOs), [2] e's RX FIFO full (e's PUSH blocks), [3] the other's
+//                   TX FIFO full. Reset 0 (off): with both links off every FIFO is as before.
+//                   On: one byte a clock moves while the RX FIFO has one and the TX FIFO has
+//                   room (its mark counts, D70), so the path holds 32 bytes; a PUSH blocks only
+//                   when e's RX FIFO is full, as without the link (RX overflow status and IRQ
+//                   too). The host may write the other engine's TX FIFO at any time: in a clock
+//                   where both would push it the host's byte goes in first and the link's a
+//                   clock later. A host read of e's FIFO data register does not pop while the
+//                   link is on (the link owns the head). Off (any time): nothing moves; bytes
+//                   stay where they are (e's RX FIFO, readable by the host again, and the other
+//                   TX FIFO, for its engine). No move in a clock that flushes either end.
+//                   Restart does not touch the link or the FIFOs.
 //   0x30+0x10*e   engine e, second page:
 //      +0 LINE       line coder, see pbe_line: [1:0] mode (0 off, 1 NRZ, 2 NRZI, 3 Manchester,
 //                    D90), [3:2] stuffing (0 none, 1 after 6 ones, 2 after 5 ones, 3 after 5
@@ -91,6 +106,8 @@
 //      +A CRC_GOOD_2, +B CRC_GOOD_3   RW: CRC_GOOD bits 23..16, 31..24. Reset 0.
 //      +C CRC_CFG2   RW [0] CRC width bit 4: width - 1 = {CRC_CFG2[0], CRC_CFG[3:0]} (1-32 bits).
 //                    Reset 0, which leaves every CRC of up to 16 bits as before.
+//      +D LINK_FILL  R  bytes in engine e's link path: e's RX FIFO + the other engine's TX FIFO
+//                    (0-32; counted whether the link is on or off, D102). Writes do nothing.
 //
 // Edge/reset contract, clarified by the round-2 model audit (no logic changes):
 // Host pins and protocol pins pass through two clk registers; engines/host SPI consume
@@ -205,7 +222,13 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
 
   wire [1:0] restart = (wr_en && wr_addr == 7'h00) ? wr_data[5:4] : 2'b00;
   wire [1:0] flush   = (wr_en && wr_addr == 7'h00) ? wr_data[7:6] : 2'b00;
-  wire [1:0] tx_flush = flush | ((wr_en && wr_addr == 7'h0E) ? wr_data[1:0] : 2'b00);
+  // LINK (engine e's +7, D102): [0] on, [1] = 1 flushes the path (self-clearing)
+  logic [1:0] link_en;
+  wire [1:0] link_wr = {wr_en && wr_addr == 7'h27, wr_en && wr_addr == 7'h17};
+  wire [1:0] link_flush = {link_wr[1] && wr_data[1], link_wr[0] && wr_data[1]};
+  wire [1:0] tx_flush = flush | ((wr_en && wr_addr == 7'h0E) ? wr_data[1:0] : 2'b00)
+                      | {link_flush[0], link_flush[1]};  // a path ends in the other engine's TX FIFO
+  wire [1:0] rx_flush = flush | link_flush;
 
   // engine-facing signals
   logic [15:0] pc;       // 8 bits per engine
@@ -214,6 +237,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
   logic [15:0] e_out, e_oe, tx_data, rx_din, rx_dout;
   logic [1:0]  tx_empty, tx_full, tx_pop, tx_mark, tx_rewind, rx_empty, rx_full, rx_push, e_irq;
   logic [9:0]  tx_count, rx_count;  // 5 bits per engine
+  logic [1:0]  host_txw, link_mv;    // the link (D102): host pushes a TX FIFO; a byte moves
+  logic [11:0] link_fill;            // 6 bits per path: e's RX FIFO + the other's TX FIFO
   logic [7:0]  f_set, f_clr;  // engine-relative, 4 bits per engine
   logic [15:0] p_set, p_clr;  // the same, mapped to physical flags, 8 bits per engine
   logic [7:0]  e_flags;       // each engine's view of its 4 flags
@@ -250,8 +275,11 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       crc_good <= '0;
       crc_wide <= '0;
       host_quad <= 1'b0;
+      link_en  <= '0;
     end else begin
-      if (quad_exit) host_quad <= 1'b0;  // 8 SCK edges with CS_n high (never during a write)
+      if (quad_exit) host_quad <= 1'b0;
+      if (link_wr[0]) link_en[0] <= wr_data[0];
+      if (link_wr[1]) link_en[1] <= wr_data[0];  // 8 SCK edges with CS_n high (never during a write)
       // engine events first, so a host write in the same cycle wins
       flags    <= (flags | p_set[7:0] | p_set[15:8] | host_set) & ~(p_clr[7:0] | p_clr[15:8] | host_clr);
       irq_pend <= irq_pend | e_irq;
@@ -346,6 +374,8 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       4'hE:    eng_rd = rd_e1 ? line_cfg[15:8] : line_cfg[7:0];
       4'hF:    eng_rd = rd_e1 ? e_status[15:8] : e_status[7:0];
       4'h6:    eng_rd = rd_e1 ? rx_dout[15:8] : rx_dout[7:0];
+      4'h7:    eng_rd = rd_e1 ? {4'b0, tx_full[0], rx_full[1], rx_empty[1] && tx_empty[0], link_en[1]}
+                              : {4'b0, tx_full[1], rx_full[0], rx_empty[0] && tx_empty[1], link_en[0]};
       default: eng_rd = 8'h00;
     endcase
   end
@@ -368,6 +398,7 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
       4'hA:    pg_rd = rd_p1 ? crc_good[55:48] : crc_good[23:16];
       4'hB:    pg_rd = rd_p1 ? crc_good[63:56] : crc_good[31:24];
       4'hC:    pg_rd = {7'b0, crc_wide[rd_p1]};
+      4'hD:    pg_rd = {2'b0, rd_p1 ? link_fill[11:6] : link_fill[5:0]};
       default: pg_rd = 8'h00;
     endcase
   end
@@ -445,15 +476,31 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
                         ra1[31:30], ra1[23:22], ra1[15:14], ra1[7:6], 1'b0};
 `endif
 
+  // ---- engine-to-engine link (D102) ----
+  // With LINK[e] on, engine e's RX FIFO drains into the other engine's TX FIFO, one byte a
+  // clock: the two existing FIFOs in a chain, no new storage. A byte moves only when the RX
+  // FIFO has one and the TX FIFO has room, and not in a clock where the host pushes that TX
+  // FIFO (the host wins; the move waits a clock) or either end is flushed. Engine e's PUSH
+  // blocks only when its own RX FIFO is full, exactly as without the link. Off: nothing moves;
+  // bytes stay in whichever FIFO holds them.
+  for (genvar e = 0; e < 2; e++) begin : g_link
+    localparam int O = 1 - e;
+    assign host_txw[e] = wr_en && wr_addr == ((e == 0) ? 7'h16 : 7'h26);
+    assign link_mv[e]  = link_en[e] && !rx_empty[e] && !tx_full[O] && !host_txw[O]
+                         && !rx_flush[e] && !tx_flush[O];
+    assign link_fill[e*6+:6] = {1'b0, rx_count[e*5+:5]} + {1'b0, tx_count[O*5+:5]};
+  end
+
   // ---- engines and their FIFOs ----
   for (genvar e = 0; e < 2; e++) begin : g_eng
     localparam logic [6:0] FIFO_ADDR = (e == 0) ? 7'h16 : 7'h26;
+    localparam int O = 1 - e;  // the other engine: its link feeds this TX FIFO
 
     pbe_fifo #(.ADDR_BITS(4)) u_txf (
         .clk, .rst_n,
         .flush(tx_flush[e]),
-        .push (wr_en && wr_addr == FIFO_ADDR),
-        .din  (wr_data),
+        .push (host_txw[e] || link_mv[O]),
+        .din  (host_txw[e] ? wr_data : rx_dout[O*8+:8]),
         .pop  (tx_pop[e]),
         .mark (tx_mark[e]),
         .rewind(tx_rewind[e]),
@@ -465,10 +512,11 @@ module tt_um_ayushyadavnvs_pbe (  // Tiny Tapeout needs the GitHub user in the n
 
     pbe_fifo #(.ADDR_BITS(4)) u_rxf (
         .clk, .rst_n,
-        .flush(flush[e]),
+        .flush(rx_flush[e]),
         .push (rx_push[e]),
         .din  (rx_din[e*8+:8]),
-        .pop  (rd_done && rd_addr == FIFO_ADDR),
+        // with the link on, the link owns the head: a host read does not pop (D102)
+        .pop  ((rd_done && rd_addr == FIFO_ADDR && !link_en[e]) || link_mv[e]),
         .mark (1'b0),
         .rewind(1'b0),
         .dout (rx_dout[e*8+:8]),

@@ -1,0 +1,182 @@
+; UART <-> I2C bridge, engine 1: an I2C controller run by commands that arrive in its TX FIFO
+; (from engine 0's UART through the link, D102); replies go to its RX FIFO (and through the
+; other link back to engine 0's UART, bridge_uart.pbe). No host in the data path.
+;
+; Commands (bytes, as sent on the UART):
+;   'W' (0x57) A n d1 .. dn   START, A, d1 .. dn, STOP. A is the address byte as it goes on the
+;                             bus (7-bit address << 1, R/W = 0). n = 0: the address alone (a probe).
+;                             Reply: [0x00] every byte ACKed; [0x01] the address was NACKed (the
+;                             data bytes are read and dropped); [0x02] a data byte was NACKed (STOP
+;                             there; the rest are dropped).
+;   'R' (0x52) A n            START, A (R/W = 1), n bytes read (ACK each but the last, NACK the
+;                             last), STOP. Reply: [0x00] d1 .. dn, or [0x01] if A was NACKed.
+;   anything else             Reply [0xFF]; the byte is dropped and the next one is a command.
+; A write's reply goes out after its STOP; a read's status goes out first and its data as it is
+; read (the STOP follows the last byte's NACK). Every reply goes out only once the whole command
+; has arrived (bytes after a NACK are read and dropped first): engine 0 is half-duplex, so the
+; terminal must wait for a command's reply before it sends the next command. A command may
+; arrive slowly: between its bytes the controller holds SCL low, which I2C allows.
+; SCL: low at least 4 ticks (1.47 us at CLKDIV 21), high 2 ticks (0.73 us) plus any stretching.
+;
+; Pins: SDA = pin base, SCL = pin base + 1, open drain, both need pull-ups.
+; Config: OUT and IN MSB first (SHIFT = 0x03); JMP_PIN = 0 (SDA); tick = 1/7 of the SCL period
+;   (CLKDIV 21 at 60 MHz: fast mode, 390 kHz; 85: standard mode). FLAG0 and FLAG1 of this engine
+;   are its own state (leave FLAG_BASE at 4: physical flags 4-7).
+; Host setup: engine 1: CLKDIV 21, PIN_BASE 2, JMP_PIN 0, SHIFT 0x03, START_PC = this program's
+;   word; the rest is in bridge_uart.pbe.
+.equ sda 0
+.equ scl 1
+
+cmd:    PULL                 ; the command byte
+        MOV  ISR, OSR
+        SET  OSR, 0x57       ; 'W'
+        JEQ  wr
+        SET  OSR, 0x52       ; 'R'
+        JEQ  rd
+        SET  OSR, 0xFF       ; unknown: reply 0xFF
+        MOV  ISR, OSR
+        PUSH
+        JMP  cmd
+rd:     FLAG 0, SET          ; FLAG0: a read
+        JMP  go
+wr:     FLAG 0, CLR
+go:     FLAG 1, CLR          ; FLAG1: the address has been ACKed
+        PULL                 ; A
+        PIN  sda, REL        ; START: SDA falls while SCL is high (SCL is high or low here)
+        PIN  scl, REL
+        WAIT scl, HIGH [1]
+        PIN  sda, DRV0 [1]
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the first OUTOD
+wb:
+        PIN  sda, OUTOD      ; bit 7
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 6
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 5
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 4
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 3
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 2
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 1
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, OUTOD      ; bit 0
+        PIN  scl, REL
+        WAIT scl, HIGH [1]   ; clock stretching: wait while the target holds SCL low
+        PIN  scl, DRV0 [2]   ; low: 3 ticks + the next OUTOD = 4
+        PIN  sda, REL        ; the ACK slot
+        PIN  scl, REL
+        WAIT scl, HIGH
+        JMP  PIN_HI, nack    ; SDA high while SCL is high: NACK
+        PIN  scl, DRV0 [2]
+        JMP  FLAG1, wd       ; a data byte was ACKed
+        FLAG 1, SET          ; the address was ACKed
+        JMP  FLAG0, rdata
+        PULL                 ; n
+        MOV  X, OSR
+wd:     JMP  X--, wnext
+        PIN  sda, DRV0       ; STOP: SDA rises while SCL is high
+        PIN  scl, REL
+        WAIT scl, HIGH [1]
+        PIN  sda, REL [3]
+        SET  OSR, 0x00       ; every byte ACKed
+        MOV  ISR, OSR
+        PUSH
+        JMP  cmd
+wnext:  PULL
+        JMP  wb
+nack:   PIN  scl, DRV0 [2]
+        PIN  sda, DRV0       ; STOP: SDA rises while SCL is high
+        PIN  scl, REL
+        WAIT scl, HIGH [1]
+        PIN  sda, REL [3]
+        JMP  FLAG1, wdn      ; a data byte NACKed: X bytes are left
+        PULL                 ; the address NACKed: n
+        MOV  X, OSR
+        SET  OSR, 0x01
+        MOV  ISR, OSR        ; the reply waits in ISR while the rest is dropped
+        JMP  FLAG0, reply    ; a read has no data bytes
+        JMP  drop
+wdn:    SET  OSR, 0x02
+        MOV  ISR, OSR
+drop:   JMP  X--, dr1        ; drop the command's remaining bytes first: engine 0 is
+reply:  PUSH                 ;   half-duplex, so the reply goes out only when the command is in
+        JMP  cmd
+dr1:    PULL
+        JMP  drop
+rdata:  PULL                 ; n
+        MOV  X, OSR
+        SET  OSR, 0x00       ; the status first, then the data as it is read
+        MOV  ISR, OSR
+        PUSH
+        PIN  sda, REL        ; the target drives SDA
+rl:     JMP  X--, rbyte
+        PIN  sda, DRV0       ; STOP: SDA rises while SCL is high
+        PIN  scl, REL
+        WAIT scl, HIGH [1]
+        PIN  sda, REL [3]
+        JMP  cmd
+rbyte:
+        PIN  scl, REL        ; bit 7
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 6
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 5
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 4
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 3
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 2
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 1
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PIN  scl, REL        ; bit 0
+        WAIT scl, HIGH
+        IN   sda
+        PIN  scl, DRV0 [3]   ; low: 4 ticks
+        PUSH
+        MOV  ISR, X          ; bytes left after this one
+        SET  OSR, 0
+        JEQ  rlast
+        PIN  sda, DRV0       ; ACK: more to come
+        PIN  scl, REL
+        WAIT scl, HIGH [1]
+        PIN  scl, DRV0 [2]
+        PIN  sda, REL
+        JMP  rl
+rlast:  PIN  sda, REL        ; NACK the last byte
+        PIN  scl, REL
+        WAIT scl, HIGH [1]
+        PIN  scl, DRV0 [2]
+        JMP  rl              ; X = 0: the STOP

@@ -1,0 +1,6 @@
+; tb_link (D102): each engine copies its TX FIFO into its RX FIFO, byte for byte. With the link
+; on, engine e's PUSH lands (one clock later) in the other engine's TX FIFO.
+loop:   PULL
+        MOV  ISR, OSR
+        PUSH
+        JMP  loop
