@@ -171,6 +171,22 @@ td:first-child { font-family: var(--mono); white-space: nowrap; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); }
 .pos { color: var(--data); }
 
+
+/* waveform strip: "PBE" on the wire in three line codes, scrolling like a logic analyser */
+.wave { margin-top: 30px; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 0 10px; overflow: hidden; position: relative; }
+.wave .rows { display: grid; grid-template-columns: 118px 1fr; row-gap: 6px; align-items: center; }
+.wave .lab { font-family: var(--mono); font-size: 11px; color: var(--muted); padding-left: 14px; letter-spacing: .06em; }
+.wave .lane { height: 26px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.wave svg { display: block; height: 26px; animation: wave var(--dur, 14s) linear infinite; }
+.wave path { fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+.wave .r1 path { stroke: var(--gold); } .wave .r2 path { stroke: var(--ctrl); } .wave .r3 path { stroke: var(--data); }
+.wave .bytes { display: flex; justify-content: space-between; gap: 12px; padding: 0 14px 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.wave .bytes b { color: var(--gold); font-weight: 500; }
+@keyframes wave { from { transform: translateX(0); } to { transform: translateX(var(--shift, -50%)); } }
+.reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .wave svg { animation: none; } .reveal { opacity: 1; transform: none; transition: none; } }
+
 footer { margin-top: 96px; border-top: 1px solid var(--rule); padding: 28px 0 48px; color: var(--muted); font-size: 14px; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
 </style>
@@ -194,6 +210,14 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: 
       <a class="btn primary" href="{{REPO}}">View the repository</a>
       {{VIEWER_BTN}}
       <a class="btn" href="diagrams.html">Diagrams &amp; registers</a>
+    </div>
+    <div class="wave" aria-label="The bytes P, B, E on the wire as UART, NRZI and Manchester signals">
+      <div class="bytes"><span>ON THE WIRE</span><span><b>"PBE"</b> · 0x50 0x42 0x45</span></div>
+      <div class="rows">
+        <div class="lab">UART</div><div class="lane r1"></div>
+        <div class="lab">NRZI · USB</div><div class="lane r2"></div>
+        <div class="lab">MANCHESTER</div><div class="lane r3"></div>
+      </div>
     </div>
   </div>
   <div>
@@ -309,6 +333,65 @@ document.querySelectorAll('.filters button').forEach(b => b.addEventListener('cl
   document.querySelectorAll('.filters button').forEach(x => x.setAttribute('aria-pressed', x === b));
   document.querySelectorAll('.proto').forEach(p => p.hidden = b.dataset.f !== 'all' && p.dataset.group !== b.dataset.f);
 }));
+
+// waveform strip: the same bits ("PBE" as UART frames: start, 8 data bits LSB first, stop)
+(function () {
+  const bits = [1, 1, 1, 1];
+  for (const c of "PBE") { bits.push(0); for (let i = 0; i < 8; i++) bits.push((c.charCodeAt(0) >> i) & 1); bits.push(1, 1); }
+  bits.push(1, 1, 1, 1);
+  const seq = bits.filter(b => b === 0).length % 2 ? bits.concat(bits) : bits;  // NRZI ends where it started
+  const U = 16, H = 22, Y0 = 2;
+  const W = seq.length * U;
+  function path(levels, step) {  // levels: one value per half-step
+    let d = `M0 ${levels[0] ? Y0 : Y0 + H}`, x = 0, prev = levels[0];
+    for (const l of levels) { if (l !== prev) d += `V${l ? Y0 : Y0 + H}`; x += step; d += `H${x}`; prev = l; }
+    return d;
+  }
+  const uart = [], nrzi = [], man = [];
+  let lv = 1;
+  for (const b of seq) {
+    uart.push(b, b);
+    if (b === 0) lv ^= 1; nrzi.push(lv, lv);                 // NRZI: a 0 toggles the line (USB)
+    man.push(b ? 0 : 1, b ? 1 : 0);                           // IEEE 802.3: 1 = low-to-high, 0 = high-to-low
+  }
+  const rows = { r1: uart, r2: nrzi, r3: man };
+  for (const [cls, lev] of Object.entries(rows)) {
+    const lane = document.querySelector('.wave .' + cls);
+    if (!lane) continue;
+    const twice = lev.concat(lev);
+    lane.innerHTML = `<svg width="${2 * W}" viewBox="0 0 ${2 * W} 26" style="--shift:-${W}px;--dur:${seq.length * 0.12}s" aria-hidden="true"><path d="${path(twice, U / 2)}"/></svg>`;
+  }
+})();
+
+// count the headline numbers up once, when they come into view
+(function () {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    io.unobserve(e.target);
+    const b = e.target, node = b.firstChild;
+    if (!node || node.nodeType !== 3) return;
+    const txt = node.textContent, m = txt.match(/^([+]?)([\d,]+(?:\.\d+)?)(.*)$/);
+    if (!m) return;
+    const end = parseFloat(m[2].replace(/,/g, '')), dec = (m[2].split('.')[1] || '').length, t0 = performance.now();
+    const fmt = v => m[1] + (dec ? v.toFixed(dec) : Math.round(v).toLocaleString('en-US')) + m[3];
+    (function step(t) {
+      const k = Math.min(1, (t - t0) / 1100), e2 = 1 - Math.pow(1 - k, 3);
+      node.textContent = fmt(end * e2);
+      if (k < 1) requestAnimationFrame(step); else node.textContent = txt;
+    })(t0);
+  }), { threshold: 0.6 });
+  document.querySelectorAll('.stat b').forEach(b => io.observe(b));
+})();
+
+// sections fade up as they come into view
+(function () {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+  const els = document.querySelectorAll('section .sh, .card, .proto, .layer, .callout');
+  els.forEach(el => el.classList.add('reveal'));
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  els.forEach(el => io.observe(el));
+})();
 </script>
 </body>
 </html>
