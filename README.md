@@ -8,13 +8,14 @@ Entry for the Jane Street protocol emulator ASIC competition (Tiny Tapeout, IHP 
 | `src/` | The RTL (SystemVerilog) and the Tiny Tapeout flow configuration `config.json`; `pbe_v1/src` links here |
 | `info.yaml`, `docs/info.md`, `test/` | Tiny Tapeout project description, datasheet page, and the cocotb test that also runs on the gate-level netlist |
 | `.github/workflows/` | `gds` (Tiny Tapeout flow: LibreLane place and route for IHP CMOS5L, precheck, gate-level test), `test` (cocotb), `docs`, `regression` (`pbe_v1` `make test`, a Verilator lint and `make test-verilator`) |
-| `pbe_v1/` | Programmable Bit Engine: two engines with CRC, parity, timeout and line-coder hardware, the protocol programs (see Protocols below), the testbenches and the assembler |
+| `pbe_v1/` | Programmable Bit Engine: two engines with CRC (up to 32 bits), parity, timeout and line-coder (NRZ, NRZI, Manchester) hardware, the protocol programs (see Protocols below), the testbenches and the assembler |
 | `diagrams/pbe-diagrams.html` | Block diagrams and instruction format (open in a browser) |
 | `verify/` | Independent verification (D63, D64): the golden model, differential, sigrok and bus-model checks (`verify/golden-model/`, with the reports and evidence), formal properties, reference vectors, coverage, stress and mutation testing; run from `pbe_v1/` with `make` |
 | `macros/` | The program memory's SRAM macro (D62, D82): IHP's views and simulation model; the flow steps are in `docs/SRAM_8x4_FLOW_STEPS.md` |
+| `docs/STATUS.md` | Where the project stands: what `main` contains, open branches and issues, the plan |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
-## Protocols: 18 implemented and tested
+## Protocols: 19 implemented and tested
 
 Every protocol is a program loaded at run time into the engines' program memory (up to 256
 words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-end testbench in
@@ -39,7 +40,8 @@ words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-
 | 15 | 24-bit GPIO expander (74HC595 / 74HC165) | `gpio_expander` (33) | Against 74HC595 and 74HC165 models chained 3 deep: random exchanges at 6.9 and 2 MHz, input snapshot, latched outputs, setup and hold |
 | 16 | Logic analyser and waveform generator | `la_capture` (30), `wavegen` (16) | 4 channels with level/edge triggers against an independent stimulus, bursts to 4 MS/s, sustained 1 MS/s with the host reading, overflow reported; the generator's edges timestamped on their grid at up to 6 MS/s |
 | 17 | Quad SPI controller (flash) | `qspi_flash` (125) | Against a quad SPI NOR flash model: JEDEC ID, 0x03, 0x0B, 0x6B (1-1-4), 0xEB (1-4-4), quad page program, at 16/6 MHz SCK (single/quad) |
-| 18 | HDLC / SDLC (NRZ) | `hdlc_tx` (41), `hdlc_rx` (38) | Against an ISO 13239 model: flags, zero-bit insertion/deletion, CRC-16/X.25, back-to-back frames, CRC error, aborts; 1-2 Mbit/s both ways, 4 Mbit/s transmit |
+| 18 | HDLC / SDLC (NRZ and NRZI) | `hdlc_tx` (41), `hdlc_rx` (43) | Against an ISO 13239 model: flags, zero-bit insertion/deletion, CRC-16/X.25, back-to-back frames, CRC error, aborts, NRZI line coding (D94); 1-2 Mbit/s both ways, 4 Mbit/s transmit |
+| 19 | 10BASE-T Ethernet | `eth_tx` (52), `eth_rx` (17) | Against an IEEE 802.3 link-partner model: frames of 64-1518 bytes both ways with the FCS (CRC-32) in hardware, Manchester at 10 Mbit/s, clock offset and edge jitter, link pulses, loopback, TX underrun and RX overrun reported (D93, D101) |
 
 Two protocols can run at once, one per engine (e.g. JTAG and SWD, or I2C and 1-Wire), and
 both engines can be CAN nodes.
@@ -50,20 +52,20 @@ The design is checked by several independent layers; details in [`verify/README.
 
 | Layer | What it shows |
 |---|---|
-| Directed testbenches (`pbe_v1/test`, 16 benches) | Every protocol end to end against a model of the device on the other side of the wire |
+| Directed testbenches (`pbe_v1/test`, 20 benches) | Every protocol end to end against a model of the device on the other side of the wire |
 | Gate level | The full testbenches on the routed netlist from the Tiny Tapeout flow (`gl_regression`), and the cocotb test in `gl_test` |
-| Golden model + random differential testing | A Python model written from the specification, compared every clock with the RTL on random programs and host traffic |
+| Golden model + random differential testing | A Python model written from the specification, compared every clock with the RTL on random programs and host traffic (the Ethernet round: 1,000 seeds, about 21 million clocks) |
 | Independent decoders and bus models | sigrok's stock decoders (UART, SPI, I2C, 1-Wire, Modbus, WS2812, USB, CAN, JTAG, SWD, PS/2) and third-party cocotb bus models agree with the testbenches |
-| Formal (SymbiYosys) | Full proofs for the FIFO and the host SPI port; bounded checks for the line coder, the engine and CAN mode; every expected result matches (113 tasks) |
-| Mutation testing | 24 deliberately injected RTL bugs, all caught by the test suite |
-| Reference vectors | 22 CRC configurations from the reveng catalogue; USB and Modbus packets from independent libraries |
-| Functional coverage and stress | 130/130 functional coverage bins under Verilator 5.051 (line 98.5 %, branch 94.5 %); clock error, glitches, a slow host and both engines at once (22/22) |
+| Formal (SymbiYosys) | Full proofs for the FIFO and the host SPI port; bounded checks for the line coder, the engine, CAN mode and the Manchester receiver; every expected result matches (one induction proof of the Manchester timer's range is still open, BUG-165) |
+| Mutation testing | Deliberately injected RTL bugs, all caught by the test suite: 24 in the core, 14 more in the Ethernet hardware |
+| Reference vectors | CRC configurations up to 32 bits from the reveng catalogue; USB, Modbus, HDLC and Ethernet frames from independent references |
+| Functional coverage and stress | 130/130 functional coverage bins under Verilator 5.051 (line 98.5 %, branch 94.5 %), and 219/219 for the Ethernet round; clock error, edge jitter, glitches, a slow host and both engines at once |
 | Two simulators | `make test-verilator`: unit benches under Icarus and Verilator must give identical logs, in CI (D80) |
 | Lint and CI | Verilator `-Wall` lint, the unit benches under Verilator and Icarus with identical logs (a race check, D80), and `make test` on every push |
 
 Every design decision is recorded with its alternatives in
-[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (81 so far), and every bug with the code
-before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (106 so far).
+[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (101 so far), and every bug with the code
+before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (165 so far).
 A one-clock difference between Icarus and Verilator in one CAN unit test turned out to be a
 testbench race (BUG-102); fixing it also exposed a real reset bug in the line coders (BUG-104).
 
@@ -82,43 +84,41 @@ In `test/`: `make` runs the Tiny Tapeout cocotb test (needs `cocotb`).
 
 ## Tiny Tapeout
 
-The top module is `tt_um_ayushyadavnvs_pbe` (48 MHz, `CLOCK_PERIOD` 20.833 ns). Since D82 the
-program memory is an IHP SRAM macro per engine (256 words each) on 8×4 tiles; `info.yaml`
-and `src/config.json` place and power the two macros as `docs/SRAM_8x4_FLOW_STEPS.md`
-explains (§1-4 done; the `gds` run on 8×4 is next). The
-Tiny Tapeout flow runs on GitHub Actions (`gds` workflow, started by hand while the RTL is
+The top module is `tt_um_ayushyadavnvs_pbe` at **60 MHz** (`CLOCK_PERIOD` 16.667 ns, D92) on
+**8×4 tiles**. The program memory is an IHP SRAM macro per engine (256 words each, D82);
+`info.yaml` and `src/config.json` place and power the two macros as
+`docs/SRAM_8x4_FLOW_STEPS.md` explains. The host port is SPI with 1 or 4 data lanes (D89).
+
+The Tiny Tapeout flow runs on GitHub Actions (`gds` workflow, started by hand while the RTL is
 being finished): LibreLane synthesis, place and route, timing and DRC for IHP `sg13cmos5l`,
 the Tiny Tapeout precheck, and the cocotb test on the routed netlist. `gl_regression` then runs
-the full testbenches on the routed netlist. The first full run (commit df2e881) passed both.
+the full testbenches on the routed netlist.
 
 The SRAM power step (`librelane_plugin_sram_pdn.py`, `odb_stripes.py`), `src/pdn_cfg.tcl` and
 `src/sram_bb.v` come from Tiny Tapeout's `ttihp-cmos5l-sram-example` (Apache-2.0), adapted
 from Ken Pettit's `ihp-um-janestreet-prism`.
 
-## Clock frequency
+## Clock frequency and layout results
 
 The competition rules I could find set no clock frequency. Tiny Tapeout sets the ceiling:
 the clock input pad is specified up to about 66 MHz, and the demo board's RP2040 can generate
-1 Hz to 66.5 MHz (tinytapeout.com/specs/clock).
+1 Hz to 66.5 MHz (tinytapeout.com/specs/clock). 60 MHz gives 10BASE-T exactly 6 clocks per
+bit (3 per Manchester half-bit); each engine's `CLKDIV` turns the clock into the bit rate any other protocol
+needs.
+
+Latest routed result (GDS run 43648964222, commit 57d1c4c, 8×4 = 1,225,257 µm², 60 MHz):
+
+| | Slow (1.08 V, 125 °C) | Typical | Fast |
+|---|---|---|---|
+| Setup slack | +0.24 ns | +2.48 ns | +3.33 ns |
+| Hold slack | +0.60 ns | +0.28 ns | +0.10 ns |
 
 | | Value |
 |---|---|
-| Logic limit (slow corner, ABC estimate) | ~4.9 ns per cycle, before wire delay |
-| Routed worst setup path (slow corner) | ~20.3 ns, 0.586 ns slack at 48 MHz |
-| Tiny Tapeout limit | ~66 MHz |
-| Planned clock | 48 MHz: USB low speed is exactly 32 clocks per bit, timing is met at every corner, but with little slack at the slow corner (D45) |
+| Area | 380,741 µm² of standard cells + 2 × 28,127 µm² of SRAM macros; 36.2 % utilization |
+| Checks | Precheck, LVS, antenna and routing DRC clean; gate-level test on the routed netlist passed |
+| Logic-only worst path (slow corner, Yosys + ABC) | 4.00 ns, in the Ethernet receive clock recovery |
 
-The design works at any clock up to that limit; each engine's `CLKDIV`
-turns the clock into the bit rate a protocol needs.
-
-| SRAM build (D82, 8×4 = 1,225,257 µm²) | 198,770 µm² of standard cells + 2 × 28,127 µm² of macros (21 %) | 3.59 ns (logic only) | not routed yet |
-|---|---|---|---|
-
-| Results, version 1 (flip-flop memory) | Area (6×4 = 916,229 µm²) | Worst path, slow corner | Setup / hold slack, slow corner |
-|---|---|---|---|
-| Estimate (Yosys + ABC, before place and route) | 333,913 µm² (36 %) | 4.33 ns (logic only) | — |
-| Routed (first full run, commit df2e881) | 44.3 % utilization, incl. 3,590 hold-fix cells | ~20.3 ns | 0.586 ns / 0.602 ns |
-
-The estimate left out wires; the routed path is dominated by the program counter's fan-out into
-the program-memory read multiplexer. All corners, warnings and the analysis are in
-`docs/DESIGN_DECISIONS.md` D45.
+Timing is met at every corner, but with little margin at the slow corner, so every RTL change
+gets a new GDS run. Earlier results (the 48 MHz flip-flop build, D45; the first SRAM build at
+48 MHz with +6.81 ns slow-corner slack) are in `docs/DESIGN_DECISIONS.md`.
