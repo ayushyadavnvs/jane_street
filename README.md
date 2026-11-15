@@ -44,7 +44,10 @@ words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-
 | 19 | 10BASE-T Ethernet | `eth_tx` (52), `eth_rx` (17) | Against an IEEE 802.3 link-partner model: frames of 64-1518 bytes both ways with the FCS (CRC-32) in hardware, Manchester at 10 Mbit/s, clock offset and edge jitter, link pulses, loopback, TX underrun and RX overrun reported (D93, D101) |
 
 Two protocols can run at once, one per engine (e.g. JTAG and SWD, or I2C and 1-Wire), and
-both engines can be CAN nodes.
+both engines can be CAN nodes. An engine-to-engine FIFO link (D102, off by default) lets one
+engine hand its received bytes straight to the other: the UART ↔ I2C bridge (`bridge_uart`,
+`bridge_i2c`, D103, tested in `tb_bridge`) turns commands on a UART into I2C transactions
+with no host in the loop.
 
 ## Verification in brief
 
@@ -52,7 +55,7 @@ The design is checked by several independent layers; details in [`verify/README.
 
 | Layer | What it shows |
 |---|---|
-| Directed testbenches (`pbe_v1/test`, 20 benches) | Every protocol end to end against a model of the device on the other side of the wire |
+| Directed testbenches (`pbe_v1/test`, 22 benches) | Every protocol end to end against a model of the device on the other side of the wire |
 | Gate level | The full testbenches on the routed netlist from the Tiny Tapeout flow (`gl_regression`), and the cocotb test in `gl_test` |
 | Golden model + random differential testing | A Python model written from the specification, compared every clock with the RTL on random programs and host traffic (the Ethernet round: 1,000 seeds, about 21 million clocks) |
 | Independent decoders and bus models | sigrok's stock decoders (UART, SPI, I2C, 1-Wire, Modbus, WS2812, USB, CAN, JTAG, SWD, PS/2) and third-party cocotb bus models agree with the testbenches |
@@ -64,8 +67,8 @@ The design is checked by several independent layers; details in [`verify/README.
 | Lint and CI | Verilator `-Wall` lint, the unit benches under Verilator and Icarus with identical logs (a race check, D80), and `make test` on every push |
 
 Every design decision is recorded with its alternatives in
-[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (101 so far), and every bug with the code
-before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (165 so far).
+[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (104 so far), and every bug with the code
+before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (174 so far).
 A one-clock difference between Icarus and Verilator in one CAN unit test turned out to be a
 testbench race (BUG-102); fixing it also exposed a real reset bug in the line coders (BUG-104).
 
@@ -106,19 +109,19 @@ the clock input pad is specified up to about 66 MHz, and the demo board's RP2040
 bit (3 per Manchester half-bit); each engine's `CLKDIV` turns the clock into the bit rate any other protocol
 needs.
 
-Latest routed result (GDS run 43648964222, commit 57d1c4c, 8×4 = 1,225,257 µm², 60 MHz):
+Latest routed result (GDS run 43698688003, commit d5e4461, 8×4 = 1,225,257 µm², 60 MHz):
 
 | | Slow (1.08 V, 125 °C) | Typical | Fast |
 |---|---|---|---|
-| Setup slack | +0.24 ns | +2.48 ns | +3.33 ns |
-| Hold slack | +0.60 ns | +0.28 ns | +0.10 ns |
+| Setup slack | +1.19 ns | +2.53 ns | +3.36 ns |
+| Hold slack | +0.60 ns | +0.29 ns | +0.11 ns |
 
 | | Value |
 |---|---|
-| Area | 380,741 µm² of standard cells + 2 × 28,127 µm² of SRAM macros; 36.2 % utilization |
-| Checks | Precheck, LVS, antenna and routing DRC clean; gate-level test on the routed netlist passed |
-| Logic-only worst path (slow corner, Yosys + ABC) | 4.00 ns, in the Ethernet receive clock recovery |
+| Area | 389,114 µm² of standard cells + 2 × 28,127 µm² of SRAM macros; 36.9 % utilization |
+| Checks | Precheck, LVS, antenna and routing DRC clean; the cocotb test and the full testbenches (`gl_regression`) passed on the routed netlist |
+| Logic-only worst path (slow corner, Yosys + ABC) | 4.16 ns, in the Ethernet receive clock recovery |
 
-Timing is met at every corner, but with little margin at the slow corner, so every RTL change
-gets a new GDS run. Earlier results (the 48 MHz flip-flop build, D45; the first SRAM build at
+Timing is met at every corner. The slow-corner margin moves with placement (the run before,
+without the link, had +0.24 ns), so every RTL change gets a new GDS run. Earlier results (the 48 MHz flip-flop build, D45; the first SRAM build at
 48 MHz with +6.81 ns slow-corner slack) are in `docs/DESIGN_DECISIONS.md`.

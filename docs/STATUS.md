@@ -23,15 +23,19 @@ and `verify/golden-model/REPORT.md` (the verification record). Last updated 2026
 - **10BASE-T Ethernet TX and RX** programs with `tb_eth` (D93), HDLC NRZI (D94), the receive
   clock-recovery redesign (D101, BUG-151), and the round-3 verification (D95–D100, BUG-138–160:
   1,000-seed differential, formal, vectors, coverage 219/219, mutation 14/14, stress).
-- **18 protocols as programs** (see the table in `README.md`): UART, SPI controller and
+- **Engine-to-engine FIFO link** (D102, off by default): engine e's RX FIFO feeds the other
+  engine's TX FIFO, so one engine can hand bytes to the other; the **UART ↔ I2C bridge** on it
+  (D103, `tb_bridge`); coverage follow-ups (D104); BUG-166–174.
+- **19 protocols as programs** (see the table in `README.md`): UART, SPI controller and
   peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812, USB low-speed
   device, CAN 2.0A (2.0B tolerant), JTAG, SWD, PS/2 host, 24-bit GPIO expander, logic analyser /
-  waveform generator, quad SPI, HDLC (NRZ).
-- **Last GDS run on main's hardware** (run 43648964222, commit 57d1c4c, 8x4, 60 MHz): gds,
-  precheck and gate-level test passed; LVS, antenna and routing DRC clean; setup slack slow / typ /
-  fast +0.24 / +2.48 / +3.33 ns, hold +0.60 / +0.28 / +0.10 ns; utilization 36.2 % (standard
-  cells 380,741 µm², macros 56,254 µm²); 53 max-slew and 7 max-cap warnings (not failures).
-  **The slow-corner margin is only 0.24 ns**: every RTL addition needs a GDS run.
+  waveform generator, quad SPI, HDLC (NRZ and NRZI), 10BASE-T Ethernet.
+- **Last GDS run on main's hardware** (run 43698688003, commit d5e4461, 8x4, 60 MHz): gds,
+  precheck, gl_test and gl_regression passed; LVS, antenna and routing DRC clean; setup slack
+  slow / typ / fast +1.19 / +2.53 / +3.36 ns, hold +0.60 / +0.29 / +0.11 ns; utilization 36.9 %
+  (standard cells 389,114 µm², macros 56,254 µm²); 49 max-slew and 11 max-cap warnings (not
+  failures). The run before (57d1c4c, without the link) had only +0.24 ns at the slow corner: the
+  margin moves with placement, so every RTL addition needs a GDS run.
 
 ## Open branches
 
@@ -39,11 +43,11 @@ and `verify/golden-model/REPORT.md` (the verification record). Last updated 2026
 |---|---|---|
 | `feature/ethernet` | 4a42e56 | **Merged into `main`** after its 60 MHz GDS run passed. |
 | `verify/ethernet` | 6453473 | Merged (through `feature/ethernet`). |
-| `feature/bridge` | d5e4461 | **Reviewed; waiting for its GDS run.** Engine-to-engine FIFO link, off by default (D102); UART ↔ I2C bridge (D103); coverage follow-ups (D104); BUG-166–174. `make test`, `make test-verilator`, both lints and the branch CI pass. Synth area +1,015 µm² (+0.4 %). The CAN-to-CAN gateway is designed in `docs/BRIDGE_VERIFICATION_TODO.md` §7 but not built. |
+| `feature/bridge` | d5e4461 | **Merged into `main`** after its GDS run and gl_regression passed. |
 | `verify/ethernet-download` | d37d0de | Only a transport copy of the verification bundle. **Can be deleted** (owner to confirm). |
 | `learn/notes` | 709b06a | The owner's learning notes from the tutor session. Not for merging. |
 
-Merge order planned: `feature/bridge` → `main` after its GDS run passes.
+Nothing is waiting to be merged.
 
 ## Open issues
 
@@ -54,18 +58,17 @@ Merge order planned: `feature/bridge` → `main` after its GDS run passes.
 - **Ethernet limits** (documented in the round-3 report): a worst-case full-duplex 1514-byte frame
   full of escaped bytes exceeds the quad host port's bandwidth; the host must keep the TX FIFO fed
   (a 30 µs stall corrupts the frame, and it is reported). No analog/compliance testing yet.
-- **Coverage:** 4 RTL lines unhit on main (the host clearing CAN status bits 5–7 and an unused
-  register address); being closed on `feature/bridge`. Branch/expression/toggle misses still need
-  a review pass before the freeze.
+- **Coverage:** the 4 unhit RTL lines (the host clearing CAN status bits 5–7 and an unused register
+  address) are now covered (D104). Branch/expression/toggle misses still need a review pass before
+  the freeze.
 - **Not yet done:** FPGA prototype with real devices; the GitHub Pages site; the final
   submission package.
 
 ## Plan, in order (one background session at a time)
 
-1. **Owner:** start the GDS run on `feature/bridge` (Actions → gds → Run workflow → branch
-   `feature/bridge`); check that the slow-corner setup slack stays positive.
-2. Merge `feature/bridge`; verification of the FIFO link (its TODO file); decide on the CAN
-   gateway.
+1. Verification of the FIFO link and the bridge (`docs/BRIDGE_VERIFICATION_TODO.md`).
+2. **Owner to decide:** build the CAN-to-CAN gateway (designed in that file, §7; programs and a
+   testbench only, no new hardware).
 3. **Blind generality benchmark:** about 10 protocols never targeted (e.g. DMX512, MIDI, LIN, IR
    NEC/RC5, DALI, I2S, SDI-12, Wiegand, DShot, SSI/BiSS, MDIO, Microwire), programs only, no RTL
    change; record which work and why the others don't.
@@ -78,7 +81,7 @@ Merge order planned: `feature/bridge` → `main` after its GDS run passes.
 
 ## Waiting on the owner
 
-- Start the GDS run on `feature/bridge`.
+- Whether to build the CAN-to-CAN gateway now.
 - The UltraScale+ board model, and whether Kria-PYNQ on the KV260 is OK.
 - Ethernet demo parts: RJ45 jack with integrated magnetics (e.g. HR911105A), a fast comparator
   (e.g. TLV3501).
