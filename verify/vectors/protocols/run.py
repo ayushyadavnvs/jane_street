@@ -6,6 +6,7 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import os
 from pathlib import Path
 import random
 import re
@@ -17,6 +18,12 @@ import time
 ROOT = Path(__file__).resolve().parents[3] / 'pbe_v1'  # the design
 SOURCES = [ROOT/'src'/f'{name}.sv' for name in
            ('pbe_fifo','pbe_host_spi','pbe_crc','pbe_line','pbe_bsync','pbe_engine','tt_um_pbe')]
+# D82: the default top instantiates the SRAM wrapper and its FUNCTIONAL model.
+SRAM = ROOT.parent/'macros/RM_IHPSG13_1P_256x16_c2_bm_bist'
+SOURCES += [ROOT/'src/pbe_pmem_sram.sv',
+          SRAM/'RM_IHPSG13_1P_256x16_c2_bm_bist.v',
+          SRAM/'RM_IHPSG13_1P_core_behavioral_bm_bist.v']
+
 
 
 def queue(data):
@@ -215,7 +222,7 @@ def main():
     for protocol,bench,marker in [('usb','tb_usb','REFERENCE_USB_PASS'),('modbus','tb_pbe','REFERENCE_MODBUS_PASS')]:
         if args.protocol not in ('all',protocol):continue
         sim=output/(protocol+'.vvp')
-        call(['iverilog','-g2012','-DPBE_PROTOCOL_REFERENCE','-I',output,'-s',bench,'-o',sim,
+        call(['iverilog','-g2012','-DFUNCTIONAL','-DPBE_PROTOCOL_REFERENCE','-I',output,'-s',bench,'-o',sim,
               ROOT/'test'/(bench+'.sv'),*SOURCES],output/(protocol+'_compile'),ROOT/'test')
         text,seconds=call(['vvp','-n',sim],output/(protocol+'_run'),ROOT/'test')
         if marker not in text:raise RuntimeError(f'{protocol} missing PASS marker')
@@ -251,7 +258,7 @@ def main():
         results.append({'protocol':protocol,'status':'PASS','seconds':seconds,'pass_marker':marker,**details})
         print(f'PASS {protocol}: {seconds}s',flush=True)
     manifest['results']=results
-    manifest['source_sha256']={str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest() for path in SOURCES}
+    manifest['source_sha256']={os.path.relpath(path, ROOT):hashlib.sha256(path.read_bytes()).hexdigest() for path in SOURCES}
     (output/'results.json').write_text(json.dumps(manifest,indent=2)+'\n')
     return 0
 

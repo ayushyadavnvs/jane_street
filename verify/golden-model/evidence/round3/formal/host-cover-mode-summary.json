@@ -1,0 +1,22 @@
+[
+  {
+    "trace": "trace0.vcd",
+    "quad_reference_reached": true,
+    "sha256": "08b98799af41cbb92470b24f9f6c8238358e6cfc98dc1d5208c8107915d06498"
+  },
+  {
+    "trace": "trace1.vcd",
+    "quad_reference_reached": true,
+    "sha256": "38c603a4bca79b68c92eeb80727bc9db31db3bb8417f44dfb087601c343292ce"
+  },
+  {
+    "trace": "trace2.vcd",
+    "quad_reference_reached": true,
+    "sha256": "95b9cc4a7986ee902a2340d0987c5319a6d637d046d842764bb841b9a0855f1f"
+  },
+  {
+    "trace": "trace3.vcd",
+    "quad_reference_reached": true,
+    "sha256": "e45604a167a40aee16ca682b4b00d023c7b8b43a8facbaedc7a17923fb31bac1"
+  }
+]

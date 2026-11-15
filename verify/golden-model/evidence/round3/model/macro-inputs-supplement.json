@@ -1,0 +1,7 @@
+{
+  "note": "Recorded at campaign completion; unchanged vendor models from repository base 3cca934.",
+  "inputs": {
+    "macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_256x16_c2_bm_bist.v": "645c475787b077da4dbd15856c68bbae46aa9846a155239eb895ed2de7511053",
+    "macros/RM_IHPSG13_1P_256x16_c2_bm_bist/RM_IHPSG13_1P_core_behavioral_bm_bist.v": "d0a6258f8e9c93d1d5b1f78c0a1d66f30d28b1ad8037e5e07f53d1a4e3670b12"
+  }
+}

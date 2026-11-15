@@ -1,0 +1,37 @@
+; 10BASE-T receiver (IEEE 802.3 clause 14), engine 1 (D93). The line coder (Manchester, D90)
+; recovers the clock, finds the SFD (SYNC = 0xD5) after the preamble and ends the frame when the
+; carrier stops (TP_IDL); link pulses never start a frame. The engine moves the bytes to the RX
+; FIFO, the CRC unit checks the FCS (fed with every byte, the FCS included: the residue), and a
+; status record ends each frame.
+;
+; Pin: RD = pin base, the receive comparator's output (high while RD+ > RD-; low at idle).
+; Engine settings (60 MHz):
+;   CLKDIV 5, LINE 0x23 (Manchester, bytes), SYNC 0xD5, SHIFT 0 (LSB first),
+;   CRC_POLY 0x04C11DB7, CRC_CFG 0xBF (32 bits with CRC_CFG2 = 1, init all ones, reversed,
+;   fed by IN), CRC_GOOD 0xC704DD7B (the CRC-32 residue), TIMEOUT 0, LINE_CFG 0x40 (no
+;   parity: STAT bit 0 stays 0).
+;
+; Host protocol, RX FIFO: the frame's bytes (destination .. payload, then the 4 FCS bytes), a
+; data byte 0x7E sent twice, and at the end [0x7E][status]. Status (STAT): bit 1 = FCS ok,
+; bit 4 = line error (a byte overrun: the engine could not deliver a byte in time, e.g. the
+; FIFO was full), bit 3 = RX overflow (a PUSH found the FIFO full; also raises IRQ). A good
+; frame is 0x02. The host drains the FIFO at the line rate (1.25 MB/s, quad host port, D89).
+.equ rd 0
+
+        SET  OSR, 0x7E       ; the escape byte (OSR holds it from here on)
+        CRCRST
+rx:     IN   rd              ; a byte, or the end of the frame (then ISR is unchanged)
+        JLINE fend
+        JNE  plain           ; ISR != 0x7E
+        PUSH                 ; a data 0x7E goes to the host twice
+        MOV  ISR, OSR
+plain:  PUSH
+        JMP  rx
+fend:   STAT                 ; the frame's status (the CRC feed of the last byte is done)
+        MOV  X, ISR
+        MOV  ISR, OSR        ; [0x7E][status]
+        PUSH
+        MOV  ISR, X
+        PUSH
+        CRCRST               ; the next frame: CRC and line error start again
+        JMP  rx

@@ -1,0 +1,45 @@
+{
+  "id": "M10",
+  "category": "flag-clear",
+  "file": "src/tt_um_pbe.sv",
+  "before": "p_clr[7:0] | p_clr[15:8] | host_clr",
+  "after": "8'h00 | 8'h00 | host_clr",
+  "baseline_sha256": "aafba2a656a35d235eccc45e9bbb878d1fa1c3859b202cb032031a8ed587cef6",
+  "baseline_hdl_sha256": "39922d778030a138b880c23694c8815d7c40215834ff1613cc426f66799aee38",
+  "scratch": "/tmp/pbe-mutation-M10-muj_t6_n/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 260.33,
+      "status": "caught",
+      "first_failure": "FAIL: I2C target: address+W not ACKed",
+      "first_failing_check": "tb_proto",
+      "log": "M10-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 2,
+      "seconds": 10.285,
+      "status": "caught",
+      "first_failure": "\"reason\": \"flags\",",
+      "first_failing_check": "test_diff.random_differential",
+      "log": "M10-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test",
+    "diff"
+  ]
+}

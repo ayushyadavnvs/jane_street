@@ -1,0 +1,24 @@
+{
+  "command": [
+    "make",
+    "diff-line",
+    "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+  ],
+  "returncode": 2,
+  "seconds": 0.699,
+  "status": "caught",
+  "first_failure": "AssertionError: {'cycle': 1878, 'inputs': {'clear': False, 'cfg': 195, 'cfg2': 2, 'sync': 0, 'period_m1': 3, 'out_msb_first': 0, 'in_msb_first': 0, 'a_in': 0, 'a_early': 0, 'b_in': 1, 'tx_put': False, 'tx_end': False, 'tx_data': 193, 'rx_take': False, 'ctl': True, 'ctl_param': 17}, 'actual': {'drive': 0, 'a_out': 1, 'b_out': 0, 'tx_ready': 1, 'rx_valid': 0, 'rx_data': 0, 'frame_end': 0, 'err': 0}, 'expected': {'drive': 0, 'a_out': 1, 'b_out': 0, 'tx_ready': 1, 'rx_valid': 1, 'rx_data': 1, 'frame_end': 0, 'err': 0}}",
+  "first_failing_check": null,
+  "log": "E04.log.gz",
+  "executable_sha256": "8a229baf64671988cfb5af43ba3070c6ce7214cf32bcf96155115559d1466fa7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "E04",
+  "category": "Manchester lock threshold",
+  "file": "src/pbe_line.sv",
+  "before": "{6'b0, period_m1, 2'b0} + {7'b0, period_m1, 1'b0}",
+  "after": "{6'b0, period_m1, 2'b0} + {7'b0, period_m1, 1'b0} + {8'b0, period_m1}",
+  "baseline_sha256": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+  "mutant_sha256": "3286356cc57ec1a2047d6eac057139e57e520b8165d05928c2b5d6b1fdbded86"
+}

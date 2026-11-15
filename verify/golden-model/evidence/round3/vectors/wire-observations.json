@@ -1,0 +1,161 @@
+[
+  {
+    "test": "ethernet_tx",
+    "frames": [
+      60,
+      61,
+      255,
+      256,
+      512,
+      1514,
+      1600,
+      32640
+    ],
+    "chunks": "1..255",
+    "statuses": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "packets": [
+      {
+        "start": 312791688,
+        "end": 370696320,
+        "tail_ps": 300024,
+        "fcs": "bb2e30f0"
+      },
+      {
+        "start": 381097152,
+        "end": 439801848,
+        "tail_ps": 300024,
+        "fcs": "f4faf0e4"
+      },
+      {
+        "start": 450202680,
+        "end": 664119792,
+        "tail_ps": 300024,
+        "fcs": "df58d88a"
+      },
+      {
+        "start": 674520624,
+        "end": 889237800,
+        "tail_ps": 300024,
+        "fcs": "efa4bb55"
+      },
+      {
+        "start": 899638632,
+        "end": 1319172192,
+        "tail_ps": 300024,
+        "fcs": "dfce1bc2"
+      },
+      {
+        "start": 1329573024,
+        "end": 2550770712,
+        "tail_ps": 300024,
+        "fcs": "ffff5b81"
+      },
+      {
+        "start": 2561171544,
+        "end": 3851174736,
+        "tail_ps": 300024,
+        "fcs": "0bebc8c4"
+      },
+      {
+        "start": 3861575568,
+        "end": 29985565320,
+        "tail_ps": 300024,
+        "fcs": "1501275b"
+      }
+    ]
+  },
+  {
+    "test": "ethernet_rx",
+    "cases": [
+      {
+        "name": "good",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "bad_fcs",
+        "bytes": 64,
+        "status": 0
+      },
+      {
+        "name": "runt_0",
+        "bytes": 0,
+        "status": 0
+      },
+      {
+        "name": "runt_1",
+        "bytes": 1,
+        "status": 0
+      },
+      {
+        "name": "runt_2",
+        "bytes": 2,
+        "status": 0
+      },
+      {
+        "name": "runt_3",
+        "bytes": 3,
+        "status": 0
+      },
+      {
+        "name": "dribble_1",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_2",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_3",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_4",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_5",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_6",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_7",
+        "bytes": 64,
+        "status": 2
+      },
+      {
+        "name": "dribble_8",
+        "bytes": 65,
+        "status": 0
+      }
+    ],
+    "noise_ignored": true
+  },
+  {
+    "test": "hdlc_independent",
+    "sizes": [
+      4,
+      256
+    ],
+    "tx_status": [],
+    "rx_records": 2
+  }
+]

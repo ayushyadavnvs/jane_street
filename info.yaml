@@ -5,7 +5,7 @@ project:
   discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
   description:  "Two programmable engines that run protocol programs: UART, SPI, I2C, 1-Wire, Modbus RTU, WS2812, USB low speed"      # One line description of what your project does
   language:     "SystemVerilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     48000000       # Clock frequency in Hz (or 0 if not applicable)
+  clock_hz:     60000000       # Clock frequency in Hz (or 0 if not applicable)
 
   # How many tiles your design occupies? A single tile is about 202x155 uM.
   tiles: "8x4"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2, 8x2, 3x4, 4x4, 5x4, 6x4 or 8x4

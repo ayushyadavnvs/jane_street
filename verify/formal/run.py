@@ -102,14 +102,14 @@ def one(job,collect,timeout):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--block',choices=['all','fifo','host','line','engine','bsync','default'],default='all')
+    p.add_argument('--block',choices=['all','fifo','host','line','engine','bsync','default','ethernet','modern'],default='all')
     p.add_argument('--jobs',type=int,default=3)
     p.add_argument('--timeout',type=int,default=300)
     p.add_argument('--collect',action='store_true',help='validate complete existing artifacts, without rerunning solvers')
     a=p.parse_args()
     if a.jobs<1 or a.timeout<1: p.error('jobs and timeout must be positive')
     BUILD.mkdir(parents=True,exist_ok=True)
-    blocks=['fifo','host','line','engine','bsync','default'] if a.block=='all' else [a.block]
+    blocks=['fifo','host','line','engine','bsync','default','ethernet','modern'] if a.block=='all' else [a.block]
     for block in blocks: subprocess.run([sys.executable,str(HERE/(block+'_prepare.py'))],check=True,cwd=HERE)
     jobs=[j for block in blocks for j in matrix(block)]
     results=[]

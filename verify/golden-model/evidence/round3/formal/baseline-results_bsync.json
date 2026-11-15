@@ -1,0 +1,59 @@
+{
+  "results": [
+    {
+      "block": "bsync",
+      "task": "bmc",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "bsync_bmc",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "bmc",
+      "depth": 70,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/bsync_formal.sv": "3193afd456026822c1f23aa958ecdfd7eb87e4479bd1282a65d338b19c94a78b"
+      },
+      "seconds": 0.179,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/bsync_bmc"
+    },
+    {
+      "block": "bsync",
+      "task": "cover",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "bsync_cover",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 90,
+      "unbounded_k_induction": false,
+      "collected": true,
+      "returncode": null,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "pbe_v1/build/formal/generated/bsync_formal.sv": "3193afd456026822c1f23aa958ecdfd7eb87e4479bd1282a65d338b19c94a78b"
+      },
+      "seconds": 0.112,
+      "failed_assertions": [],
+      "covers": [
+        "pbe_bsync: bsync_formal.sv:573.5-573.59 (_witness_.cover_cover_bsync_formal_sv_573_326)",
+        "pbe_bsync: bsync_formal.sv:572.5-572.30 (_witness_.cover_cover_bsync_formal_sv_572_324)"
+      ],
+      "workdir": "build/formal/bsync_cover"
+    }
+  ],
+  "total": 2,
+  "matched": 2,
+  "proven": 0,
+  "bounded_pass": 1,
+  "expected_counterexamples": 0,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven."
+}

@@ -7,9 +7,9 @@
 ;   (the first 165, nearest the chip, drives SDI).
 ; Engine settings: SHIFT = 0x03 (OUT and IN MSB first), CRC off, TIMEOUT 0, CLKDIV 0 (or more
 ;   for slow parts: everything scales with CLKDIV + 1).
-; Timing at CLKDIV 0 (48 MHz): SCK 6.86 MHz (7 clocks per bit: high 2, low 5); SDO set 2 clocks
-;   (41.7 ns) before SCK rises; SDI read 5 clocks after SCK rises (QH may take up to 4 clocks,
-;   83 ns, to settle); LD low 3 clocks (62.5 ns), RCLK high 2 clocks. 74HC parts at 3.3 V are
+; Timing at CLKDIV 0 (60 MHz): SCK 8.57 MHz (7 clocks per bit: high 2, low 5); SDO set 2 clocks
+;   (33.3 ns) before SCK rises; SDI read 5 clocks after SCK rises (QH may take up to 4 clocks,
+;   67 ns, to settle); LD low 3 clocks (50 ns), RCLK high 2 clocks. 74HC parts at 3.3 V are
 ;   fast enough at CLKDIV 0 (the testbench's models use 60 ns CLK-to-QH); 74HC at 2 V needs
 ;   CLKDIV >= 3. A 24-bit exchange takes about 190 clocks (4 us).
 ;

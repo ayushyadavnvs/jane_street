@@ -1,0 +1,299 @@
+{
+  "seed": 1346520372,
+  "cases": [
+    {
+      "case": "uart_rx_clock_minus2",
+      "required": true,
+      "status": "PASS",
+      "settings": {
+        "error": -0.02
+      },
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "engine_status": 2,
+      "irq": 0,
+      "deadline": "none; waveform and bounded drain completed"
+    },
+    {
+      "case": "uart_rx_clock_plus2",
+      "required": true,
+      "status": "PASS",
+      "settings": {
+        "error": 0.02
+      },
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "engine_status": 2,
+      "irq": 0,
+      "deadline": "none; waveform and bounded drain completed"
+    },
+    {
+      "case": "uart_rx_clock_minus2_jitter2",
+      "required": true,
+      "status": "PASS",
+      "settings": {
+        "error": -0.02,
+        "jitter": 0.02
+      },
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "engine_status": 2,
+      "irq": 0,
+      "deadline": "none; waveform and bounded drain completed"
+    },
+    {
+      "case": "uart_rx_clock_plus2_jitter2",
+      "required": true,
+      "status": "PASS",
+      "settings": {
+        "error": 0.02,
+        "jitter": 0.02
+      },
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "engine_status": 2,
+      "irq": 0,
+      "deadline": "none; waveform and bounded drain completed"
+    },
+    {
+      "case": "uart_rx_digital_rise_delay4",
+      "required": true,
+      "status": "PASS",
+      "settings": {
+        "rise_delay_clocks": 4
+      },
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "engine_status": 2,
+      "irq": 0,
+      "deadline": "none; waveform and bounded drain completed"
+    },
+    {
+      "case": "uart_rx_idle_glitch_1clock",
+      "required": true,
+      "status": "PASS",
+      "settings": {
+        "idle_glitch": true
+      },
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "engine_status": 2,
+      "irq": 0,
+      "deadline": "none; waveform and bounded drain completed"
+    },
+    {
+      "case": "uart_tx_clock_-2%",
+      "required": true,
+      "status": "PASS",
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "error": -0.02,
+      "deadline": null
+    },
+    {
+      "case": "uart_tx_clock_+2%",
+      "required": true,
+      "status": "PASS",
+      "expected": "00ff55aa817e03c0",
+      "actual": "00ff55aa817e03c0",
+      "error": 0.02,
+      "deadline": null
+    },
+    {
+      "case": "uart_rx_slow_host_16",
+      "required": true,
+      "status": "PASS",
+      "expected": "000102030405060708090a0b0c0d0e0f",
+      "actual": "000102030405060708090a0b0c0d0e0f",
+      "offered": "000102030405060708090a0b0c0d0e0f",
+      "initial_rx_count": 16,
+      "engine_status": 2,
+      "irq": 0,
+      "initial_no_read_us": 1000,
+      "per_byte_read_pause_bits": 100,
+      "lost_input_bytes": 0,
+      "recovery": "42",
+      "classification": "lossless at FIFO capacity"
+    },
+    {
+      "case": "uart_rx_slow_host_20",
+      "required": true,
+      "status": "PASS",
+      "expected": "000102030405060708090a0b0c0d0e0f10",
+      "actual": "000102030405060708090a0b0c0d0e0f10",
+      "offered": "000102030405060708090a0b0c0d0e0f10111213",
+      "initial_rx_count": 16,
+      "engine_status": 11,
+      "irq": 1,
+      "initial_no_read_us": 1000,
+      "per_byte_read_pause_bits": 100,
+      "lost_input_bytes": 3,
+      "recovery": "42",
+      "classification": "documented sticky overflow + blocked PUSH"
+    },
+    {
+      "case": "concurrent_uart_spi_restart_0",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "6e9cf714",
+      "uart_actual": "6e9cf714",
+      "spi_expected": "9ed22c3d",
+      "spi_received": "9ed22c3d",
+      "reply_expected": "60be74b4",
+      "reply_actual": "60be74b4",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_1",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "17d82474",
+      "uart_actual": "17d82474",
+      "spi_expected": "83bee195",
+      "spi_received": "83bee195",
+      "reply_expected": "74b95eb7",
+      "reply_actual": "74b95eb7",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_2",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "d4bea512",
+      "uart_actual": "d4bea512",
+      "spi_expected": "5317f602",
+      "spi_received": "5317f602",
+      "reply_expected": "ff9e466a",
+      "reply_actual": "ff9e466a",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_3",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "9813b738",
+      "uart_actual": "9813b738",
+      "spi_expected": "0f0be9fb",
+      "spi_received": "0f0be9fb",
+      "reply_expected": "4bca6bd2",
+      "reply_actual": "4bca6bd2",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_4",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "95c6057c",
+      "uart_actual": "95c6057c",
+      "spi_expected": "3a1fb7c7",
+      "spi_received": "3a1fb7c7",
+      "reply_expected": "38f48ecf",
+      "reply_actual": "38f48ecf",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_5",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "480ebf51",
+      "uart_actual": "480ebf51",
+      "spi_expected": "d154d1d6",
+      "spi_received": "d154d1d6",
+      "reply_expected": "b66ac366",
+      "reply_actual": "b66ac366",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_6",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "dd54c9b8",
+      "uart_actual": "dd54c9b8",
+      "spi_expected": "d36ee9be",
+      "spi_received": "d36ee9be",
+      "reply_expected": "0041b200",
+      "reply_actual": "0041b200",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_7",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "0d5b2394",
+      "uart_actual": "0d5b2394",
+      "spi_expected": "00b60e9c",
+      "spi_received": "00b60e9c",
+      "reply_expected": "bb355b46",
+      "reply_actual": "bb355b46",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_8",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "54308f45",
+      "uart_actual": "54308f45",
+      "spi_expected": "bd91be1d",
+      "spi_received": "bd91be1d",
+      "reply_expected": "58129804",
+      "reply_actual": "58129804",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_9",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "fc381cf7",
+      "uart_actual": "fc381cf7",
+      "spi_expected": "7216ad68",
+      "spi_received": "7216ad68",
+      "reply_expected": "80ce67a0",
+      "reply_actual": "80ce67a0",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_10",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "1be50dad",
+      "uart_actual": "1be50dad",
+      "spi_expected": "7f0c450a",
+      "spi_received": "7f0c450a",
+      "reply_expected": "197befeb",
+      "reply_actual": "197befeb",
+      "overlap_clocks": 1336,
+      "deadline": null
+    },
+    {
+      "case": "concurrent_uart_spi_restart_11",
+      "required": true,
+      "status": "PASS",
+      "uart_expected": "6e2d97af",
+      "uart_actual": "6e2d97af",
+      "spi_expected": "6b8d0411",
+      "spi_received": "6b8d0411",
+      "reply_expected": "9752e944",
+      "reply_actual": "9752e944",
+      "overlap_clocks": 1336,
+      "deadline": null
+    }
+  ],
+  "characterization": false,
+  "required_only": true,
+  "summary": {
+    "cases": 22,
+    "passed": 22,
+    "failed": 0,
+    "failed_cases": []
+  }
+}

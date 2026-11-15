@@ -40,9 +40,11 @@
 //  111  EXT         [8:6] sub-op, [5:0] param
 //                   0 CRCRST      load the CRC's initial value and clear the line error: a new
 //                                 checked packet starts
-//                   1 OSRCRC      OSR <= CRC byte (param[0]: 0 low, 1 high; param[1]: inverted;
-//                                 param[2]: the CRC left-justified to 16 bits first, so CRC-15's
-//                                 high byte is bits 14..7, D71)
+//                   1 OSRCRC      OSR <= CRC byte {param[3], param[0]} (0 low, 1 high, 2 and 3
+//                                 the upper bytes of a CRC wider than 16 bits, D91; for a CRC of
+//                                 up to 16 bits param[3] is ignored, as before); param[1]:
+//                                 inverted; param[2]: a CRC of up to 16 bits left-justified to
+//                                 16 bits first, so CRC-15's high byte is bits 14..7 (D71)
 //                   2 STAT        ISR <= {frame sent, bit error, arbitration lost, line error,
 //                                 RX overflow, timeout happened, CRC ok, parity error} (bits 7..5
 //                                 from the bit-synchronous coder, D71); then clears parity and
@@ -62,7 +64,8 @@
 //                                 param[4]=1: [0] stuffing off (ends the stuffed region: the
 //                                             coder runs the CAN frame tail), [1] stuffing on,
 //                                             [2] error now (an error flag from the next bit)
-//                                 without bit-synchronous mode LINECTL does nothing
+//                                 without bit-synchronous mode only param[4] = 1's [0] and
+//                                 [1] act: pbe_line's stuffing off/on (D94); the rest does nothing
 //                     param[5]=1: PAGE p (D83), p = param[1:0] ([4:2] reserved, 0): the next
 //                                 instruction's jump target is in page p of the program
 //                                 (a one-shot prefix; see "Program addresses" below)
@@ -76,7 +79,7 @@
 // "CRC ok" means the register equals crc_good (0 for CRCs sent plain; the residual, e.g. USB's
 // 0x800d, for CRCs sent inverted).
 //
-// Line coder (coder_cfg[1:0] != 0, see pbe_line): it drives pin_base (and pin_base + 1 in pair
+// Line coder (coder_cfg[1:0] != 0: NRZ, NRZI or Manchester, see pbe_line): it drives pin_base (and pin_base + 1 in pair
 // mode) and sets the bit timing: clkdiv is then the bit time minus 1, and instructions run
 // every clock. OUT/OUTOD hand the coder a byte (or one bit) and wait while it is busy; END ends
 // the frame; IN takes a received byte (or bit) and waits for one, or for the end of the frame
@@ -156,14 +159,15 @@ module pbe_engine #(
     input  logic        out_msb_first,
     input  logic        in_msb_first,
     input  logic [7:0]  start_pc,     // where this engine's program starts (its word 0)
-    input  logic [15:0] crc_poly,
+    input  logic [31:0] crc_poly,
     input  logic [7:0]  crc_cfg,      // [3:0] width-1, [4] init ones, [5] reversed, [6] feed OUT, [7] feed IN
+    input  logic        crc_wide,     // CRC_CFG2[0]: bit 4 of width-1 (CRCs of 17-32 bits, D91)
     input  logic [15:0] timeout,      // ticks a blocked instruction may wait (0 = forever)
     input  logic [7:0]  line_cfg,     // [5:0] timeout_pc, [6] no parity, [7] odd parity
     input  logic [7:0]  coder_cfg,    // line coder, see pbe_line (0 = off)
     input  logic [7:0]  coder_cfg2,   // LINE2 (D65): sample point, resync, pins, CAN mode, idle wait
     input  logic [7:0]  sync,         // line coder frame start pattern
-    input  logic [15:0] crc_good,     // the CRC value that means "ok"
+    input  logic [31:0] crc_good,     // the CRC value that means "ok"
     input  logic        host_crc_init,
     input  logic        host_tmo_clr,
     input  logic        host_ovf_clr,
@@ -176,7 +180,7 @@ module pbe_engine #(
     output logic [8:0]  can_tec,      // bit-synchronous mode's error counters and state
     output logic [7:0]  can_rec,
     output logic [1:0]  can_state,    // {bus-off, error-passive}
-    output logic [15:0] crc_now,      // the CRC unit's current value, for the host
+    output logic [31:0] crc_now,      // the CRC unit's current value, for the host
     // program memory
     output logic [7:0]  pc,           // program memory read address (absolute): the next word
     output logic [23:0] pc_copy,      // three more copies of pc, to share out its fan-out
@@ -185,6 +189,7 @@ module pbe_engine #(
     input  logic        pm_wr,        // the host is writing the program memory (any word)
     // pins
     input  logic [7:0]  pins_in,  // synchronized
+    input  logic [7:0]  pins_in_n, // the same pins sampled half a clock earlier (falling edge, D90)
     output logic [7:0]  pins_out,
     output logic [7:0]  pins_oe,  // (the line coder's pins are merged in combinationally)
     // TX FIFO (host to engine)
@@ -259,6 +264,7 @@ module pbe_engine #(
   wire       coder_pair = coder_cfg[4] && !bsm;
   wire [2:0] base1 = pin_base + 3'd1;
   wire       rx_pin = coder_cfg2[4] ? pins_in[base1] : pins_in[pin_base];  // LINE2[4]: split pins
+  wire       rx_pin_e = coder_cfg2[4] ? pins_in_n[base1] : pins_in_n[pin_base];
   wire       is_txop = coder_on && op == OP_PIN && (pin_act == 3'd4 || pin_act == 3'd5 || pin_act == 3'd7);
   logic       l_drive, l_a, l_b, l_ready, l_rxv, l_end, l_err;
   logic [7:0] l_rxd;
@@ -317,8 +323,9 @@ module pbe_engine #(
   wire crc_out = is_out && !arg[0] && crc_cfg[6] && !bsm;
   wire crc_in  = is_in && !arg[5] && crc_cfg[7] && !bsm;
   wire crc_line = bsm && s_crc_step && crc_cfg[7];
-  logic [15:0] crc_value;
+  logic [31:0] crc_value;
   logic        crc_ok;
+  wire  [4:0]  crc_wm1 = {crc_wide, crc_cfg[3:0]};
 
   // byte mode: the CRC takes the byte's bits in wire order, one per clock
   wire [7:0] cf_byte = crc_out ? osr : l_rxd;
@@ -333,7 +340,7 @@ module pbe_engine #(
       .step     (cf_cnt != 4'd0 || (!cf_start && (crc_out || crc_in)) || crc_line),
       .bit_in   (cf_cnt != 4'd0 ? cf_sh[0] : crc_line ? s_crc_bit : is_out ? out_bit : in_bit),
       .poly     (crc_poly),
-      .width_m1 (crc_cfg[3:0]),
+      .width_m1 (crc_wm1),
       .init_ones(crc_cfg[4]),
       .out_rev  (crc_cfg[5]),
       .good     (crc_good),
@@ -344,6 +351,7 @@ module pbe_engine #(
   assign status  = {sent_st, berr_st, arb_st, line_err, rx_ovf, tmo_seen, crc_ok, par_err};
   assign crc_now = crc_value;
 
+  wire lctl = exec && op == OP_EXT && ext_op == E_LINECTL && !arg[5];
   pbe_line u_line (
       .clk, .rst_n,
       .clear        (restart || !coder_on || bsm),
@@ -354,10 +362,13 @@ module pbe_engine #(
       .out_msb_first,
       .in_msb_first,
       .a_in         (rx_pin),
+      .a_early      (rx_pin_e),
       .b_in         (pins_in[base1]),
       .drive        (p_drive),
       .a_out        (p_a),
       .b_out        (p_b),
+      .ctl          (lctl && !bsm),       // LINECTL STUFFOFF / STUFFON (D94)
+      .ctl_param    (arg[4:0]),
       .tx_put       (exec && is_txop && pin_act != 3'd7 && !bsm),
       .tx_end       (exec && is_txop && pin_act == 3'd7 && !bsm),
       .tx_data      (coder_bytes ? osr : {7'b0, out_bit}),
@@ -369,7 +380,6 @@ module pbe_engine #(
       .err          (p_err)
   );
 
-  wire lctl = exec && op == OP_EXT && ext_op == E_LINECTL && !arg[5];
   pbe_bsync u_bsync (
       .clk, .rst_n,
       .clear        (restart || !bsm || !run),  // a stopped CAN node stays off the bus
@@ -485,8 +495,21 @@ module pbe_engine #(
       pg_num <= arg[1:0];
     end
   end
-  // OSRCRC param[2]: the CRC left-justified to 16 bits (CRC-15: bits 14..7 in the high byte)
-  wire [15:0] crc_osr = arg[2] ? (crc_value << (4'd15 - crc_cfg[3:0])) : crc_value;
+  // OSRCRC param[2]: the CRC left-justified to 16 bits (CRC-15: bits 14..7 in the high byte);
+  // a CRC wider than 16 bits is not shifted. Byte {param[3], param[0]} of the result (D91);
+  // param[3] counts only for a CRC wider than 16 bits, so for every narrower one each encoding
+  // gives exactly the byte it gave before D91 (param[3] was ignored).
+  wire [15:0] crc_left = crc_value[15:0] << (4'd15 - crc_wm1[3:0]);
+  wire [31:0] crc_osr  = (arg[2] && !crc_wm1[4]) ? {16'b0, crc_left} : crc_value;
+  logic [7:0] crc_byte;
+  always_comb begin
+    case ({arg[3] && crc_wm1[4], arg[0]})
+      2'd0:    crc_byte = crc_osr[7:0];
+      2'd1:    crc_byte = crc_osr[15:8];
+      2'd2:    crc_byte = crc_osr[23:16];
+      default: crc_byte = crc_osr[31:24];
+    endcase
+  end
 
   // ---- fetch address ----
   logic [7:0] pc_next;
@@ -685,7 +708,7 @@ module pbe_engine #(
             OP_EXT: begin
               case (ext_op)
                 E_OSRCRC: begin
-                  osr     <= (arg[0] ? crc_osr[15:8] : crc_osr[7:0]) ^ {8{arg[1]}};
+                  osr     <= crc_byte ^ {8{arg[1]}};
                   par_out <= 1'b0;
                 end
                 E_CRCRST: begin  // a new packet: its status starts again

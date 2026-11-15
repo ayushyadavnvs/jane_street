@@ -1,0 +1,50 @@
+{
+  "base_commit": "3cca9343df306d124ac8f4ab311fcddd72989fa2",
+  "python": "3.12.14",
+  "libraries": {
+    "cocotb": "2.0.1",
+    "cocotbext-spi": "0.5.0",
+    "cocotbext-i2c": "0.1.2",
+    "cocotbext-uart": "0.1.4",
+    "crccheck": "1.3.1",
+    "luna-usb": "0.2.3",
+    "usb-protocol": "0.9.2",
+    "pymodbus": "3.11.3"
+  },
+  "rtl_sha256": {
+    "src/pbe_bsync.sv": "27c53b2808b6c5b6791929cf2a0cd418fb40c0a3b27f3f3a813c5e0744552ba5",
+    "src/pbe_crc.sv": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+    "src/pbe_engine.sv": "e37c78e1d73f4f5a166efee1d8c211f966cbf2a54b272e051f4821f285cbd6b6",
+    "src/pbe_fifo.sv": "9de94713ce3d42f8746f425556f5430312196e9ed5a285b12b87d353fc98eae3",
+    "src/pbe_host_spi.sv": "17137c3bfce0c1f84e6d4650c300c2f9a37e2ba32a2dbba30bf34db990991d08",
+    "src/pbe_line.sv": "92279674840d3d4e63dd03c79261498e0688621690fe85f176797454dcca7bb7",
+    "src/pbe_pmem_sram.sv": "3368954719394ec33affe930248ec7ab0d706944782aeadc604f0f01c72409f8",
+    "src/tt_um_pbe.sv": "aafba2a656a35d235eccc45e9bbb878d1fa1c3859b202cb032031a8ed587cef6"
+  },
+  "program_sha256": {
+    "pbe_v1/programs/can_node.pbe": "e60a0ec5a22d73f3509883c2a794e5e9d122e3ab5ba1fae7b0511d8f65b25cb7",
+    "pbe_v1/programs/eth_rx.pbe": "95458863aa14f697e55edb9d4d19d3ca8513781e45ed4566f2d9843045baa3f6",
+    "pbe_v1/programs/eth_tx.pbe": "43b9ee222a8159e1d27e8347cbf0e59a20d31dedc23b96cbeba8776c82b79114",
+    "pbe_v1/programs/gpio_expander.pbe": "922de213909dc3405339ea6d9500117fc7c814a9990d1f2a5e9b41da8a78b666",
+    "pbe_v1/programs/hdlc_rx.pbe": "1403bbdc0708597941de0c60e301d5295bfbe23eccde938bf4724a6ec2030677",
+    "pbe_v1/programs/hdlc_tx.pbe": "ae96ee4f36accfdc560e682e57b30ba3f72500fbf1413674e8b10f98ea85095d",
+    "pbe_v1/programs/i2c_ctrl.pbe": "072a3f9036b8c3a1b85d99700b783f3ba3f539f1e10434ea83caba3959df75ba",
+    "pbe_v1/programs/i2c_target.pbe": "9cde4b4943165dbc8a6ade56f808b11ca7f3a3717f8a40f58b29a2b3066da435",
+    "pbe_v1/programs/i2c_watch.pbe": "5472e814cb1515a2fb6d0b70c0d8a87ade98469f009bcf6ea9f2ff1bfe063f98",
+    "pbe_v1/programs/jtag.pbe": "907de53f35b2e9aa193a03b03c1d8c886764681543c88d9c4c7d8bb52b835788",
+    "pbe_v1/programs/la_capture.pbe": "83d31dcd305b4ae28e5ac0fc7e5acb090498ab481ed3e6a0e071605feece9163",
+    "pbe_v1/programs/modbus_rtu.pbe": "b08abbc84faf99ec5b592606460bc219f348d55db5bac318429bd3bbf454598a",
+    "pbe_v1/programs/nop_test.pbe": "04cf7fd91b853ff430573cca723055c43cae5723ef206151295b249bd4543c92",
+    "pbe_v1/programs/onewire_ctrl.pbe": "7bcc3c7d2a697f95892affa0a9b2b33a84295274874f920ba01da0688fae169f",
+    "pbe_v1/programs/ps2_host.pbe": "45285d6ee9cfd33c1125801addd1cca51ec46da7f688dd47ce08c6fb2f5c30db",
+    "pbe_v1/programs/qspi_flash.pbe": "7cb0ec2e6b7be1bd91f8ed548c59cbe762179fcc2b29d44588beef23524a95c1",
+    "pbe_v1/programs/spi_ctrl.pbe": "062f608ad768a7df01261b199bc07dcc416e05c8ff9f6b8c56f8d113ef9a60e4",
+    "pbe_v1/programs/spi_periph.pbe": "4d5767c19d048c234220c7e1a33160c36390ca2ce6188e893e48d2aad7b79026",
+    "pbe_v1/programs/swd.pbe": "32425e3609a60fc326c6fc14eee41cbf106f8222d109f324ba2eaca42e7eed96",
+    "pbe_v1/programs/uart_rx.pbe": "2d10d2e9cd60117c11fb135e4ddb55eeb3e515e5bc3f96bec840a9009797155e",
+    "pbe_v1/programs/uart_tx.pbe": "7d28782a0b3499df6e867ca936eee7a2342edbe87b060510c78c939bafbe93db",
+    "pbe_v1/programs/usb_dev.pbe": "031292a3f562fd8b41eb6a8dbf0d8f254124d0923f11c1834535be018ad6b516",
+    "pbe_v1/programs/wavegen.pbe": "08dbc2dd661565201e69d7d41a62f7b2c41a216b5b50e3eed293c0ca065470a4",
+    "pbe_v1/programs/ws2812.pbe": "8d67197f5e8ee0f1c58d0bd5cadbd7ffc4d6108d2b2670bc1fe80866310e0fab"
+  }
+}

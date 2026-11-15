@@ -1,0 +1,26 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-83hwj11b/E07/verify/vectors/crc/run.py",
+    "--wide",
+    "--random-cases",
+    "1"
+  ],
+  "returncode": 1,
+  "seconds": 0.471,
+  "status": "caught",
+  "first_failure": "AssertionError: CRC-24/BLE init / init-over-step",
+  "first_failing_check": null,
+  "log": "E07.log.gz",
+  "executable_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "E07",
+  "category": "CRC reflection",
+  "file": "src/pbe_crc.sv",
+  "before": "out_rev ? rev : crc",
+  "after": "out_rev ? crc : crc",
+  "baseline_sha256": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+  "mutant_sha256": "90b72823ed9ed11feb434b6e2ce72f27e4f6abf68ac69fca279b4702a41bf612"
+}

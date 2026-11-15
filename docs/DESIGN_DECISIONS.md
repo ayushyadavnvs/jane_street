@@ -264,7 +264,11 @@ mark the old one **Changed** instead of deleting it.
 - **Chosen:** Protocol pins on `uio[7:0]` (the only pins with output enables), host SPI on
   `ui_in[2:0]` / `uo_out[0]`, IRQ and status on `uo_out[7:1]`.
 
-## D18. Clock frequency: 48 MHz — **Changed (USB)**
+## D18. Clock frequency: 48 MHz — **Changed (USB); Changed again (10BASE-T: 60 MHz, D92)**
+
+**Changed (10BASE-T, D92):** the clock is 60 MHz: a 10 Mbit/s Manchester half bit is exactly 3
+clocks, and USB low speed is still a whole number of clocks per bit (40).
+
 
 - **Chosen:** Plan for 48 MHz. The competition sets no frequency; Tiny Tapeout's clock pad is
   specified to about 66 MHz.
@@ -541,7 +545,10 @@ mark the old one **Changed** instead of deleting it.
 - **Alternatives:** drop the byte and keep going (keeps timing, loses data silently); deeper
   FIFOs (area; v2 needed 16 bytes for USB and paid ~32,800 µm²).
 
-## D34. WS2812 (NeoPixel) LED driver: a program, timed by delays
+## D34. WS2812 (NeoPixel) LED driver: a program, timed by delays — **Changed (60 MHz for 10BASE-T, D92)**
+
+**Changed (D92):** at 60 MHz the tick is 33.3 ns (`CLKDIV` 1) and the delays are [11] [11] [11].
+
 
 - **Chosen:** `programs/ws2812.pbe`, 8 words, tick = 2 clocks (41.7 ns at 48 MHz). Each bit is
   three pin instructions: `DRV1 [9]` (0.42 µs), `OUT [9]` (a 1 stays high for another 0.42 µs, a
@@ -872,7 +879,11 @@ clean (0 design violations).
   - The physical-design flow is paused (`gds` and `gl_regression` by hand only, D46) until the
     RTL is final.
 
-## D46. Tiny Tapeout packaging
+## D46. Tiny Tapeout packaging — **Changed (10BASE-T: 60 MHz, D92)**
+
+**Changed (D92):** `clock_hz` 60000000 and `CLOCK_PERIOD` 16.667 ns; the cocotb test runs at
+16,668 ps.
+
 
 - **Chosen:** the repository root is the Tiny Tapeout project, built from the IHP template
   (`ttihp-verilog-template`, actions `ttihp27a`, PDK `ihp-sg13cmos5l`):
@@ -2709,7 +2720,12 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   its `spi` decoder on SCK, CS# and IO0 decodes the single-line command and address bytes of
   all 22 transactions exactly as the host sent them.
 
-## D88. HDLC / SDLC: NRZ with exact flags around the line coder; NRZI needs hardware
+## D88. HDLC / SDLC: NRZ with exact flags around the line coder; NRZI needs hardware — **Changed (the hardware, D94)**
+
+**Changed (D94):** `pbe_line` now has `LINECTL STUFFOFF/STUFFON` and `LINE[6]` (flag-delimited
+frames), the two pieces proposed below; `hdlc_tx` and `hdlc_rx` were rewritten on them and work in
+NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are history.
+
 
 - **Asked by the owner:** HDLC/SDLC framing: 0x7E flags, zero-bit insertion and deletion by the
   line coder's "after 5 ones" stuffing, CRC-16/X.25, abort detection; NRZ or NRZI. Two programs:
@@ -2795,3 +2811,691 @@ Known and accepted; each is a choice to keep the hardware small or the program w
   by idle and an abort (exactly seven 1s) followed at once by a flag, a 64-byte frame, at 1 and
   2 Mbit/s. 5/5. The model also checks that the chip's transmitter never sends an abort.
 - **sigrok:** libsigrokdecode 0.5.3 has no HDLC decoder; the cross-check is the model.
+
+## D89. Quad host port: 4 bits per SCK in both directions, entered and left explicitly
+
+- **Asked by the owner** for 10BASE-T (D90-D93): a frame is 1.25 MB/s with no gap inside it,
+  and the 16-byte FIFOs cannot hold a frame (up to 1518 bytes), so the host must stream it in
+  real time. The single-lane port moves one byte per 8 SCK, and SCK is at most clk / 8 (the
+  2-flop synchronizers and the read pipeline, below): 64 clocks per byte, 0.94 MB/s at 60 MHz
+  (0.75 at 48), less than one Ethernet stream. The owner chose a faster host port over large
+  frame buffers.
+- **Chosen: a quad mode of the same port** (`pbe_host_spi`, D89 in its header):
+  - **Pins.** Host to chip: D0 = `ui_in[2]` (MOSI), D1..D3 = `ui_in[3..5]`, the spare inputs;
+    SCK and CS_n stay on `ui_in[0..1]`. Chip to host: Q0 = `uo_out[0]` (MISO), Q1..Q3 =
+    `uo_out[1..3]`, borrowed in quad mode only and only while CS_n is low; with CS_n high they
+    are IRQ and the two running bits as before. `uo_out[7:4]` (RX has data, TX full) are never
+    borrowed: they are what a streaming host watches. `ui_in[6..7]` stay unused.
+  - **Framing unchanged:** command byte, data bytes, auto-increment, the streaming registers,
+    the read pipeline. Each SCK rising edge carries a nibble, high nibble first; a byte is 2 SCK
+    cycles. The read data lines are separate outputs, so there is no turnaround cycle and a
+    read burst runs at the write rate.
+  - **Entering:** `HOSTCFG` (0x50, RW, reset 0) bit 0. The mode in use is latched from it only
+    while CS_n is high, so the transaction that writes it finishes in the old mode, and no
+    transaction ever changes mode half-way.
+  - **Leaving (the defined safe way back):** write `HOSTCFG` = 0 in quad mode; or **8 SCK
+    rising edges while CS_n is high**, which clears `HOSTCFG` whatever mode the port is in (a
+    host that lost track of the mode, or restarted, sends it unconditionally; single mode
+    ignores it); or reset.
+- **Synchronizers:** D1..D3 go through the same two clk flops as SCK, CS_n and MOSI (the host
+  synchronizer is now 6 bits). Single mode reads only bits 0..2, exactly as before.
+- **Maximum SCK and bandwidth** (the same limit in both modes, clk / 8: the chip sees an SCK
+  edge 2-3 clocks after it happens, so a falling edge shifts the next read nibble out about 3
+  clocks later, and the host samples it at the next rising edge, 4 clocks after the fall):
+
+  | Clock | SCK max | Single lane | Quad |
+  |---|---|---|---|
+  | 48 MHz | 6 MHz | 0.75 MB/s | 3.0 MB/s |
+  | 60 MHz | 7.5 MHz | 0.94 MB/s | 3.75 MB/s |
+
+  `tb_quad` measures 64 and 16 clocks per byte in 16-byte bursts, both directions. A
+  10BASE-T stream (1.25 MB/s, one byte per 48 clocks at 60 MHz) uses a third of the quad port
+  in either direction, so the host has 3x the line rate; each burst costs one command byte
+  (and, if the host does not watch the TX-full pin, a `TX_COUNT` read: 2 bytes more).
+- **FIFO depth: kept at 16 bytes.** At 60 MHz a byte leaves the TX FIFO (or arrives in the RX
+  FIFO) every 0.8 µs during a frame. A full 16-byte FIFO covers 12.8 µs of host absence; a
+  refill of 15 bytes takes 15 x 16 = 240 clocks (4 µs) plus a command byte, so a host that
+  services the FIFO at least every ~8 µs (or keeps streaming and pauses SCK while the
+  TX-full pin is high) never underruns. A host able to run SCK at 7.5 MHz with 4 lines is a
+  PIO/DMA engine or an FPGA, whose jitter is well below a microsecond. 32 bytes would double the
+  allowance to ~25 µs but cost about +11k µm² per FIFO pair (D45: 690 µm² per byte) and change
+  the FIFO depth assumed by the golden model, formal proofs, coverage and stress (all built on
+  16 bytes), for a host class that cannot run this port anyway. Underruns and overruns are
+  never silent (D93), so a host that is too slow is told.
+- **Alternatives:**
+  - *A dual port* (2 bits): 1.9 MB/s at 60 MHz, only 1.5x Ethernet with no room for bursts and
+    polls.
+  - *A faster SCK* with a source-synchronous sampling scheme (sampling MOSI on the raw SCK, not
+    through the synchronizers): breaks the 2-flop discipline the whole port is built on.
+  - *Entering by a command byte* (e.g. a reserved command like QSPI flashes' 0x38): equivalent,
+    but a register reads back and is in the register map like every other setting.
+  - *Leaving by CS_n held high for N clocks:* the host would have no explicit action; any idle
+    host would leave quad mode.
+- **Generality:** the port is protocol-neutral: every high-rate stream gains (the logic
+  analyser's sustained capture rate, D86, is limited by the port; quad SPI's 2.8 MB/s reads,
+  D87; HDLC and USB at higher rates).
+- **Tests:** `tb_quad` (16 checks: reset mode, entering at CS_n high, register writes and reads,
+  16-byte bursts at 16 clocks per byte against 64, the borrowed pins with CS_n high and low,
+  `uo_out[6]` as TX full in quad mode, a program load and a 64-byte UART loopback in quad
+  mode, leaving by `HOSTCFG` = 0, by 8 SCK pulses (and their harmlessness in single mode), and
+  by reset). `tb_host.svh` has a quad path: with `+QUAD` every bench's host switches at its
+  first transaction; `make test` runs `tb_la` that way and `make test-quad` also `tb_pbe` (UART,
+  SPI, I2C, 1-Wire, Modbus, SMBus). Every existing bench passes unchanged in single mode.
+- **Register map:** `HOSTCFG` 0x50 is the first register above the second pages; unmapped reads
+  still return 0, so the golden model (which never writes 0x50) still matches.
+
+## D90. Manchester line coding (LINE mode 3), clock recovery on both clock edges
+
+- **Asked by the owner** for 10BASE-T (and generally DALI, RC5, MIL-STD-1553 style links).
+- **Chosen: mode 3 of `LINE[1:0]`**, the one reserved code (D39), in `pbe_line`. Every other
+  mode, and every existing configuration, is unchanged; the formal default-equivalence and
+  the golden model never select mode 3.
+- **Convention:** IEEE 802.3 clause 7.3.1.1 (to which 10BASE-T, clause 14, refers): "during the
+  first half of the bit-symbol, the encoded signal is the logical complement of the bit value
+  being encoded; during the second half, the uncomplemented value". So a 1 is low then high,
+  with a transition in the middle of every bit. `LINE[7]` swaps the halves (a 1 is high then
+  low: G.E. Thomas, MIL-STD-1553's Manchester II). Byte and bit transfers, LSB/MSB first, SYNC
+  and pair mode work as in the other modes; stuffing is off (LINE[3:2] ignored).
+- **Transmit:** the first half is floor(period_m1 / 2) + 1 clocks (3 of 6 at 10 Mbit/s and
+  60 MHz), the second the rest. After `END` the line is held at the high level (in pair mode:
+  pin a high, pin b low, a positive differential) for **3 bit times**, then let go (the pin
+  unit's level, idle). That is 10BASE-T's TP_IDL (clause 14.3.1.2.1, Figure 14-10: a positive
+  level after the last bit before idle) and DALI's 2 stop bits. A secondary source (a TI application note) gives TP_IDL as a 300 ns or 350 ns pulse depending
+  on the last bit; holding 3 bit times after the last bit cell gives 300 ns from a boundary
+  transition (last bit 0) and 350 ns from a mid-bit one (last bit 1), the same two numbers.
+  The minimum (about 250 ns, "at least 2 bit times" in the owner's brief) and the return to
+  zero are left to the external driver's network and are for the verifier to check against
+  the template (`docs/ETHERNET_VERIFICATION_TODO.md`). A transmit underrun holds the level (no
+  transitions: the far end sees the carrier end) and pulses the line error, as in other modes.
+- **Receive, clock recovery — Changed by D101** (10BASE-T: the verifier's wire stress at the
+  full ±13.5 ns per-crossing limit, BUG-151; the single-edge threshold below cannot meet it).
+  As first built: a bit timer holds the expected mid-bit point; a transition at
+  least 3/4 of a bit (+ 1/4 clock) after it is the next mid-bit transition, and the level after
+  it is the bit; earlier transitions (bit boundaries, only between equal bits) are skipped.
+  - **The first transition** after idle starts a frame and is the reference; its bit is not
+    delivered (it is a preamble or start bit). With the 10BASE-T receiver idling low (the
+    comparator, `docs/info.md`) the first transition of a preamble (a 1: low then high) is a
+    mid-bit transition, so lock is immediate; a wrong first lock corrects itself at the first
+    0/1 pair, and `SYNC` (the SFD 0xD5) finds the byte alignment.
+  - **End of carrier:** no mid-bit transition for 2 bit times (TP_IDL is 3). `frame_end`
+    pulses only for a frame whose `SYNC` was found (or with `SYNC` = 0): link pulses (one
+    positive pulse), a lone edge at the end of TP_IDL and noise end silently.
+  - **Jitter.** First version: the reference was each accepted edge itself. `tb_line` M7 (per
+    edge uniform jitter, 20 frames per step) decoded up to ±0.5 clock (±8.3 ns at 60 MHz):
+    the interval between two edges carries both edges' jitter plus a clock of quantization.
+    The commonly quoted 10BASE-T receive jitter is ±13.5 ns (802.3 clause 14.3.1.3, for the
+    verifier to confirm), so that was not enough. Two changes, measured one at a time:
+    1. **A first-order loop:** each mid-bit transition moves the reference by a quarter of its
+       error (1/8-clock resolution), so the reference averages the edges. Alone: no gain
+       (still ±0.5 clock), because the quantization of the edge itself was then the limit.
+    2. **Both clock edges** (the owner's suggestion): the top level samples the pins at the
+       falling clock edge too (`pins_n0` on the falling edge, then two rising-edge stages: a
+       3-flop synchronizer whose first stage has half a clock to settle), and the engine passes
+       the receive pin's falling-edge sample to the coder (`a_early`). An edge already present
+       at the falling edge happened in the first half of the clock, so edges are timed to half
+       a clock. With the loop: ±0.6 clock. With the threshold moved by the mean detection
+       delay (a quarter clock): **±0.8 clock, ±13.3 ns at 60 MHz, error-free**; failures start
+       at ±0.9 clock (2 of 40 frames at ±18 ns on a 20 ns bench clock). Loop gain 1/2: ±0.6;
+       1/8: ±0.5 (slower tracking); thresholds ±1/8 clock either side: ±0.6-0.7.
+  - **Clock offset:** 802.3 allows ±0.01 % (100 ppm); M4 decodes at ±100 ppm with ±0.6 clock
+    of jitter and at ±1 % (100x the limit) with ±0.4 clock. The loop's steady-state lag at
+    an offset f is about 4 f bit times (0.04 clock at 1 %).
+- **Who else benefits:** both-edge sampling is per pin and general (the logic analyser or any
+  future receiver could use it); Manchester itself serves DALI (1200 bit/s, idle high, 2 stop
+  bits), RC5 infrared, MIL-STD-1553 data words (its sync is a code violation the coder does
+  not generate: a program would bit-bang it) and 10BASE-T.
+- **Alternatives:**
+  - *A PLL-style decoder in the program* (bit mode, IN per half bit): 3 clocks per half bit
+    leave no instruction time.
+  - *Oversampling at 8 per bit* (an 80 MHz clock): the owner's clock is 60 MHz.
+  - *Edge-relative decoding without a loop* (the first version): simpler, ±8.3 ns.
+  - *A new LINE bit for Manchester:* mode 3 was free and has no other sensible meaning.
+- **Cost:** per engine, a 24-bit signed bit timer, one registered 24-bit threshold (6 x
+  `CLKDIV`, off the compare path like `sp_q`, D65; the other two limits, a bit and two bits in
+  eighths, are shifted copies of `CLKDIV`), the second-half register; 24 flip-flops for the
+  falling-edge pin samples in the top level. Measured with `make synth` in D92.
+- **Tests:** `tb_line` M1-M7 (`tb_line_manch.svh`, an encoder written from 802.3 and checks of
+  every clock): transmit in both polarities with the TP_IDL tail and release, an underrun,
+  receive at 0/±100 ppm/±1 % with jitter, link pulses and a stray edge ignored, a coder-to-coder
+  loopback, the jitter sweep. Also under Verilator (`make test-verilator`), identical logs.
+
+## D91. CRC unit up to 32 bits: CRC-32 for Ethernet, zip, PNG, MPEG-2
+
+- **Asked by the owner:** CRC-32 (Ethernet FCS) with every existing configuration unchanged.
+- **Chosen:** `pbe_crc` is widened to 32 bits (register, polynomial, good value, value out); the
+  width is 5 bits. Everything else is the same algorithm: a shift-left register fed in wire
+  order, reversed output for LSB-first CRCs, init all ones, "ok" when the register equals the
+  good value.
+  - **Ethernet:** poly 0x04C11DB7, 32 bits, init all ones, reversed output, fed `OUT` (transmit)
+    or `IN` (receive) bits; the FCS is the value inverted, bytes 0..3 low byte first
+    (`OSRCRC B0..B3, INV`), which puts x^31 first on the wire as 802.3 clause 3.2.9 requires. A
+    receiver feeds the FCS too and checks the residue: the register ends at 0xC704DD7B, which
+    is 0xDEBB20E3 (the residue usually quoted, of the reflected algorithm) bit-reversed. The
+    good value compares the raw register, as for USB's 0x800d (D41).
+  - **Registers (no existing address moves):** in each engine's second page, +8/+9
+    `CRC_POLY_2/3` (write: polynomial bits 23..16 and 31..24; read: the CRC value's bits 23..16
+    and 31..24, as +9/+A read bits 15..0), +A/+B `CRC_GOOD_2/3`, +C `CRC_CFG2` [0] = width bit
+    4. These offsets read 0 before. All reset 0.
+  - **OSRCRC:** the byte is {param[3], param[0]}: `LO`/`HI` (param[3] = 0) are bytes 0 and 1 as
+    before, `B2`/`B3` bytes 2 and 3. `LEFT` (left-justify to 16 bits, CAN, D71) applies to CRCs
+    of up to 16 bits and does nothing for wider ones. param[3] was ignored before, and it still
+    is for a CRC of up to 16 bits: every existing program has it 0 (the images are
+    byte-identical), but the golden model's random programs set every EXT parameter bit, and a
+    param[3] that picked byte 2 (zero) of a 16-bit CRC would change their results (`make diff`).
+    Only a CRC wider than 16 bits, which needs `CRC_CFG2`, sees the new bytes.
+- **Bit-identical for widths up to 16:** with `CRC_CFG2` = 0 and the upper polynomial and good
+  bytes 0 (their reset values) the register's upper half stays 0 (the mask), and every output
+  is what the 16-bit unit gave. `tb_crc` (c) runs 300 random 1-16-bit configurations (random
+  polynomials, good values, init, reversal, init/step sequences) against a copy of the old unit
+  (`test/ref_pbe_crc16.sv`), clock for clock, from reset. (A live width change without `CRCRST`
+  keeps the register's state, as before; after a CRC wider than 16 bits that state can have
+  upper bits, so switching an engine from CRC-32 to a narrower CRC needs a `CRCRST`, which
+  every program does at the start of a packet anyway.)
+- **General:** Ethernet FCS, zip/gzip and PNG (CRC-32), MPEG-2 transport streams
+  (CRC-32/MPEG-2, sent MSB first, not inverted), iSCSI/ext4/SCTP (CRC-32C), POSIX `cksum`,
+  plus every CRC of 17-31 bits (CRC-24 for OpenPGP and Bluetooth LE, CRC-17/21 of CAN FD).
+- **Alternatives:**
+  - *A byte-parallel CRC-32 (8 bits per clock):* the byte-mode feed already takes 8 clocks per
+    byte, far inside the 48 clocks of a 10BASE-T byte; a parallel network would be several
+    times larger and specific to one polynomial.
+  - *A fixed CRC-32 block beside the 16-bit unit:* duplicates the shift register and loses
+    the other 32-bit CRCs.
+  - *Folding the width bit into CRC_CFG:* no free bit (all 8 are used).
+- **Cost:** per engine 16 more bits of register, polynomial and good value, a wider mask,
+  reversal and compare (`make synth` in D92).
+- **Tests:** `tb_crc`: (a) the reveng catalogue check values for "123456789" of CRC-32
+  (0xCBF43926), CRC-32/BZIP2, CRC-32/MPEG-2, CRC-32C and CRC-32/POSIX, all exact; (b) Ethernet
+  frames of 60, 514 and 1514 random bytes: the unit's FCS equals a byte-wise reflected CRC-32
+  (poly 0xEDB88320) written in the bench, the residue after the FCS is 0xC704DD7B, a flipped bit
+  is caught; (c) bit-identity above. End to end with `OSRCRC B0..B3` in `tb_eth` (D93).
+
+## D92. 60 MHz: 6 clocks per 10BASE-T bit (3 per half bit)
+
+- **Asked by the owner:** the clock goes from 48 to 60 MHz, so a 10 Mbit/s Manchester half bit is
+  exactly 3 clocks (D90). `info.yaml` `clock_hz` 60000000 and `src/config.json` `CLOCK_PERIOD`
+  16.667 (those two keys only; the comment in `config.json` that still says 48 MHz is the
+  owner's to change).
+- **What depended on 48 MHz:**
+  - **USB low speed** (1.5 Mbit/s): 40 clocks per bit (`CLKDIV` 39), was 32. The line coder
+    needs a whole number of clocks per bit; 60 / 1.5 = 40 is one. `tb_usb`: turnaround 3.01 to
+    3.15 bit times (2 to 7.5 allowed).
+  - **WS2812** (`ws2812.pbe`): its pulses are delays in ticks of `CLKDIV` + 1 clocks. At 48 MHz
+    a 2-clock tick was 41.7 ns; at 60 MHz 41.7 ns is 2.5 clocks. With a 33.3 ns tick (`CLKDIV` 1)
+    and delays [11] [11] [11] (was [9] [9] [8]): 0 = 0.40 us high, 0.83 us low; 1 = 0.80 /
+    0.43 us; byte boundaries 3 ticks longer (0.93 / 0.53 us): all inside the datasheet's
+    ±150 ns. `tb_proto` checks every pulse.
+  - **I2C target** (`i2c_target.pbe`): the 300 ns data hold after SCL falls was `[12]` plus the
+    synchronizer at 48 MHz; at 60 MHz `[15]` (317 ns measured). The setup before releasing SCL,
+    `[15]`, is 267 ns (333 at 48 MHz); the standard-mode minimum is 250 ns.
+  - **I2C controller:** fast mode `CLKDIV` 21 (390 kHz; low 1.47 us >= 1.3), standard mode 85
+    (was 17 and 68).
+  - **CAN** (bit time = `CLKDIV` + 1): 479 / 239 / 119 / 59 for 125k / 250k / 500k / 1M (was 383 /
+    191 / 95 / 47); `tb_can` computes them from the clock and passes.
+  - **PS/2:** a 5 us tick is `CLKDIV` 299 (was 239).
+  - **Host port:** SCK at most clk / 8 = 7.5 MHz: 0.94 MB/s single lane, 3.75 MB/s quad (D89).
+  - Everything timed by `CLKDIV` alone scales by 1.25 (JTAG/SWD clocks up to 10 MHz, quad SPI
+    20 MHz single write, logic analyser 5 MS/s at `CLKDIV` 1): the program headers, the README
+    and `docs/info.md` give the 60 MHz figures.
+- **Benches:** `CLK_NS` = 16.6672 in every top-level bench: `#(CLK_NS / 2)` rounds the half
+  period to 8.334 ns, a 16.668 ns period, 0.01 % slow, as the 48 MHz benches were (20.834 ns);
+  a period rounding fast made the 1-Wire 60 us slot 1.2 ns short (BUG-132). The cocotb test
+  (`test/test.py`) runs at 16,668 ps (it needs an even number). Benches with 48 MHz numbers
+  were fixed (BUG-132). All 13 top-level benches pass at 60 MHz, unchanged otherwise.
+- **Timing** (`make timing`, logic only, IHP slow corner, no wires; the routed report is the
+  real figure, D45):
+
+  | | Worst logic path | Start |
+  |---|---|---|
+  | Before this work (D88) | 3.61 ns | |
+  | Quad host port (D89) | 3.64 ns | |
+  | Manchester, both-edge sampling (D90) | 4.80 ns | `pin_base` -> receive-pin mux -> the Manchester edge compare |
+  | CRC-32 (D91) | 4.55 ns | `pin_base` (the same class; ABC's result moves by ~0.2 ns run to run) |
+
+  The last routed run had 6.81 ns of setup slack at 48 MHz (20.83 ns), a worst path of about
+  14.0 ns. At 60 MHz (16.67 ns) that path leaves about 2.6 ns; the logic estimate grew by
+  about 1.2 ns since, so the expected slack is about 1.4 ns, to be confirmed by the next
+  routed (`gds`) run, which this work did not run (the owner's instruction).
+- **Area** (`make synth`, IHP typical, standard cells only; the SRAM macros are extra):
+
+  | | Area | Change |
+  |---|---|---|
+  | Before this work | 199,555 µm² | |
+  | + quad host port (D89) | 201,711 µm² | +2,156 |
+  | + Manchester and both-edge sampling (D90) | 220,700 µm² | +18,989 |
+  | + CRC-32 (D91) | 234,907 µm² | +14,207 |
+
+  In all +35,352 µm² (+17.7 %). 60 MHz itself adds nothing to the RTL (the programs and benches
+  changed). If the routed slack comes out short, the new worst path can be cut by registering
+  the receive pin's selection (`rx_pin`, `rx_pin_e`): one clock more latency for every coder,
+  which tolerates it (the synchronizers already add two).
+- **Alternatives:** 50 MHz (5 clocks a bit, a 2.5-clock half bit: no) or 80 MHz (8 clocks a bit:
+  more receive margin, but about 12.5 ns, under the routed worst path).
+
+## D93. 10BASE-T: eth_tx.pbe and eth_rx.pbe, streamed by the quad host port
+
+- **Asked by the owner:** full 10BASE-T, transmit and receive (the brief's stretch goal), on the
+  general hardware of D89-D92: engine 0 transmits, engine 1 receives (full duplex).
+- **Transmit, `programs/eth_tx.pbe` (52 words, one page):** pair mode, TD+ = pin base, TD- =
+  pin base + 1, Manchester, bytes, `CLKDIV` 5 (6 clocks a bit at 60 MHz).
+  - **Host records:** a frame is chunks `[n][n bytes]` (n = 1..255) and `[0]`, so a frame of any
+    length streams through the 16-byte FIFO with an 8-bit counter (X); the engine adds the
+    preamble (7 x 0x55) and SFD (0xD5, `OUT, NOCRC`), and the FCS (`OSRCRC B0..B3, INV`, D91).
+    The first chunk's length starts the frame; the 8 preamble bytes (6.4 us) give the host time
+    to queue more. *Alternative:* a 16-bit length prefix: the engine has one 8-bit counter.
+  - **Per byte:** `PULL`, `OUT` (the coder takes it at its first bit), the CRC feed (8 clocks),
+    the loop jump: about 11 of the 48 clocks a byte lasts.
+  - **End:** `END` twice: the second returns when the coder takes the first, at the end of the
+    last bit, so the inter-frame gap is timed from the right place: 36 x 17 clocks (10.2 us)
+    plus the coder's 2-bit gap before the next frame. Measured (the model): 10.68 us between
+    back-to-back frames (802.3: at least 9.6 us). TP_IDL is the coder's (D90): measured 300 ns
+    after a final 0, 350 ns after a final 1.
+  - **Link pulses:** while idle the `PULL` for the next frame times out every 1 ms (`TIMEOUT`
+    60000 clocks; the timeout vector counts 16 of them in X), then a 100 ns pulse (TD+ high, by
+    the pin unit under the idle coder), then the same 10.2 us gap as after a frame. Measured
+    16.0 ms apart (802.3 clause 14.2.1.1: 16 +- 8 ms). The first one comes 16 ms after the start,
+    not at once (BUG-133).
+  - **Status:** one byte per frame in engine 0's RX FIFO (`STAT`): bit 4 = the coder ran out of
+    data (an underrun: the frame on the wire is corrupt), bit 2 = the FIFO stayed empty for 1 ms
+    inside the frame (the engine ended it at once: the timeout vector sees FLAG0 "in a frame").
+    `STAT` at the start of each frame clears the idle loop's timeouts (BUG-134).
+- **Receive, `programs/eth_rx.pbe` (17 words):** RD = pin base (the receive comparator's output),
+  Manchester, bytes, `SYNC` 0xD5: the coder finds the SFD, recovers the clock and ends the
+  frame with the carrier (D90); link pulses never reach the program.
+  - **Records:** the bytes (the FCS included), a data 0x7E twice, and `[0x7E][status]` at the
+    end, as `hdlc_rx` (D88): a frame does not fit the FIFO, so its length cannot come first.
+    Status (`STAT`): 0x02 = FCS ok (the CRC unit fed with every byte, the FCS too, at its residue
+    0xC704DD7B, D91); bit 4 = line error (a byte the engine could not take in time), bit 3 = a
+    `PUSH` found the RX FIFO full. Per byte: `IN`, `JLINE`, `JNE`, `PUSH`, `JMP`: about 14 clocks
+    with the CRC feed.
+  - **Parity off** (`LINE_CFG[6]`), or `STAT` bit 0 is a meaningless parity of the frame.
+- **Host rate:** a frame needs 1.25 MB/s with no pause longer than the FIFO covers (16 bytes,
+  12.8 us). In `tb_eth` the host runs the quad port at SCK = clk / 8 (3.75 MB/s): it writes up
+  to 12 bytes per burst, pausing (ending the burst) while the TX-full pin is high, and reads
+  each RX FIFO by `RX_COUNT` and a burst read; transmit, receive and both at once (the loopback,
+  full duplex through one port) run with no underrun or overrun.
+- **Not done (limits):**
+  - *No CSMA/CD:* the transmitter does not defer to a carrier or detect collisions, so the link
+    partner must be full duplex. A switch port that sees only link pulses (no auto-negotiation)
+    falls back to 10 Mbit/s half duplex by parallel detection and may then collide with the
+    chip: the port must be set to 10 Mbit/s full duplex. (A program could defer to engine 1's
+    carrier through a flag; collision detection needs the transmitter to watch the receive pin.)
+  - *No auto-negotiation (fast link pulses)* and no link-integrity state machine (link fail after
+    50-150 ms without pulses): the host can watch the received frames; the coder ignores link
+    pulses by design.
+  - *No polarity correction* on receive (a reversed pair inverts every bit: the SFD is never
+    found); *no jabber* control (the host bounds frame length); dribble bits after the last
+    whole byte are dropped.
+- **Who else benefits:** the record formats are the HDLC ones; Manchester and CRC-32 serve the
+  other users listed in D90 and D91.
+- **Tests:** `tb_eth` against `eth_model.sv`, a link partner written from IEEE 802.3 (its own
+  Manchester decoder by mid-bit windows, CRC-32 byte-wise reflected, preamble/SFD, bit timing
+  100 +- 1 ns, TP_IDL 200-450 ns, gap >= 9.6 us, link pulses 60-200 ns wide and 8-24 ms apart);
+  19 checks: transmit 64/512/1518-byte frames back to back with their status bytes; receive the
+  same sizes, a bad FCS, +-100 ppm, +1000 ppm and -5000 ppm with jitter, three frames 9.6 us
+  apart; the loopback engine 0 -> engine 1 with the host streaming both at once; link pulses
+  while idle and the model's link pulses into engine 1 (no record); a 30 us host underrun (status
+  bit 4), a 1.2 ms one (the engine aborts: bit 2), and an RX overrun (bits 3 and 4).
+
+## D94. pbe_line stuffing control and flag-delimited frames: HDLC in NRZI (item 6a); multi-pin IN/OUT not done (6b)
+
+- **Asked by the owner** (from D88): the minimal general hardware for HDLC with NRZI.
+- **Chosen, in `pbe_line`:**
+  1. **`LINECTL STUFFOFF` / `STUFFON`** (EXT sub-op 7, param[4] = 1, [0] off, [1] on; the same
+     encoding as the bit-synchronous coder's, D67). Each queued unit carries the stuffing state
+     current when it was queued (`q_ns`, then `tns` with the shift register), so a program sends
+     `STUFFOFF`, a flag 0x7E as an ordinary byte or 8 bits, `STUFFON`, and the flag goes out
+     unstuffed inside the same coder frame as the data around it: the NRZI level is continuous
+     and the bits already queued keep their own state. The SYNC byte is always stuffed. Reset,
+     clear (coder off, restart): stuffing on. The width and arbitration controls stay
+     bit-synchronous only. *Alternative:* a mode bit in `LINE`: it would apply to the bits in
+     the queue at the moment of the write, not to a chosen unit.
+  2. **`LINE[6]`, flag-delimited frames** (the reserved bit; ignored in Manchester): a stuffing
+     violation ends the frame at either line level (not only at the idle high level, BUG-033's
+     rule), and the receiver does not go idle: the run count restarts and the bit after the
+     violation is the first bit of the next frame (a flag's last 0, or an abort's 7th 1). The
+     "8 idle bit times" end is off in this mode. With `LINE[6]` = 0 everything is as before.
+  - *Not done:* the receive flag pattern (a raw-bit SYNC compare, to deliver aligned bytes):
+    with continuous reception the program finds the alignment itself at no cost (it reads the
+    bit after each frame end), so the pattern compare was not needed.
+- **Programs (rewritten, one pair for both codings):**
+  - `hdlc_tx.pbe` (41 words, was 41): flags between `STUFFOFF` and `STUFFON`; NRZ `LINE` 0x09,
+    NRZI 0x0A. Between frames it sends flags (interframe time fill) instead of letting go of the
+    line: letting go hands the line to the pin unit at a level that in NRZI depends on the data,
+    and the engine's own receiver then reported overruns (the BUG-123 effect, which a trailing 1
+    cured only in NRZ). Before the first frame the line idles high (mark).
+  - `hdlc_rx.pbe` (43 words, was 38): `LINE` 0x49 / 0x4A. At a frame end it reads the next bit: 0
+    is a flag (the next frame starts), 1 an abort. D88's RXD poll (and its `d` byte in the TX
+    FIFO) is gone; it also removes D88's 10 kbit/s lower limit for abort detection. The records
+    and the `CRC_GOOD` 0xD0F9 are unchanged (each segment is still the frame and the closing
+    flag's 0 1 1 1 1 1).
+- **Tests:** `tb_line` H (unit, both codings): flags and an abort sent with `LINECTL` inside one
+  coder frame, received with `LINE[6]`: the frame ends where expected, the data bits exact, the
+  bit after an abort's sixth 1 is a 1. `tb_hdlc`: the D88 phases (transmit at 1.25, 2.5 and
+  5 Mbit/s, receive at 1.25 and 2.5 Mbit/s with shared flags, a CRC error, aborts followed by
+  idle and by a flag, 64-byte frames) in NRZ and again in NRZI, against `hdlc_model.sv`, now
+  NRZI-capable (0 = a transition): 9/9. The model saw 914 flags and no abort from the chip.
+- **Cost:** three flip-flops and a few gates per engine.
+- **6b, multi-pin IN/OUT (optional): not done.** Free encoding bits exist (`IN` ARG[4:0] and
+  `PIN` ARG[2:1] are always 0 today, and the golden model's random programs never set them), and
+  sampling or driving 4 pins in one clock is small in the engine. It was left out because what
+  it is for is not small: the logic analyser (`la_capture.pbe`) and the quad SPI program
+  (`qspi_flash.pbe`) would be rewritten around it with their benches (`tb_la`'s skew checks,
+  `tb_qspi`'s timing), the CRC and parity rules for a multi-bit `IN`/`OUT` need defining, and
+  the golden model and formal engine properties would need the new semantics before `make diff`
+  could exercise it. It belongs in a session of its own.
+
+
+## D95. Ethernet verification: preserve the default contract, then extend independent checks
+
+- **Chosen:** work from D94 on `verify/ethernet`, in the seven ordered stages of
+  `ETHERNET_VERIFICATION_TODO.md`. Keep source RTL and old evidence unchanged. New receipts
+  belong under `verify/golden-model/evidence/round3/`; fresh generated work stays in build/.
+- **Default stage:** tie quad inputs low in a wrapper, connect early samples to ordinary
+  samples in non-Manchester harnesses, disable LINECTL, and zero-extend narrow CRC inputs.
+  Include the reset-derived single-lane invariant in induction rather than assuming internal
+  state. The historical equivalence comparison excludes newly assigned LINE mode 3, LINE[6]
+  and non-bit-synchronous LINECTL action encodings: those are new features, tested separately.
+  Preserve every old assertion, counterexample, depth and expected status otherwise.
+- **D82 compatibility:** standalone launchers must include the actual FUNCTIONAL SRAM models,
+  not silently select the FF fallback. The external bus loader uses the current assembler's
+  three return values and each engine's own SRAM, retaining caller-specified start offsets.
+  Bus baud calculations derive from 16668 ps (60 MHz rounded to an even ps, as required).
+- **Mutations:** re-anchor old faults to their current semantic sites; retain one replacement
+  per mutant and reject source drift. A compile error or timeout is inconclusive, never a kill.
+- **Alternatives rejected:** changing RTL to fit stale checkers; constraining away a new mode
+  in its own tests; replacing recorded evidence; counting BMC/cover as inductive proof;
+  selecting the FF implementation just to avoid supplying the SRAM model.
+- **Tools:** OSS CAD Suite 2026-07-27: Verilator 5.051 devel (v5.050-99-gf8fb1d664),
+  Yosys 0.67+94 (7defa5186), bundled SBY/Yices. Debian Icarus/vvp 12.0 precede the suite
+  for simulation and `make test`; stock sigrok-cli 0.7.2/libsigrokdecode 0.5.3.
+  Python 3.12 with cocotb 2.0.1 and the pinned per-target requirements. Version probes and
+  command receipts distinguish this environment from historical Python runtimes.
+- **Boundary:** no GDS or gate-level workflow, analog/electrical compliance or routed timing
+  claim. Existing default results and new-feature outcomes must be reported separately.
+- Mutation output defaults to ignored `pbe_v1/build/mutations`, preventing `make mutate`
+  from overwriting the historical round-2 receipts. Selected round-3 receipts are copied
+  explicitly after the campaign, as with other generated build artifacts.
+- Raise only the line SBY wall-time budget from 120 to 1200 seconds on the shared two-CPU
+  runner. Retain depth 164/48 and all properties/assumptions; do not trade proof depth for
+  runtime. Resume with one solver job and source/configuration-validated collection.
+
+## D96. D89–D94 executable reference and opt-in differential profile
+
+- **Chosen:** extend the existing Python reference from D89–D94 and public source-header
+  specification text. Retain the queue-of-bits representation and represent Manchester's
+  reference as an integer age in eighth clocks, not an RTL shifter or a copy of its code.
+  CRC remains the polynomial-remainder bit algorithm; D91 supplies the wider mask and
+  OSRCRC byte rules. Host parsing uses a lane stride and request latched at idle.
+- Add architectural examples for quad framing/latching/recovery, both engines' wide registers,
+  and CRC-32/ISO-HDLC's independent check value. Run examples before implementing support;
+  retain failing and passing transcripts. Their scope is conformance, not a proof.
+- `make diff ETHERNET=1` opts into quad mode changes, idle-SCK recovery and wide CRC settings.
+  Keep the default seeded schedule and RNG draws intact. Compare against an isolated checkout
+  of 3cca934: two default seeds/600 iterations produce the same 50,663 clocks and counters.
+  Historical 49,010-clock reports predate PAGE/SRAM/current test setup; do not rewrite them.
+- Model unknown host outputs per lane. Require four-state unknowns exactly where FIFO head
+  data is unspecified; do not silently zero unknown known-data bits. The two-state exception
+  remains limited to those model-marked lanes.
+- Add a separate seeded per-clock D90/D94 line campaign; keep the old 160-configuration,
+  80,160-clock sweep independently runnable. Diagnostic RTL state may explain a mismatch;
+  it never feeds predictions. Any implementation-informed timing clarification must be
+  recorded as a shared cycle contract, not claimed as an independent architectural proof.
+- **Alternatives rejected:** changing the old default generator to force new modes; masking
+  all quad output lanes on reads; inferring the expected mode/data from the DUT; copying RTL
+  into the model. Preserve old receipts and separate old-profile/new-profile coverage.
+- **Workflow update from owner:** complete all stages locally; defer all pushes until the end.
+  Repository write access does not block implementation or validation.
+
+## D97. Enforce Manchester's documented LINE2 idle-wait exception
+
+- The minimal two-coder test establishes BUG-145 independently of the golden model.
+- **Chosen small repair:** make `idle_wait = cfg2[6] && !manch`. Preserve the existing
+  qualification and timing in modes 0–2. Keep Manchester's loop, coding, clock and TP_IDL
+  behavior unchanged. Apply after the baseline campaigns have retained their original
+  source provenance; rerun the regression gates on the repaired source.
+- **Alternative:** document Manchester+LINE2[6] as unsupported. Rejected because the public
+  D90 contract already says the setting is ignored, and one mode guard expresses it exactly.
+- Fixing this RTL bug is within the owner's explicit minimal-test/small-clear-fix exception.
+
+## D98. Ethernet formal scope, observer strengthening, and exact fast regressions
+
+- The new `ethernet` formal block separates unbounded k-induction (quad/single host framing,
+  pre-D89 single-lane equivalence, coefficient-reference CRC widths 17–32, and pre-D91 narrow
+  equivalence) from bounded Manchester/HDLC checks and nonvacuity covers.
+- Keep the existing host's legal synchronized mode-0 timing assumptions (SCK phases >=4
+  clocks and CS setup). The equivalence comparison itself allows arbitrary pin timing and
+  arbitrary extra MOSI lanes, with quad disabled. Request changes are unconstrained; the mode
+  latch and eight-idle-SCK counter are checked independently of the DUT's state.
+- Prove parser stride alignment as an invariant, never assume an unreachable quad bit index
+  away. Export common host/CRC state only to strengthen sequential equivalence. Observers do
+  not drive the design; source-aware receipts retain the generated inputs and expected modes.
+- CRC reference reset must be asynchronous, matching the documented primitive interface.
+  Narrow equivalence includes live width changes and the entire raw state, not only a
+  potentially truncated/reversed output. Do not claim an induction failure is an RTL bug.
+- Manchester's bounded harness uses two preamble bytes, SFD, and an arbitrary payload. It
+  checks the IEEE first/second halves independently on the TX wire, the 3-bit TP_IDL tail,
+  recovered data and a completion deadline; the paired coding cannot cancel a polarity bug
+  silently. Jitter/clock offsets are simulation stress, not claimed formal proofs.
+- Add exact external-interface timeout/parity regressions early in the normal gate. They
+  retain all old checks and preserve the random profile's seeded schedule, while preventing
+  long protocol scenarios from being the first detector of simple M19/M23 faults.
+- Alternative rejected: weakening properties/depths, calling UNKNOWN a proof, asserting
+  partial output equivalence without the stored-state relation, or counting a timed-out
+  mutation check as detection. Actual bounds and any pilot counterexamples are reported.
+
+## D99. Independent wire vectors and standards-based digital stress
+
+- **Chosen:** Scapy 2.8.0 supplies Ethernet frame bytes; Python binascii/zlib CRC-32 supplies
+  FCS independently of the PBE model. A stateless IEEE-half-cell decoder checks captured
+  public TX pins, preamble/SFD, LSB bit order, all FCS bits, TP_IDL and minimum IFG. Save
+  actual decoded packets as pcap plus FCS/timing sidecars. An independent flag/zero-deletion
+  parser and crccheck 1.3.1 CRC-16/IBM-SDLC check HDLC NRZI frames.
+- Cover 60–1514-byte Ethernet frames, boundary sizes and larger frames. A 32,640-byte jumbo
+  uses every nonzero chunk length 1–255 once. Test empty TX input, escape density, corrupted
+  FCS, runts, dribble bits and quiet link/noise events through actual host-visible records.
+- Extend RevEng checks to all 24 primary catalogue entries of widths 17–32. Twenty have
+  native zero/all-ones initialization; four non-native 24-bit seeds use explicit host-fed
+  prefixes solved with the external library's GF(2) map. Report those as prefeed-assisted,
+  never as an arbitrary-seed register. Preserve all old narrow counts and random draws.
+- IEEE 802.3-2012 clauses 3.2.9, 4.4.2 and 14 define FCS, IFG and link timing. Section One,
+  14.3.1.3.1 (printed p346) requires ±13.5 ns relative to **each ideal zero crossing**;
+  adjacent intervals can vary by twice that amount. Primary text inspected at the mirror
+  https://www.my-wire.de/schnittstellenbeschreibung/ethernet.pdf; no copyrighted PDF is
+  added to the repository. The independent encoder perturbs actual edges, never every
+  half-cell slot irrespective of whether an edge exists.
+- Test uniform, alternating-extreme and spacing-dependent jitter, ±100 ppm and larger
+  offsets, exact 9.6-us back-to-back receive, clk/8 host phase sweeps, starvation/timeout,
+  overflow and recovery. Save delivery separately from error-reporting success. Worst-case
+  escaped receive plus transmit consumes the raw host bandwidth before command overhead;
+  a detected overflow is an architectural throughput limit, not successful delivery.
+- The spacing-dependent stimulus is a digital ISI proxy. Analog thresholds, squelch,
+  impedance, cable transfer, metastability, routed half-cycle setup/hold and physical
+  compliance remain unverified. No GDS or gate-level workflow is permitted or invoked.
+- **Alternatives rejected:** using the golden model as an external frame oracle; rounding
+  13.3344 ns up to the standard's 13.5 ns; retuning RTL merely to pass a few seeds; calling
+  a bad-CRC record delivery success; hiding unrestricted PAGE counterexamples in a narrowed
+  default proof. Unbounded legacy line equivalence covers all LINE2 values in modes 0–2;
+  the full-PC D88 engine comparison is distinct from the historical pre-CAN domain.
+- **Tools:** OSS CAD Suite 2026-07-27, Verilator 5.051, Yosys 0.67+94, bundled SBY/Yices;
+  Icarus/vvp 12.0 for four-state simulation; Python 3.12.4/cocotb 2.0.1. Stock sigrok versions
+  and all existing pinned bus/protocol libraries remain as D95. Compiler output grouping
+  is disabled to fit the two-CPU/eight-GiB runner without dropping instrumentation/assertions.
+
+## D100. Coverage closure, mutation sensitivity and volatile read timing
+
+- Default instrumentation remains 140 bins. Opt-in D89–D94 instrumentation adds 79 bins
+  for host framing/latch/recovery, every wide width, reflection/init/comparison, OSRCRC
+  byte selection, Manchester period/polarity/early samples/carrier behavior and D94 tags.
+  Keep the old and new line sweeps in separate data files. Directed public-interface
+  programs close simultaneous STUFFOFF/ON and Manchester idle-wait bins. Structural holes
+  and boundaries not represented by these bins remain explicitly listed in the report;
+  219/219 named events is not exhaustive configuration, analog or path coverage.
+- Preserve every mutant's single source site, frozen input manifest, command, assertion
+  reason and separate outcome. Original timeout/survivor/compile outcomes remain evidence.
+  A new continuous-one-run test detects E10's run-reset fault after the random test survives.
+  Program mutants replace the second END, frame-start STAT or extra escape PUSH with NOP,
+  avoiding incidental changes to X. Completion status must follow the last FCS bit: this
+  tests the documented second-END barrier, which payload/FCS-only checking can miss.
+- Stopped engines do not stop their line coder. Compare volatile host readback against the
+  model at actual sample time, preserving per-clock pin checks and explicit directed values;
+  do not assume a pre-command STATUS snapshot is stable through a transaction. Global-index
+  replay and progress receipts preserve the seeded schedule and identify any aborted run.
+- Distinguish unbounded equivalence/induction, bounded checks, nonvacuity covers, deliberate
+  historical counterexamples and incomplete proof attempts. The optional broad structural
+  engine-equivalence pilot leaves 35 cells unproved; it supplies no proof claim. The D88
+  full-PC engine miter instead has a successful bounded depth-eight result. A separate
+  repair-only unbounded line comparison admits all LINE2 values and D94 controls in modes
+  0–2, establishing preservation of the one-line Manchester guard repair.
+- All work stays on verify/ethernet. The owner's updated workflow defers pushes until the
+  complete local verification and report are ready; no stage pushes, merges or prohibited
+  physical/gate-level workflows are part of this campaign.
+- Final acceptance requires all 219 named bins: the exploratory `--partial` summarization
+  is removed from the normal extended recipe after gap closure. The quad formal observer
+  explicitly checks Q3..Q1 as well as Q0; full internal word equality alone is not substituted
+  for checking the externally specified lane mapping (BUG-160).
+
+## D101. Manchester receive: decide each edge from the next one, with a threshold that follows inter-symbol interference (BUG-151)
+
+- **Why:** the verifier's independent wire stress (D99) drives every crossing exactly at the
+  802.3 limit, ±13.5 ns from its ideal position (clause 14.3.1.3.1), at ±100 ppm. D90's loop
+  passed 6 of the 12 required cases. It failed both data-dependent ("isi": a crossing after a
+  short interval is late, after a long one early) and the fast-source alternating cases
+  (BUG-151). This decision **changes D90's receive clock recovery**; its transmit side,
+  both-edge sampling, carrier rules and every other mode are unchanged. The cause is
+  10BASE-T's jitter limit.
+- **Margins on paper (D90).** Times are relative to the reference (the learned mid-bit
+  position) at 60 MHz. Sampling on both clock edges times an edge to 8.33 ns, so an edge is
+  seen 0 to 8.33 ns late; the reference averages, so relative to it an edge is within ±4.2 ns.
+  After a mid-bit transition the next edge is a boundary (nominal 50 ns) or the next mid-bit
+  transition (100 ns), and D90 decides on that one edge against a threshold at 75 ns.
+  - With an unbiased reference: boundaries at most 50 + 13.5 + 4.2 = 67.7 ns, mid-bit
+    transitions at least 100 - 13.5 - 4.2 = 82.3 ns. That leaves 7.3 ns either side of the
+    threshold.
+  - *Alternating* extremes (consecutive crossings ±13.5 ns): the loop at gain 1/4 ripples by
+    13.5 x 1/7 ≈ 1.9 ns, so a mid-bit transition can be seen at 80.4 ns.
+  - *isi*: the preamble (all mid-bit transitions after mid-bit ones) is uniformly 13.5 ns
+    early, so the reference learns that position; data boundaries are 13.5 ns late, which is
+    27 ns relative to it: 77 + 4.2 = 81.2 ns.
+  - So a single threshold must sit above 81.2 ns and below 80.4 ns. No threshold works, which
+    matches what was measured. The deficit (about 1 ns) is less than one clock edge's
+    resolution, so retuning the gain or the threshold cannot fix it. The decision itself has
+    to use more information.
+- **Chosen:**
+  - **Wait for the next edge.** The edge E1 after a mid-bit transition stays pending. If
+    another edge E2 comes while τ1 + τ2 < T, E1 was a boundary and E2 is the mid-bit
+    transition. Once τ1 + (time now) reaches T, E1 was the mid-bit transition, and E2, if
+    any, is the next pending edge.
+    - Nominal sums: a boundary then mid-bit is 50 + 100 = 150 ns; a mid-bit then the next
+      edge is 100 + 150 = 250 ns (or 300 ns).
+    - E1 is usually resolved at the time T - τ1, before E2, so the bit is late by at most
+      about a bit. A boundary's E2 is the mid-bit transition itself.
+  - **T = 200 ns + m_b (16N + m_b in eighths).** m_b is the mean phase error of the mid-bit
+    transitions that follow a boundary.
+    - With isi, those are late by the interference offset δ against the ones that follow a
+      mid-bit transition; a boundary pair's sum moves by about 2δ and a mid-bit pair's by
+      about δ, so the threshold moves with m_b ≈ δ.
+    - m_b is learnt from the start of each frame with gains 1/2, 1/4, 1/8, then 1/16.
+    - The reference itself moves 1/8 of each mid-bit transition's error (D90: 1/4). The
+      threshold now carries the bias, and the lower gain averages more.
+  - **While hunting for SYNC:** T = 250 ns (20N), and a repeated bit that SYNC never repeats
+    is impossible, so the edge after it is taken as a mid-bit transition at once.
+    - For Ethernet (0xD5 never repeats a 0), the edge after every preamble 0 is decided
+      without a threshold. The only decision with E2 a boundary before the SFD's end is the
+      SFD's own "11".
+    - The rule is derived from the SYNC register, not from Ethernet; with SYNC = 0 nothing
+      is hunted.
+  - **A lone early edge is dropped.** A pending edge that came under 5/8 bit (5N) after the
+    reference, with nothing after it in time, delivers no bit and leaves the reference alone.
+    - Examples: the rise into TP_IDL after a final 0, or a stray edge.
+    - Within the jitter limit no mid-bit transition is that early: about 35 eighths or more at
+      6 clocks a bit, against 5N = 30.
+    - D90 skipped such edges with its single threshold. Without this rule, bit mode would get
+      an extra bit after frames that end in a 0, and the carrier end would come later
+      (BUG-163).
+  - Carrier end, first-edge lock, both-edge timing and SYNC are unchanged (2 bit times without
+    a mid-bit transition or a pending edge end the carrier).
+- **Margins on paper (D101), the same quantization:**
+
+  | Case | Boundary pair sum | Mid-bit pair sum | T | Margin |
+  |---|---|---|---|---|
+  | Unbiased, extremes | ≤ 150 + 27 + 8.3 = 185.3 | ≥ 250 - 27 - 8.3 = 214.7 | 200 | ±14.7 ns of sum |
+  | Alternating | 150 ± 3.8 (E1 and E2 have opposite jitter and cancel) | 250 ± 3.8 | 200 | ≈ 46 ns |
+  | isi, reference on the preamble | ≤ 204 + 8.3 = 212.3 | ≥ 277 | ≈ 227 (m_b ≈ δ = 27) | 15 / 50 ns |
+  | isi, reference settled between classes | ≤ 185.3 | ≥ 250 | ≈ 213.5 | 28 / 36 ns |
+  | SFD (hunting) | isi ≤ 212.3 | after a 1: ≥ 265 | 250 | 38 / 15 ns |
+
+  - The sum doubles the separation of the hypotheses and adds two edges' jitter. Against
+    independent worst-case extremes it gives the same per-edge margin as a single edge with
+    a perfect reference.
+  - What it adds is robustness to the two structured cases that broke D90. Alternating
+    jitter cancels within a pair, and the data-dependent offset is measured and followed.
+  - Two independent uniform crossings reach their extremes together far more rarely than one.
+- **Measured** (model in eighths, the verifier's generator, 16 clock phases, 256-byte frames,
+  both seeds):
+  - All 12 required cases pass at all 16 phases (192/192). The worst data decision is 3
+    eighths (6.3 ns) from the threshold on the boundary side and 1 eighth on the mid-bit side.
+    The hunting decisions are 15 or more eighths away.
+  - The whole required matrix also passes at ±16 ns per crossing (192/192), 186/192 at
+    ±17 ns, 158/192 at ±18 ns.
+  - D90 under the same model: 3 of 12 at all phases.
+  - Every phase of the 60-byte minimum frame and of ±1 % / ±0.1 % 1514-byte frames passes.
+- **Alternatives tried** (the same model):
+  - *Retuning D90's threshold and gain:* at most 8 of 12 at one phase; the paper margin says
+    it cannot close.
+  - *Class-balancing the reference with a single-edge decision:* fixes isi, breaks uniform
+    and alternating, because the balance estimate's noise lands on a margin that is already
+    near zero.
+  - *Delayed decision with a fixed threshold:* 180/192. All the failures are isi at the SFD
+    and the first data boundaries, before anything learns δ.
+  - *A first m_b gain of 1:* noisier, 140-190 depending on the other gains.
+  - *m_b's final gain 1/8 instead of 1/16:* the same 192/192 at 13.5 ns but only to ±16 ns,
+    with less margin.
+  - *Including the mean of the other class:* no gain.
+- **Timing structure** (BUG-162): the first version had the pin's edge feeding a chain of
+  about seven adders and measured 9.61 ns. The final version keeps three properties.
+  - `mcnt` and `p_tau` are kept 8 eighths low, as in D90, so 8N - 8, 16N - 8 and 16N - 16
+    are shifts of CLKDIV, and m_b is stored with 8N - 8 added.
+  - Every arithmetic result is computed from registers for both possible edge times (on the
+    clock or half a clock early): the next `mcnt`, the pending time and the new m_b. The pins
+    only select among them.
+  - Each threshold compare is one three-operand sum (p_tau + mcnt - T); its sign is the
+    result. Rounded shifts become the next adder's carry.
+  - The SYNC compare is done for both possible bits (E1's level or the pin's) and selected
+    after.
+- **Cost** (`make synth` / `make timing`, the same tools on both trees):
+
+  | | Before (D90) | After (D101) |
+  |---|---|---|
+  | Logic path | 4.475 ns | 4.00 ns |
+  | Chip area | 235,563 µm² | 277,617 µm² (+42,054, +17.9 %; about 28 % of the 8x4 tiles) |
+
+  - Per engine: the pending edge (a 24-bit time and two flags), m_b (24 bits) with a 2-bit
+    gear, a registered 24-bit threshold, a registered 5N, and the duplicated
+    (early / on-time) adders. D90's registered 6N threshold is gone.
+  - The owner's reference figure for the logic path was 4.62 ns. Both trees were measured
+    here, and the after figure is below both.
+- **Contract change:** the golden model's Manchester receive (`verify/golden-model/model/
+  pbe_model.py`) now mirrors D101 cycle for cycle.
+  - Bits are delivered when E1 resolves, up to about one bit later than D90.
+  - `mc_elapsed` is the true time since the reference; the RTL's `mcnt` is it minus 8.
+  - The model contract test `test_first_manchester_reference_and_carrier_deadline` now states
+    D101's contract with an in-spec sequence: the first edge is the reference, the mid-bit
+    edge is delivered, a lone edge half a bit later is dropped, and the carrier ends 2 bits
+    after the reference. D90's version drove a "mid-bit" edge 0.6 bit late.
+  - The 240-configuration line differential passes against the RTL.
+- **Tests:**
+  - `tb_line` M4-M7: M7's jitter sweep now decodes up to ±1.0 clock (±16.7 ns); D90 reached
+    ±0.8 clock.
+  - `make stress-ethernet` (`receive_jitter`): all 12 required cases. Beyond the limit:
+    14 and 15 ns pass in all three patterns; 18 ns passes uniform only; 20 ns fails.
+  - The ±0.1 % / ±1 % 1514-byte cases pass.
+  - `tb_eth` passes, and so does the 240-configuration line differential (192241 clocks,
+    model = RTL).
+  - Mutants: E05 (early offset) is caught by the differential; E04 (threshold ignoring m_b) is
+    caught by the 60-byte isi reproducer (BUG-164).
+  - The bounded Manchester round trip (`ethernet.sby` manchester_p0/p1) was run with
+    yosys-smtbmc and z3, because SymbiYosys is not installed here.
+    - Polarity 1: PASSED to depth 260.
+    - Polarity 0: no failure through step 235, where the 7000 s limit stopped it; not a full
+      pass.
+  - The timer-range task's 8-step base case passes; its induction is open (BUG-165).

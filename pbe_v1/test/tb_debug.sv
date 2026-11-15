@@ -12,7 +12,7 @@
 // CLKDIV = 0, then both concurrently at CLKDIV = 0xFFFF (the slowest) with the short scenarios.
 // +ONLY=jtag|swd|both|slow runs one phase.
 module tb_debug;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 8;      // host SCK = clk / 16
 
   logic clk = 0, rst_n = 0;

@@ -7,8 +7,8 @@
 ;
 ; Pins: TXD = pin base (to the transceiver), RXD = pin base + 1. The program drives TXD high
 ;   (DRV1), so TXD is recessive whenever the coder is not driving it dominant.
-; Engine settings (48 MHz; bit time = CLKDIV + 1 clocks):
-;   CLKDIV = 383 / 191 / 95 / 47 for 125k / 250k / 500k / 1M; JMP_PIN = 1 (RXD);
+; Engine settings (60 MHz; bit time = CLKDIV + 1 clocks):
+;   CLKDIV = 479 / 239 / 119 / 59 for 125k / 250k / 500k / 1M (383 / 191 / 95 / 47 at 48 MHz); JMP_PIN = 1 (RXD);
 ;   SHIFT = 0x03 (OUT and IN MSB first); LINE = 0x2D (NRZ, stuffing after 5 equal bits, frames
 ;   start with 8-bit units); LINE2 = 0xF2 (CAN mode, frame follower, wait for bus idle, RXD on
 ;   pin base + 1, 75 % sample point; 0xF3 for 87.5 %); CRC_POLY = 0x4599, CRC_CFG = 0x8E (CRC-15, fed by the

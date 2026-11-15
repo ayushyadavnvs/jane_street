@@ -1,0 +1,2 @@
+Before: expected frame_end at [13], observed []; FAIL
+After: architectural unit passes at [13]

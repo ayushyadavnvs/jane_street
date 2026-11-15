@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1794588120" />
+    <testcase name="random_differential" classname="test_diff" file="/workspace/work/jane_street/verify/golden-model/differential/test_diff.py" lineno="272" time="2835.1704835891724" sim_time_ns="349275306.456" ratio_time="123193.75800422285" />
+  </testsuite>
+</testsuites>

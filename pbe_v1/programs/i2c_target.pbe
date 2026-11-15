@@ -11,8 +11,10 @@
 ;   FLAG2 with the RX FIFO empty: a read needs its next byte. Queue it, then clear FLAG2.
 ;   Bytes the controller writes arrive in the RX FIFO and are ACKed by the engine.
 ;   Read FLAGS after draining the RX FIFO: if FLAG2 was still clear, no address was drained.
-; Timing at 48 MHz: SDA changes >= 300 ns after SCL falls (data hold, [12]) and >= 333 ns
-;   before this engine lets go of SCL (data setup, [15]). Up to fast mode plus (1 MHz).
+; Timing at 60 MHz: SDA changes >= 300 ns after SCL falls (data hold: [15] after the WAIT, plus
+;   the synchronizer) and >= 267 ns before this engine lets go of SCL (data setup, [15]; the
+;   standard-mode minimum is 250 ns). Up to fast mode plus (1 MHz). (At 48 MHz the hold
+;   delays were [12]: D92.)
 .equ sda 0
 .equ scl 1
 
@@ -33,7 +35,7 @@ abit:   WAIT scl, RISE       ; address bits 7..1
         FLAG 1, CLR
         JMP  PIN_LO, wmode   ; SDA still shows R/W while SCL is high
         FLAG 1, SET          ; a read
-wmode:  WAIT scl, FALL [12]
+wmode:  WAIT scl, FALL [15]
         PIN  scl, DRV0       ; hold SCL low while the host decides
         PUSH                 ; the address byte
         FLAG 2, SET
@@ -42,13 +44,13 @@ wmode:  WAIT scl, FALL [12]
         PIN  sda, DRV0 [15]  ; ACK
         PIN  scl, REL
         WAIT scl, RISE
-        WAIT scl, FALL [12]
+        WAIT scl, FALL [15]
         JMP  FLAG1, rd
         PIN  sda, REL        ; write: receive bytes
 wbyte:  SET  X, 7
 wbit:   WAIT scl, RISE
         IN   sda
-        WAIT scl, FALL [12]  ; after a STOP the engine waits here until the next START
+        WAIT scl, FALL [15]  ; after a STOP the engine waits here until the next START
         JMP  FLAG0, start
         JMP  X--, wbit
         PIN  scl, DRV0       ; hold SCL while the byte goes to the host (also if the FIFO is full)
@@ -56,7 +58,7 @@ wbit:   WAIT scl, RISE
         PIN  sda, DRV0 [15]  ; ACK
         PIN  scl, REL
         WAIT scl, RISE
-        WAIT scl, FALL [12]
+        WAIT scl, FALL [15]
         PIN  sda, REL
         JMP  wbyte
 rd:     PIN  scl, DRV0       ; read: hold SCL until the host queues the next byte
@@ -67,10 +69,10 @@ rd:     PIN  scl, DRV0       ; read: hold SCL until the host queues the next byt
 rbit:   PIN  sda, OUTOD [15]
         PIN  scl, REL
         WAIT scl, RISE
-        WAIT scl, FALL [12]
+        WAIT scl, FALL [15]
         JMP  X--, rbit
         PIN  sda, REL        ; the controller ACKs or NACKs
         WAIT scl, RISE
         JMP  PIN_HI, idle    ; NACK: that was the last byte
-        WAIT scl, FALL [12]
+        WAIT scl, FALL [15]
         JMP  rd

@@ -7,7 +7,7 @@
 // inputs change during an exchange (they must be the ones at LD#); the outputs must not change
 // until RCLK rises, and must then hold the bytes sent. The SCK rate is measured.
 module tb_gpio;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 8;
 
   logic clk = 0, rst_n = 0;
@@ -132,7 +132,7 @@ module tb_gpio;
     run(40, "CLKDIV 0");
     $display("  CLKDIV 0: SCK min period %0.1f ns (%0.2f MHz), high %0.1f ns, low %0.1f ns",
              sck_per, 1000.0 / sck_per, sck_hi, sck_lo);
-    check(sck_per > 145.0 && sck_per < 147.0, "SCK period at CLKDIV 0 is not 7 clocks");
+    check(sck_per > 7 * CLK_NS - 1.0 && sck_per < 7 * CLK_NS + 1.0, "SCK period at CLKDIV 0 is not 7 clocks");
     sck_per = 1e9;
     setup(16'd3);
     run(8, "CLKDIV 3");

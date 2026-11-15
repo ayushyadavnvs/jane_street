@@ -46,6 +46,7 @@
 
     if (f_past_valid) begin
       // Internal relationships are inductive strengthening, not assumptions.
+      assert(!quad); // default wrapper ties quad_req low; include mode in induction
       assert(sck_d == f_prev_sck);
       assert(bitcnt == f_bit);
       assert(have_cmd == f_command);

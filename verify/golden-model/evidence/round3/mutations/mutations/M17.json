@@ -1,0 +1,44 @@
+{
+  "id": "M17",
+  "category": "stuff-5-vs-6",
+  "file": "src/pbe_line.sv",
+  "before": "(st == 2'd1) ? 3'd6 : 3'd5",
+  "after": "(st == 2'd1) ? 3'd5 : 3'd6",
+  "baseline_sha256": "92279674840d3d4e63dd03c79261498e0688621690fe85f176797454dcca7bb7",
+  "baseline_hdl_sha256": "457bcfb412d19a772c269eaf9e087fd8e7a46a8ee18b3c2635ca9f5416592c6d",
+  "scratch": "/tmp/pbe-mutation-M17-72vvcuu8/pbe_v1",
+  "checks": {
+    "test": {
+      "command": [
+        "make",
+        "test",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+      ],
+      "returncode": 2,
+      "seconds": 86.015,
+      "status": "caught",
+      "first_failure": "FAIL: USB TX: driven for 2336 clocks, expected 72 bits x 32",
+      "first_failing_check": "tb_line",
+      "log": "M17-test.log.gz"
+    },
+    "diff": {
+      "command": [
+        "make",
+        "diff",
+        "PYTHON=/workspace/work/jane_street/.venv/bin/python",
+        "N=1",
+        "CYCLES=600",
+        "SEED=0x504245"
+      ],
+      "returncode": 0,
+      "seconds": 19.974,
+      "status": "survived",
+      "first_failure": null,
+      "first_failing_check": null,
+      "log": "M17-diff.log.gz"
+    }
+  },
+  "caught_by": [
+    "test"
+  ]
+}

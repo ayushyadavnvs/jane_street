@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-83hwj11b/E02/verify/ethernet/run_directed.py"
+  ],
+  "returncode": 1,
+  "seconds": 11.896,
+  "status": "caught",
+  "first_failure": "\"reason\": \"outputs actual=(0, 0, 12), expected=(0, 0, 0)\",",
+  "first_failing_check": null,
+  "log": "E02.log.gz",
+  "executable_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "E02",
+  "category": "quad latch while selected",
+  "file": "src/pbe_host_spi.sv",
+  "before": "if (cs_n) begin\n        quad     <= quad_req;",
+  "after": "quad <= quad_req;\n      if (cs_n) begin",
+  "baseline_sha256": "17137c3bfce0c1f84e6d4650c300c2f9a37e2ba32a2dbba30bf34db990991d08",
+  "mutant_sha256": "c620640f6231f48a2de6345783f01d9fd52e5471caf37286ffb16868e4c0de28"
+}

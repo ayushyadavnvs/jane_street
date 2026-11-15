@@ -7,7 +7,7 @@
 //
 // Every pin has a pull-up and lines are wired-AND, like a real open-drain bus.
 module tb_pbe;
-  localparam real CLK_NS = 20.8333;  // 48 MHz, the planned clock
+  localparam real CLK_NS = 16.6672;  // 60 MHz, the planned clock (simulated: 16.668 ns, D92)
   localparam int HOST_HALF = 8;  // host SCK half period in clocks (SCK = clk / 16)
   localparam int UART_BIT = 100;  // clocks per UART bit (500 kbaud at 50 MHz)
 
@@ -636,7 +636,7 @@ module tb_pbe;
     reg_write(7'h12, 0);
     reg_write(7'h14, 2'b00);
     reg_write(7'h15, 0);
-    reg_write(7'h20, 17);                // E1 tick = 18 clocks, SCL = 7 ticks: I2C fast mode (<= 400 kHz)
+    reg_write(7'h20, 21);                // E1 tick = 22 clocks, SCL = 7 ticks: I2C fast mode (<= 400 kHz at 60 MHz)
     reg_write(7'h21, 0);
     reg_write(7'h22, 4);                 // E1 pins start at 4
     reg_write(7'h24, 2'b11);             // MSB first
@@ -929,6 +929,9 @@ module tb_pbe;
       mb_max_gap = 0;
       mb_send;
       mb_receive;
+      // FLAG2 is set one tick before IRQ (modbus_rtu.pbe, `fend`): a fast host (quad mode)
+      // can see the flag inside that tick, so wait up to 2 ticks for the pin (BUG-125)
+      for (int t = 0; t < 2 * (mb_div + 1) && !uo_out[1]; t++) @(negedge clk);
       check(uo_out[1], "Modbus: no IRQ at the end of the response");
       if (mb_resp_at >= 0)
         check(mb_rsp_start - mb_de_off >= mb_resp_at - 1.0 && mb_rsp_start - mb_de_off <= mb_resp_at + 1.0,
@@ -1018,7 +1021,7 @@ module tb_pbe;
     reg_write(7'h12, OW);
     reg_write(7'h14, 2'b00);
     reg_write(7'h15, 130);               // START_PC >= 128 (D82)
-    reg_write(7'h20, 17);                // E1: I2C fast mode
+    reg_write(7'h20, 21);                // E1: I2C fast mode
     reg_write(7'h21, 0);
     reg_write(7'h22, 4);
     reg_write(7'h24, 2'b11);
@@ -1096,7 +1099,7 @@ module tb_pbe;
       reg_write(7'h04, 8'h00);
       load_program("conc_image.hex");    // i2c_ctrl at engine 1 word 0
       reg_write(7'h03, 8'b0011_0000);
-      reg_write(7'h20, 17);              // E1: I2C fast mode, as in test 3
+      reg_write(7'h20, 21);              // E1: I2C fast mode, as in test 3
       reg_write(7'h21, 0);
       reg_write(7'h22, 4);
       reg_write(7'h24, 2'b11);

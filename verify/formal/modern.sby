@@ -1,0 +1,20 @@
+[tasks]
+engine
+[options]
+mode bmc
+depth 8
+timeout 1200
+[engines]
+smtbmc yices
+[script]
+read -formal -sv modern_equiv.sv preeth_old.sv pbe_line.sv pbe_bsync.sv pbe_crc.sv pbe_engine.sv
+prep -top modern_equiv
+async2sync
+dffunmap
+[files]
+modern_equiv.sv
+../../pbe_v1/build/formal/generated/preeth_old.sv
+../../src/pbe_line.sv
+../../src/pbe_bsync.sv
+../../src/pbe_crc.sv
+../../src/pbe_engine.sv

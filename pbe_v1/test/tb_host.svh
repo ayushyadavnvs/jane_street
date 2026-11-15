@@ -1,5 +1,10 @@
 // Host-side helpers shared by the end-to-end testbenches. The including module provides
-// clk, HOST_HALF, ui_in (host SCK = [0], CS_n = [1], MOSI = [2]) and the DUT output uo_out.
+// clk, rst_n, HOST_HALF, ui_in (host SCK = [0], CS_n = [1], MOSI = [2]; quad D1..D3 = [5:3])
+// and the DUT output uo_out.
+//
+// Quad host mode (D89): with +QUAD on the command line the first transaction after reset
+// first writes HOSTCFG = 1 in single mode; every transaction after it is quad (4 bits per SCK
+// on ui_in[5:2] and uo_out[3:0]). A bench may also call host_quad_on/off/recover itself.
 
   int errors = 0;
   task automatic check(input bit ok, input string msg);
@@ -12,14 +17,36 @@
   // ---------------- host SPI (mode 0) ----------------
   // The host's pins change after a falling edge of the chip clock, never at a rising edge, where
   // the chip's synchronizers sample them and the simulator's process order would decide (BUG-102).
+  bit host_quad = 0;        // the mode the chip's port is in (as far as the host knows)
+  bit host_want_quad = 0;   // +QUAD: switch to quad mode at the first transaction
+  int host_quad_entries = 0;
+  initial host_want_quad = $test$plusargs("QUAD");
+  always @(negedge rst_n) host_quad = 0;  // a chip reset returns the port to single mode
+
   task automatic spi_byte(input logic [7:0] tx, output logic [7:0] rx);
-    for (int i = 7; i >= 0; i--) begin
-      ui_in[2] = tx[i];
+    if (host_quad) begin
+      ui_in[5:2] = tx[7:4];  // high nibble first
       repeat (HOST_HALF) @(negedge clk);
-      ui_in[0] = 1;  // rising: both sides sample
-      rx[i] = uo_out[0];
+      ui_in[0] = 1;
+      rx[7:4] = uo_out[3:0];
       repeat (HOST_HALF) @(negedge clk);
       ui_in[0] = 0;
+      ui_in[5:2] = tx[3:0];
+      repeat (HOST_HALF) @(negedge clk);
+      ui_in[0] = 1;
+      rx[3:0] = uo_out[3:0];
+      repeat (HOST_HALF) @(negedge clk);
+      ui_in[0] = 0;
+      ui_in[5:3] = 0;
+    end else begin
+      for (int i = 7; i >= 0; i--) begin
+        ui_in[2] = tx[i];
+        repeat (HOST_HALF) @(negedge clk);
+        ui_in[0] = 1;  // rising: both sides sample
+        rx[i] = uo_out[0];
+        repeat (HOST_HALF) @(negedge clk);
+        ui_in[0] = 0;
+      end
     end
   endtask
 
@@ -32,11 +59,53 @@
     if (!level) begin
       ticket = host_next++;
       while (host_serving != ticket) @(negedge clk);
+      if (host_want_quad && !host_quad && rst_n) host_quad_switch(1);
     end
     repeat (HOST_HALF) @(negedge clk);
     ui_in[1] = level;
     repeat (HOST_HALF) @(negedge clk);
     if (level) host_serving++;
+  endtask
+
+  // One transaction writing HOSTCFG (0x50), called while holding the port; the new mode
+  // starts at CS_n high.
+  task automatic host_quad_switch(input bit on);
+    logic [7:0] d;
+    repeat (HOST_HALF) @(negedge clk);
+    ui_in[1] = 0;
+    repeat (HOST_HALF) @(negedge clk);
+    spi_byte({1'b1, 7'h50}, d);
+    spi_byte({7'b0, on}, d);
+    repeat (HOST_HALF) @(negedge clk);
+    ui_in[1] = 1;
+    repeat (HOST_HALF) @(negedge clk);
+    host_quad = on;
+    if (on) host_quad_entries++;
+  endtask
+
+  task automatic host_quad_on();
+    logic [7:0] d;
+    host_want_quad = 1;
+    reg_read(7'h50, d);  // any transaction: cs() switches first
+  endtask
+
+  task automatic host_quad_off();
+    host_want_quad = 0;
+    reg_write(7'h50, 8'h00);  // in quad mode: back to single at CS_n high
+    host_quad = 0;
+  endtask
+
+  // The recovery that works in either mode: 8 SCK pulses with CS_n high.
+  task automatic host_recover();
+    host_want_quad = 0;
+    repeat (HOST_HALF) @(negedge clk);
+    for (int i = 0; i < 8; i++) begin
+      ui_in[0] = 1;
+      repeat (HOST_HALF) @(negedge clk);
+      ui_in[0] = 0;
+      repeat (HOST_HALF) @(negedge clk);
+    end
+    host_quad = 0;
   endtask
 
   task automatic reg_write(input logic [6:0] addr, input logic [7:0] data);

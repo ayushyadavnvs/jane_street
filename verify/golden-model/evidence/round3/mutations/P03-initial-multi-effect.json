@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/workspace/work/jane_street/pbe_v1/build/coverage/obj_tb_eth/sim"
+  ],
+  "returncode": 1,
+  "seconds": 81.438,
+  "status": "caught",
+  "first_failure": "FAIL: (1) TX 64, 512, 1518 bytes back to back: decoded, FCS ok (0 frames)",
+  "first_failing_check": "tb_eth",
+  "log": "P03.log.gz",
+  "id": "P03",
+  "category": "Ethernet frame STAT",
+  "file": "pbe_v1/programs/eth_tx.pbe",
+  "before": "        STAT                 ; clears",
+  "after": "        SET  X, 0            ; clears",
+  "baseline_sha256": "43b9ee222a8159e1d27e8347cbf0e59a20d31dedc23b96cbeba8776c82b79114",
+  "mutant_sha256": "c6a3ab21798ba6327bb5bffc5bb387b206cd6519f52256f78699eeb6ef6eb15c"
+}

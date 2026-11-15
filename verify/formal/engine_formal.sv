@@ -56,11 +56,11 @@ module engine_formal(input wire clk);
   pbe_engine dut(
     .clk(clk),.rst_n(rst_n),.run(run),.restart(restart),.clkdiv(clkdiv),
     .pin_base(3'd0),.jmp_pin(3'd0),.out_msb_first(1'b0),.in_msb_first(1'b0),
-    .start_pc(start_pc),.crc_poly(16'd0),.crc_cfg(8'd0),.timeout(timeout),
-    .line_cfg(8'h45),.coder_cfg(8'd0),.coder_cfg2(8'd0),.sync(8'd0),.crc_good(16'd0),
+    .start_pc(start_pc),.crc_poly(32'd0),.crc_wide(1'b0),.crc_cfg(8'd0),.timeout(timeout),
+    .line_cfg(8'h45),.coder_cfg(8'd0),.coder_cfg2(8'd0),.sync(8'd0),.crc_good(32'd0),
     .host_crc_init(1'b0),.host_tmo_clr(1'b0),.host_ovf_clr(1'b0),.host_lerr_clr(1'b0),.host_arb_clr(1'b0),.host_berr_clr(1'b0),.host_sent_clr(1'b0),
     .status(status),.crc_now(),.can_tec(),.can_rec(),.can_state(),.pc(pc),.pc_copy(),.pc_d(pc_d),.instr(instruction),.pm_wr(pm_wr),
-    .pins_in((`F_KIND==4)?8'd0:pins),.pins_out(pins_out),.pins_oe(pins_oe),
+    .pins_in((`F_KIND==4)?8'd0:pins),.pins_in_n((`F_KIND==4)?8'd0:pins),.pins_out(pins_out),.pins_oe(pins_oe),
     .tx_data(tx_data),.tx_empty(tx_empty),.tx_pop(tx_pop),.tx_mark(),.tx_rewind(),.rx_data(),.rx_full(rx_full),
     .rx_push(rx_push),.flags(flags),.flag_set(flag_set),.flag_clr(flag_clr),.irq(),
     .f_mem_current(current_word)

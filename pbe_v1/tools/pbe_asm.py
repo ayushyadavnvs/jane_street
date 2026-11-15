@@ -27,8 +27,9 @@ Syntax (case-insensitive, ';' starts a comment):
     FLAG n, SET|CLR|IRQ
     NOP
     MOV  X|OSR|ISR, X|OSR|ISR|0                      (FLAG action 3 with a non-zero move)
-    CRCRST | OSRCRC LO|HI [, INV] [, LEFT] | STAT | JCRCBAD label     (opcode 111)
+    CRCRST | OSRCRC LO|HI|B0..B3 [, INV] [, LEFT] | STAT | JCRCBAD label     (opcode 111)
                               LEFT: the CRC left-justified to 16 bits (CRC-15: bits 14..7 high)
+                              B0..B3: byte 0..3 of a CRC of up to 32 bits (LO = B0, HI = B1, D91)
     JEQ label | JNE label     jump if ISR == OSR / ISR != OSR    (opcode 111)
     JLINE label               jump if the line coder saw the end of a frame; clears it
     LINECTL W1..W8 [, ARB]    bit-synchronous coder: unit width, arbitration window on (D67)
@@ -247,8 +248,9 @@ def assemble(text, base, name="<src>", auto_page=True):
                         raise AsmError(f"{name}:{n}: OSRCRC takes INV and LEFT, got '{m_}'")
                 args = args[:1]
                 need(1)
-                arg = (sub | (int("LEFT" in mods) << 2) | (int("INV" in mods) << 1)
-                       | pick({"LO": 0, "HI": 1}, args[0], n, "CRC byte"))
+                b_ = pick({"LO": 0, "HI": 1, "B0": 0, "B1": 1, "B2": 2, "B3": 3}, args[0], n, "CRC byte")
+                arg = (sub | ((b_ >> 1) << 3) | (int("LEFT" in mods) << 2) | (int("INV" in mods) << 1)
+                       | (b_ & 1))
             elif mnem == "LINECTL":
                 if not args:
                     raise AsmError(f"{name}:{n}: LINECTL needs a width (W1..W8) or actions")

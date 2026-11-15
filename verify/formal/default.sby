@@ -1,19 +1,23 @@
 # Default configuration = the pre-CAN design (main 797314f), bounded equivalence.
 [tasks]
 line
-engine
+engine historical original
+engine_page0 pagezero
 
 [options]
 mode bmc
 line: depth 18
-engine: depth 8
+pagezero: depth 8
+historical: depth 8
+historical: expect fail
 
 [engines]
 smtbmc yices
 
 [script]
 line: read -formal -sv default_equiv.sv default_old.sv pbe_line.sv
-engine: read -formal -sv -D F_ENGINE default_equiv.sv default_old.sv pbe_line.sv pbe_bsync.sv pbe_crc.sv pbe_engine.sv
+pagezero: read -formal -sv -D F_ENGINE default_equiv.sv default_old.sv pbe_line.sv pbe_bsync.sv pbe_crc.sv pbe_engine.sv
+historical: read -formal -sv -D F_ENGINE -D F_LEGACY_UNRESTRICTED default_equiv.sv default_old.sv pbe_line.sv pbe_bsync.sv pbe_crc.sv pbe_engine.sv
 prep -top default_equiv
 async2sync
 dffunmap

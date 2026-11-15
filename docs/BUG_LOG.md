@@ -81,6 +81,19 @@ to is on the branch `archive/v2-usb`, and `docs/USB_NOTES.md` summarizes them.
 | BUG-111 | RTL (`PBE_PMEM_FF` fallback) | The 64-word fallback took write addresses mod 64, so loading a whole 256-word image overwrote each engine's program with the image's upper (zero) words | `make test-ff` (`tb_usb`) | Fixed (writes to words 64-255 dropped) |
 | BUG-112 | Testbench | `tb_page` (d) declared `int bad = 0;` inside a procedural block: a static variable initialised once (BUG-023's pattern), which `make test`'s lint rejects | Icarus warning on the first run of `tb_page` | Fixed |
 | BUG-113 | Testbench | `tb_page` (a) did not check that a timeout clears a pending `PAGE`: a timeout that kept it passed | Running `tb_page` against that fault (D83) | Fixed (a `PAGE` before the timed-out `WAIT`, a jump first in the vector) |
+| BUG-125 | Testbench | `tb_pbe` checked the Modbus IRQ pin inside the tick between `FLAG 2, SET` and `IRQ`; only a fast (quad) host landed there | `tb_pbe +QUAD` (D89) | Fixed (bounded wait for the pin) |
+| BUG-126 | Testbench | `host_quad_on`'s dummy transaction wrote `HOSTCFG` = 0 just after switching to quad | `tb_quad` (b) | Fixed (a read) |
+| BUG-127 | Tooling | Icarus 12: `return` in tasks, queue arguments and bit selects of queue elements, real arrays in automatic tasks | `tb_quad`, `tb_line` M | Worked around |
+| BUG-128 | RTL (line coder) | The Manchester bit timer moved its reference 3/4 of each edge's error instead of 1/4 | `tb_line` M7 (D90) | Fixed before commit |
+| BUG-129 | RTL (line coder) | The Manchester bit timer lost half a clock after an edge seen at the falling clock edge | `tb_line` M4, M6 (D90) | Fixed before commit |
+| BUG-130 | Testbench | `tb_crc` (c) compared the CRC units with 32-bit state left over from (b) | `tb_crc` (D91) | Fixed (reset first) |
+| BUG-131 | Testbench, Tooling | The engine unit benches left `crc_wide` unconnected (unknown CRC width); Icarus misreported `$isunknown` on a concatenation | The gate before pushing D91 | Fixed |
+| BUG-132 | Testbench | Benches with 48 MHz constants (USB 32 clocks a bit, a 146 ns SCK check, I2C `CLKDIV` 17, a simulated period rounding fast) failed at 60 MHz | Running every bench at 60 MHz (D92) | Fixed |
+| BUG-133 | Program (10BASE-T) | `eth_tx` sent a link pulse right before a frame | `tb_eth`'s 802.3 model (D93) | Fixed before commit |
+| BUG-134 | Program (10BASE-T) | `eth_tx`'s frame status carried the idle loop's timeouts | `tb_eth` (3) (D93) | Fixed before commit |
+| BUG-135 | Testbench, Tooling | `tb_eth` re-parsed de-escaped bytes of an unfinished frame; Icarus has no `break` | `tb_eth` (3) | Fixed |
+| BUG-136 | Program (HDLC) | `hdlc_rx`'s hunt after an abort read one bit and started a frame in the middle of idle | `tb_hdlc` (D94) | Fixed before commit |
+| BUG-137 | Program (HDLC) | `hdlc_tx` let go of the line between frames; in NRZI the level is data-dependent and its own receiver overran | `tb_hdlc` (D94) | Fixed before commit (flag fill) |
 
 ---
 
@@ -3233,3 +3246,744 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **After:** `while (q_len.size() == 0) #(100);   // (Icarus does not wake a wait on a queue's size)`
 - **Test:** `tb_hdlc` phase `RX, CLKDIV 23` after the 1 Mbit/s phases: before, `frame 0: not
   received` ... `FAIL`; after, `PASS` (and the phase passed alone before the fix).
+
+## BUG-125 — tb_pbe checked the Modbus IRQ pin inside the tick between FLAG2 and IRQ (test)
+
+- **Where:** `pbe_v1/test/tb_pbe.sv`, the Modbus rounds (Test 5).
+- **Cause:** `modbus_rtu.pbe` ends a frame with `FLAG 2, SET` and then `FLAG 0, IRQ`, one tick
+  later (at 19200 baud a tick is an eighth of a bit, 6.5 µs: about 310 clocks). The bench reads the flag
+  (`flag_get`), drains the FIFO and then checks the IRQ pin at once. With the single-lane host
+  the reads took longer than the tick, so the pin was always up; with the quad host (D89, 4x
+  faster) the check landed inside the tick: `FAIL: Modbus: no IRQ at the end of the response`
+  in 8 rounds. The chip was right: the program raises IRQ one tick after the flag.
+- **Before:**
+  ```
+      mb_receive;
+      check(uo_out[1], "Modbus: no IRQ at the end of the response");
+  ```
+- **After:** wait up to 2 ticks for the pin:
+  ```
+      mb_receive;
+      for (int t = 0; t < 2 * (mb_div + 1) && !uo_out[1]; t++) @(negedge clk);
+      check(uo_out[1], "Modbus: no IRQ at the end of the response");
+  ```
+- **Test:** `make test-quad` (`tb_pbe` with `+QUAD`): before, 8 errors; after, `PASS`. The
+  single-lane run is unchanged.
+
+## BUG-126 — tb_host's host_quad_on wrote HOSTCFG = 0 right after switching to quad (test)
+
+- **Where:** `pbe_v1/test/tb_host.svh`, `host_quad_on` (D89).
+- **Cause:** `host_quad_on` set `host_want_quad` and then ran a dummy transaction so that `cs()`
+  would switch the port first. The dummy was `reg_write(7'h50, 8'h00)`: after the switch
+  (which writes `HOSTCFG` = 1 in single mode), it wrote `HOSTCFG` = 0 in quad mode, so the chip
+  went back to single mode at that CS_n high while the host stayed in quad. `tb_quad` (b):
+  `FAIL: (b) HOSTCFG reads 1 in quad mode`, and every check after it.
+- **Before:**
+  ```
+    host_want_quad = 1;
+    reg_write(7'h50, 8'h00);  // any transaction: cs() switches first
+  ```
+- **After:** a read, which changes nothing:
+  ```
+    host_want_quad = 1;
+    reg_read(7'h50, d);  // any transaction: cs() switches first
+  ```
+- **Test:** `tb_quad` (b)-(e): before, 6 failures; after, 16/16 `PASS`.
+
+## BUG-127 — Icarus 12 failed on three testbench constructs of tb_quad and tb_line M (tool)
+
+- **Where:** `pbe_v1/test/tb_host.svh` (quad `spi_byte`), `tb_quad.sv`, `tb_line_manch.svh`.
+- **Cause:** limits of Icarus Verilog 12, each found by a failing run, none in the RTL:
+  1. `return` inside a task: `error: Cannot "return" from tasks`;
+  2. a queue passed to an automatic task, and a queue element's bits selected with a variable
+     index (`rx[n*4+:4]` into an output argument, `mt_q[i][2]`): elaboration errors or
+     `vvp: ... Assertion 'running_thread && running_thread->rd_context' failed` at run time;
+  3. a `real` array (or several real locals) inside an automatic task: the same `rd_context`
+     assertion at time 0, before the first test (found by bisecting the include file).
+- **Before:** for example `task automatic run_manch_tests(); ... real ppms[6], jits[6];`, and
+  `rx[n*4+:4] = uo_out[3:0];` in a `for (int n = 1; n >= 0; n--)` loop.
+- **After:** `if/else` instead of `return`; fixed-size module-level arrays and three `int` queues
+  instead of queue arguments and bit selects of queue elements; the nibble loop unrolled
+  (`rx[7:4]`, `rx[3:0]`); `run_manch_tests` and `manch_drive` static tasks with module-level
+  reals. The same constructs are avoided in the rest of the new benches.
+- **Test:** `tb_quad` and `tb_line` (M1-M7) run to `PASS` under Icarus; `tb_line` also under
+  Verilator (`make test-verilator`, identical logs).
+
+## BUG-128 — The Manchester bit timer moved its reference 3/4 of the error, not 1/4 (design)
+
+- **Where:** `src/pbe_line.sv`, Manchester receive (D90), found before the first commit.
+- **Cause:** `mcnt` holds the time since the reference. After a mid-bit edge that came e late,
+  the reference should move e/4 (towards the edge), so the edge is then e - e/4 after it. The
+  code stored e/4, the time after a reference moved 3e/4: a loop of gain 3/4, which follows each
+  jittered edge almost fully.
+- **Before:** `else if (m_mid) mcnt <= m_err >>> 2;`
+- **After:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);`
+  (the last term is BUG-129).
+- **Test:** `tb_line` M7, frame errors out of 40 at ±0.6 / ±0.7 clock of jitter: 15 / 24 before
+  (the same as no loop at all, which gave the clue), 8 / 17 after. A trace of a failing frame
+  showed a mid-bit edge rejected 0.25 clock after a late one had pulled the reference.
+
+## BUG-129 — The Manchester bit timer lost half a clock after an early edge (design)
+
+- **Where:** `src/pbe_line.sv`, Manchester receive with both clock edges (D90), before commit.
+- **Cause:** an edge seen in the first half of a clock (`a_early` differs) is timed 4 eighths
+  earlier (`m_tau`). The counter after it must hold the time since the new reference *at this
+  clock*, which is half a clock after that edge; the update left the 4 eighths out, so every
+  early edge moved the timer half a clock early.
+- **Before:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2);`
+- **After:** `else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);`
+- **Test:** `tb_line` M4 and M6: before, frames lost a byte (`63 bytes`, `62 bytes`) even at
+  ±0.3 clock and the loopback failed; after, all pass and M7 reaches ±0.8 clock.
+
+## BUG-130 — tb_crc compared the 32-bit and 16-bit CRC units with 32-bit state left over (test)
+
+- **Where:** `pbe_v1/test/tb_crc.sv` (c), D91.
+- **Cause:** (c) checks that the 32-bit unit equals the old 16-bit one for widths up to 16. It
+  ran right after (b), whose CRC-32 runs left upper bits in the 32-bit register; a width change
+  does not clear the register (the documented live-change rule, unchanged), so the first
+  clocks of (c) before an `init` differed: `FAIL: (c) 9 clocks differ from the 16-bit unit`.
+  The claim is for an engine configured at 16 bits or fewer, i.e. from reset.
+- **Before:** (c) started with the state of (b).
+- **After:**
+  ```
+      @(negedge clk) rst_n = 0;
+      @(negedge clk) rst_n = 1;
+  ```
+  before (c), and the decision (D91) states that a switch from CRC-32 to a narrower CRC needs
+  `CRCRST`.
+- **Test:** `tb_crc`: before, 9 differing clocks; after, `PASS` (12,000 clocks identical).
+
+## BUG-131 — The engine unit benches left the new CRC inputs unconnected, and Icarus misreported $isunknown (test, tool)
+
+- **Where:** `pbe_v1/test/tb_engine_known_reset.sv`, `tb_engine_ops.sv`, `tb_engine_restart.sv`
+  (D91).
+- **Cause:** two problems, found by the gate (`make test`, `make test-verilator`) before item 3
+  was pushed:
+  1. the benches connect `pbe_engine` by name with 16-bit `crc_poly`/`crc_good` and no
+     `crc_wide`. The new input floated (z), so the CRC width was unknown: `FATAL: engine
+     reset/restart has an unknown output cfg=00 cfg2=00` in `tb_engine_known_reset` (Icarus and
+     Verilator alike);
+  2. after connecting it, Icarus 12 still reported `$isunknown` true for a 51-bit concatenation
+     of outputs while every one of them was known on its own (the bench already split its check
+     once for the same Icarus fault at 106 bits).
+- **Before:** `.crc_poly(16'h8005), .crc_cfg(8'h3f), ... .crc_good(16'd0)`, `wire [15:0]
+  crc_now;`, and `if ($isunknown({pins_out,pins_oe,flag_set, ..., status,crc_now,pc,pc_copy}) ...`.
+- **After:** `.crc_poly(32'h8005), .crc_wide(1'b0), ... .crc_good(32'd0)`, `wire [31:0]
+  crc_now;`, and one `$isunknown` per output, or-ed.
+- **Test:** `tb_engine_known_reset`: before, the `FATAL` at 6 ns; after, `PASS` over all 192
+  coder configurations; `tb_engine_ops` and `tb_engine_restart` pass; `make test-verilator`
+  passes (its `tb_engine_*` logs identical under both simulators).
+
+## BUG-132 — Benches with 48 MHz constants failed at 60 MHz (test)
+
+- **Where:** `pbe_v1/test/tb_usb.sv`, `tb_gpio.sv`, `tb_pbe.sv`, `tb_ps2.sv`, `tb_la.sv`, and the
+  simulated clock of every top-level bench (D92).
+- **Cause:** once `CLK_NS` was 60 MHz, the benches that derived nothing from it failed, each on
+  a number written for 48 MHz:
+  1. `tb_usb`: the host model decoded the device at 32 clocks a bit (`phase % 32 == 16`), set
+     `CLKDIV` 31, and checked the device's EOP SE0 as 60..68 clocks: `FAIL: USB host: device EOP
+     SE0 lasted 76 clocks` (94 failures);
+  2. `tb_gpio`: `check(sck_per > 145.0 && sck_per < 147.0, "SCK period at CLKDIV 0 is not 7
+     clocks")`, 7 clocks in nanoseconds at 48 MHz; it measured 116.7 ns, 7 clocks at 60 MHz;
+  3. `tb_pbe`: the I2C controller at `CLKDIV` 17 ran at 476 kHz: `FAIL: I2C: SCL period 2100 ns,
+     over 400 kHz` and `SCL low 1200 ns`;
+  4. `tb_pbe`: `FAIL: 1-Wire: controller low pulse of 59998 ns` (69 times): the 1 us tick is 60
+     clocks, and `#(CLK_NS / 2)` with `CLK_NS` = 16.6667 rounds the half period to 8.333 ns, a
+     period of 16.666 ns, a hair fast, so 60 us came out 1.2 ns short of the 60 us minimum. (At
+     48 MHz, 20.8333 / 2 rounded up, to a hair slow.)
+  5. `tb_ps2` set `CLKDIV` 239 (a 5 us tick at 48 MHz, 4 us at 60) and `tb_la` printed the
+     48 MHz sample rates; both still passed, but no longer tested or said what they claimed.
+- **After:** `tb_usb`: `localparam int USB_CLK = 40` used for the decoder, `CLKDIV` and the EOP
+  check (`2 * USB_CLK +- 4`); `tb_gpio`: `7 * CLK_NS +- 1.0`; `tb_pbe`: `CLKDIV` 21 (390 kHz);
+  every bench: `CLK_NS = 16.6672` (the half period rounds to 8.334 ns: a 16.668 ns period,
+  slow by 0.01 %, as the 48 MHz benches were with 20.834 ns), `CLK_SIM` 16.668 in `tb_la` and
+  `tb_hdlc`; `tb_ps2`: `CLKDIV` 299; `tb_la`: the 60 MHz rates.
+- **Test:** each bench at 60 MHz: before, the failures above; after, all pass.
+
+## BUG-133 — eth_tx sent a link pulse right before the first frame (design)
+
+- **Where:** `pbe_v1/programs/eth_tx.pbe` (D93), found by `tb_eth` before commit.
+- **Cause:** the program started with a link pulse and went straight to the idle `PULL`; the
+  host's first frame was already queued, so the frame's preamble began about 200 ns after the
+  pulse. 802.3's model (`eth_model.sv`) sees a positive pulse joined to a frame: `FAIL
+  (10BASE-T model): a burst at 315900 ns that starts positive is not a single pulse (853
+  transitions)`, and that frame was lost to the check. The same happened whenever a frame was
+  queued just as a link pulse went out.
+- **Before:**
+  ```
+  nlp:    PIN  tdp, DRV1 [5]
+          PIN  tdp, DRV0
+          SET  X, 15
+  idle:   PULL
+  ...
+  init:   PIN  tdp, DRV0
+          PIN  tdm, DRV0
+          JMP  nlp
+  ```
+- **After:** a link pulse is followed by the inter-frame gap (the frame's own code), and the
+  first pulse comes 16 ms after the start:
+  ```
+          PIN  tdp, DRV1 [5]
+          PIN  tdp, DRV0
+          JMP  gap             ; then the inter-frame gap, as after a frame
+  ...
+  init:   PIN  tdp, DRV0
+          PIN  tdm, DRV0
+          JMP  gap
+  ```
+- **Test:** `tb_eth` (1) and (4): before, 2 of 3 frames decoded and the model's error; after,
+  3 of 3, and link pulses only between frames.
+
+## BUG-134 — eth_tx's frame status reported the idle loop's timeouts (design)
+
+- **Where:** `pbe_v1/programs/eth_tx.pbe` (D93), found by `tb_eth` (3) before commit.
+- **Cause:** "timeout happened" (`STATUS[2]`) is sticky until `STAT`. Idle, the engine times out
+  every 1 ms (the link-pulse clock), so the status byte of the first frame after an idle period
+  had bit 2 set, which the host protocol defines as "the frame was aborted": `engine 0 status
+  04` for a good frame.
+- **Before:** `start:  FLAG 0, SET` then the preamble.
+- **After:** `start:  FLAG 0, SET` / `STAT` (clears the timeout flag; ISR is overwritten later).
+- **Test:** `tb_eth` (3): before, status 0x04 for a good frame; after, 0x00 (and (5)'s abort
+  still reports bit 2).
+
+## BUG-135 — tb_eth re-parsed the de-escaped bytes of an unfinished frame (test), and two Icarus limits (tool)
+
+- **Where:** `pbe_v1/test/tb_eth.sv`, `parse_rx`; `eth_model.sv`.
+- **Cause:** `parse_rx` turned the bytes read from engine 1 into frames, de-escaping 0x7E 0x7E
+  to one 0x7E. When the FIFO had been read in the middle of a frame (the loopback test reads
+  every 2 us), it pushed the bytes of the unfinished frame back for the next call, already
+  de-escaped: a lone 0x7E followed by a data byte was then read as the end-of-frame record. The
+  loopback failed with nonsense frames (`frame 0: 20 bytes, status 36`; byte 20 of every test
+  frame is 0x7E). Also: Icarus 12 has no `break` (`sorry: break statements not supported`) and
+  no `return` from a task (BUG-127), so the first versions did not compile.
+- **Before:** consume every byte, then `rx1.push_front(rf_bytes.pop_back())` for an unfinished
+  frame.
+- **After:** find the end of the first whole record (skipping 0x7E 0x7E pairs) before consuming
+  anything; flags and `disable` of a named block instead of `break` and `return`.
+- **Test:** `tb_eth` (3): before, the loopback failed; after, 3 frames, bytes and status ok.
+
+## BUG-136 — hdlc_rx (D94) started a frame after an abort one bit later, in the middle of idle (design)
+
+- **Where:** `pbe_v1/programs/hdlc_rx.pbe`, the rewrite on flag-delimited frames, before commit.
+- **Cause:** after an abort the program "hunts": it must skip bits until the next frame end
+  (six 1s). The first version read one bit and fell into the frame code, so a frame started
+  wherever that bit was: idle 1s and the next flag's first bits (1 1 1, 0 1 1 1 1) made a byte
+  (0xFB), and the abort frame was reported as a 1-byte frame with status 0x80 and the rest of the
+  frame separately. `tb_hdlc` RX phases: `frame 3: status 00000080, expected 00000040` and later
+  frames shifted. A trace of engine 1's `IN`s and `PUSH`es showed the byte formed before the flag.
+- **Before:**
+  ```
+  hunt:   IN   rx, NOCRC
+          JLINE fend0
+  seg:    SET  OSR, 0x7E
+  ```
+- **After:**
+  ```
+  hunt:   IN   rx, NOCRC
+          JLINE fend0
+          JMP  hunt
+  seg:    SET  OSR, 0x7E
+  ```
+- **Test:** `tb_hdlc` RX at CLKDIV 47 and 23, NRZ and NRZI: before, 5-8 wrong records; after,
+  `PASS`.
+
+## BUG-137 — hdlc_tx (D94) let go of the line between frames; its own receiver reported overruns (design)
+
+- **Where:** `pbe_v1/programs/hdlc_tx.pbe`, the rewrite, before commit.
+- **Cause:** after the last frame's closing flag the program ended the coder frame (`END`), as
+  D88's did. The flag ends with a 0, so in NRZ the line was low at the release (BUG-123's
+  situation, which D88 cured with a trailing 1), and in NRZI the level is data-dependent, so no
+  trailing bit can fix it. The engine's own receiver, idle under the coder, then took the
+  release for a frame and overran: `the transmitter reported a line error (underrun)` in every
+  TX phase, although the model received every frame correctly.
+- **Before:** `JMP TX_READY, next` / `PIN tx, END` / `JMP idle` after the closing flag.
+- **After:** flags until the next frame (interframe time fill): the coder never lets go of the
+  line after the first frame, so its receiver stays suppressed (D94).
+- **Test:** `tb_hdlc` TX phases, NRZ and NRZI: before, `FAIL` (status bit 4); after, `PASS`.
+
+
+## BUG-138 — stale default formal/coverage harness inputs after D89–D94 (verification)
+
+- **Before:** host `prep -top pbe_host_spi` leaves `quad_req` symbolic; old single-lane
+  parser asserts `bitcnt == f_bit`. Line harnesses omit `a_early`, `ctl` and `ctl_param`;
+  engine harnesses omit `crc_wide`/`pins_in_n` and supply 16-bit CRC inputs.
+- **Failure:** `make formal FORMAL_BLOCK=host` fails the old parser when quad is selected.
+  Simply tying quad_req low gives a passing base case but UNKNOWN induction because an
+  arbitrary induction state may still have quad set. The induction trace is not an RTL bug.
+- **After:** `host_default.sv` ties new inputs low; the observer asserts `!quad` as an
+  inductive invariant. Line harnesses use `.a_early(a_in), .ctl(1'b0), .ctl_param(5'd0)`;
+  engine harnesses use `.crc_wide(1'b0), .pins_in_n(pins)` and 32-bit zero-extension.
+  Historical default equivalence explicitly excludes the newly assigned encodings.
+- **Regression:** `make formal` (including the existing expected counterexamples),
+  `make coverage`; outcomes and remaining failures are recorded in the round-3 report.
+  No behavioral RTL change.
+
+## BUG-139 — long verification launchers predate D82 SRAM and assembler changes (tool)
+
+- **Before:** bus/stress/sigrok/protocol launchers compile `tt_um_pbe.sv` without
+  `pbe_pmem_sram.sv` or the macro model; bus loader does `program, _ = asm.assemble(...)`
+  and writes a shared `[0]*128` image. Bus `PERIOD_PS = 20834` still describes 48 MHz.
+- **Failure:** each launcher exits nonzero with `Unknown module type: pbe_pmem_sram`.
+  With the model supplied, all six bus tests and stress fail at `Chip.load` with
+  `ValueError: too many values to unpack (expected 2)`.
+- **After:** supply the wrapper and both stock SRAM model files with FUNCTIONAL defined;
+  unpack `program, _, _`, initialize separate 256-word images through the host's pointer
+  high register 0x0F, retain per-engine start offsets, and derive rates from 16668 ps.
+  Replace fixed I2C-controller divisors 17/35/68 with `ceil(HZ/(7*rate))-1` for
+  400/200/100 kbit/s; at 60 MHz these are 21/42/85.
+- **Regression:** `make test-buses`, `make stress`, `make sigrok`,
+  `make test-protocol-vectors`. Exact post-fix outcomes remain in the round-3 evidence;
+  failed runs are never relabelled passing. No RTL or program change.
+- During SRAM-model bring-up the protocol runner completed USB and seven Modbus cases
+  but failed while exporting hashes: `path.relative_to(ROOT)` rejects the newly added
+  sibling macro directory. Use `os.path.relpath(path, ROOT)` (preserves existing keys and
+  records macros as `../macros/...`), then rerun the complete target. Keep the failed
+  receipt-export run distinct from a successful end-to-end target.
+
+## BUG-140 — old mutation anchors no longer match current FIFO/engine/line source (tool)
+
+- **Before:** M07 compares full against rptr, M18 lacks `!n_ns`, M21 expects a one-line
+  pop update, M22 lacks `!lv_hit`, and M24 predates the nonblocking PULL variants.
+- **Failure:** preflight `source.count(before) == 1` returns zero for all five sites;
+  the old campaign would abort with RuntimeError rather than injecting those faults.
+- **After:** M07 flips the full pointer comparison against mptr; M18 disables the current
+  stuffing predicate; M21 removes the guard from the current pop block; M22 removes only
+  restart exclusion and retains `!lv_hit`; M24 inverts FIFO readiness while preserving
+  nonblocking PULL variants. Exactly one site must still match.
+- **Regression:** preflight all 24 replacements, then `make mutate`; each still invokes
+  both make test and the separate differential on an isolated copy. Source drift, compile
+  failures and timeouts cannot count as detected mutations. No tracked RTL change.
+- The old mutation output default also targeted `evidence/round2/mutations`; it now targets
+  ignored `build/mutations` so a fresh campaign cannot replace historical evidence.
+
+## BUG-141 — formal line wall-time budget cuts off the required bound on this runner (tool)
+
+- **Before:** `verify/formal/line.sby`: `timeout 120`; the outer runner's longer timeout
+  cannot override SymbiYosys's own cutoff.
+- **Failure:** default `rt_nrz_s1_single_bit_lsb` returns TIMEOUT around step 138, short of
+  depth 164. The retained log shows no failed assertion. A timeout is inconclusive.
+- **After:** `timeout 1200`, with every depth, property and assumption unchanged; run one
+  solver job while finishing the default campaigns. Source-aware receipts reject results
+  whose expanded configuration differs, so the changed line jobs must be rerun.
+- **Regression:** `make formal FORMAL_JOBS=1 FORMAL_ARGS='--timeout 1800'` or validated
+  collection of individually completed identical jobs. Actual solver outcomes remain in
+  the round-3 report; an increased budget alone is never evidence of a proof.
+
+## BUG-142 — draft Manchester reference placed the first edge half a clock early (model)
+
+- **Before:** first edge did `self.mc_elapsed = offset`; carrier age used
+  `min(old_age + 8, limit)`. The receiver's first reference is established at the rising
+  clock; the early sample refines subsequent edge errors, not that initial reference.
+- **Failure:** seeded D90 line differential, cycle 28051, CFG 0xB3/period_m1 3: RTL pulses
+  frame_end but the draft model accepts a boundary as a new mid-bit and misses carrier end.
+  The compact captured age/input history is retained in round3/model. This is a model error,
+  not an RTL bug. Diagnosing it used RTL state only after observable output disagreement.
+- **After:** initialize the reference age to zero on the first edge. Stop incrementing when
+  the age reaches/passes the carrier threshold, retaining a possible sub-clock overshoot;
+  do not clamp its numeric value prematurely.
+- **Regression:** `test_first_manchester_reference_and_carrier_deadline` checks the observable
+  deadline from a 14-clock edge sequence; the draft code misses its expected frame_end at
+  index 13. Rerun `PBE_LINE_ETHERNET=1 make diff-line` for the complete randomized campaign.
+- The first-edge quantization/overshoot are implementation-informed cycle clarifications;
+  do not call their agreement an independent architectural proof (D96).
+
+## BUG-143 — stock UART decoder was still configured for the 48 MHz capture (tool)
+
+- **Before:** `sigrok_verify.py`: `uart:rx=p0:baudrate=480000`; the current tb_pbe transmits
+  one bit per 100 clocks at 60 MHz. The fixed decoder baud therefore disagrees with the wire.
+- **Failure:** fresh `make sigrok`: 21 PASS + 2 documented USB XFAIL + 1 UART FAIL;
+  UART decoded `4b1a7f04`, expected `55a300ff0f80`.
+- **After:** request 600000 baud (60 MHz / 100); no capture, decoder source, expected payload
+  or tolerance is changed. The approximately 80-ppm simulated clock rounding is negligible
+  compared with the stock UART receiver's baud window.
+- **Regression:** rerun the checker on the same fresh compact captures with `--vcd-dir`;
+  require 22 PASS + the same 2 USB XFAIL, and preserve the failed receipt separately.
+
+## BUG-144 — draft generated SV fixture did not elaborate genvar port expressions correctly (tool/test)
+
+- **Before:** the minimal two-coder bench connected `drive[k]` and `cfg2(k==0?0:64)` directly
+  from an inline genvar. Icarus 12 rejected the output bit select as nonconstant; fixing only
+  the selects left the cfg2 condition as an undriven expression, giving a misleading PASS.
+- **After:** bind a local integer parameter `K=k` and use K for both the port bit selects
+  and configuration condition. Add an explicit four-state fixture assertion requiring the
+  actual input ports to be 0x00 and 0x40, respectively, before applying stimulus.
+- **Regression:** the corrected bench compiles, prints its known-input fixture PASS and then
+  exposes the real D90 contract violation (BUG-145). Retain the compile failure and the old
+  false-PASS transcript; neither is evidence about the RTL contract.
+
+## BUG-145 — Manchester transmitter incorrectly waits for LINE2 idle qualification (RTL)
+
+- **Contract:** `pbe_line.sv` Manchester header/D90: LINE2 sample point, resync and idle wait
+  do not apply. The hand-off explicitly flagged LINE2[6] as untested.
+- **Before:** `wire idle_wait = cfg2[6];` feeds the common tx_ok gate even in Manchester.
+  An idle-high fixture waits for eleven bit samples; a physical idle-low receiver cannot
+  qualify that wait. Neither behavior matches the documented Manchester exception.
+- **Minimal failing test first:** `verify/ethernet/tb_manchester_idle_wait.sv`: identical
+  Manchester bytes, with LINE2 0 and 0x40, must have identical driven outputs. It fails at
+  292690 ps on the baseline, before any RTL edit. The fixture asserts its input settings
+  are both known. No end-to-end Ethernet program or model is needed to reproduce it.
+- **Small repair:** qualify the old idle wait with `!manch`, so it retains its old
+  effect in modes 0–2 and has no effect in mode 3. This is a documented exception, not a
+  changed Manchester algorithm. Apply only after retaining the running baseline source
+  receipts, then rerun the minimal test, old-mode checks, both simulators and all gates.
+- **Status:** repair applied after retaining baseline evidence; the isolated reproducer and
+  new formal/smoke differential checks pass. The final full gate, six simulator-log comparisons, both lints and all new formal
+  checks pass; repair-only legacy equivalence proves 575 cells. Report at
+  the top of the final message, including whether repaired and validated.
+
+## BUG-148 — the old timeout mutant lacks a fast exact-deadline RTL regression (test)
+
+- **Before:** M19 replaces `tmo_cnt >= timeout` with `tmo_cnt > timeout`; its long make-test
+  path timed out at 1800 seconds and its separate one-seed differential survived. These
+  outcomes are inconclusive/survived, not detection. The current PAGE/SRAM seed schedule
+  differs from the historical campaign where that differential caught the fault.
+- **After:** add `tb_timeout_boundary.sv` near the beginning of `make test`: after an explicit
+  restart, a permanently blocked WAIT with TIMEOUT=1/CLKDIV=0 must set STATUS[2] on the fourth
+  post-restart clock, and not on the first three. No internal engine state is read.
+- **Fail before/pass after:** the actual one-site M19 scratch RTL fails at that fourth clock;
+  unmodified RTL passes `make test-timeout-boundary`. Rerun M19's full make-test and separate
+  differential after adding the regression. Retain the separate differential's blind spot.
+- This fixes a verification gap, not the engine's existing timeout behavior.
+
+## BUG-146 — quad parser induction initially admitted unreachable stride states (formal observer)
+
+- **Before:** the generalized byte parser asserted output/state equivalence but did not
+  constrain its own reachable quad bit/read-shift alignment by proved invariants.
+- **Failure:** the base case passes, while induction returns UNKNOWN with arbitrary quad
+  bit indices that cannot arise after reset; framing/read-load assertions then disagree.
+- **After:** assert (not assume) `f_bit[1:0]==0` and `f_read_shift[1:0]==0` whenever the
+  reference mode is quad. The step relation proves these reachable-state invariants.
+- **Regression:** `ethernet.sby host` passes base case and temporal induction at depth 32;
+  no timing assumption or old framing assertion was removed.
+
+## BUG-147 — CRC formal reference reset and equivalence observer were incomplete (formal harness)
+
+- **Before:** coefficient reference used a synchronous `always @(posedge clk)` reset while
+  the documented CRC reset is asynchronous. The narrow miter also duplicated raw/reversed
+  CRC instances without asserting their complete stored-state relation.
+- **Failure:** wide reference assertion fails at step 3 after a repeated reset; the DUT has
+  reset while the synchronous reference still exposes prior coefficients. Narrow base case
+  passes, but induction can reveal unmatched hidden bits after a live width change (UNKNOWN).
+- **After:** use an asynchronous coefficient reset and compare the actual primary instances'
+  full raw CRC registers through observation-only ports, alongside value and comparator.
+- **Regression:** both `ethernet.sby crc32` and `crc16` pass temporal induction at depth 8.
+  Preserve the pilot counterexample/UNKNOWN logs separately from final proofs. No RTL repair.
+
+## BUG-149 — Verilator C++ grouping exhausts the shared runner's memory (tool)
+
+- **Before:** coverage builds pass `-j 2` without an explicit output-group policy. Verilator
+  5.051 groups many generated tb_pbe translation units into two huge `vm_classes` files.
+- **Failure:** tb_pbe compilation exits 2 with `cc1plus` killed. The cgroup reports one
+  `oom_kill` at its 8-GiB limit. No simulation or coverage result exists for that failed build;
+  the other bench/differential/line results must not substitute for it.
+- **After:** add `--output-groups 0` so generated C++ files compile individually. Keep the
+  same Verilator, RTL, instrumentation, assertions, source splits, stimulus and coverage
+  aggregation. This is a compiler resource adjustment, not a coverage relaxation.
+- **Regression:** rerun `verify/coverage/run.py --reuse-builds`; reuse only already successful
+  source-signature-matching builds, rebuild tb_pbe and the changed port-tieoff fixture, and
+  require every bench plus fresh nonempty coverage dumps. The repaired baseline campaign passes all 140/140 old functional bins; exact metrics
+  are retained in round3/stage1/coverage-summary.json.
+
+## BUG-150 — pre-CAN equivalence miter predates PAGE jump semantics (verification)
+
+- **Before:** the `default_engine` miter compared arbitrary live `start_pc` and arbitrary
+  8-bit program locations against pre-CAN 797314f, whose jumps always target its first
+  64-word page. D83 now targets the executing instruction's page. Merely comparing PC modulo
+  128 cannot make these behaviors equivalent.
+- **Failure:** the retained original counterexample has `start_pc=148`, new `pc_d=4`, old
+  `pc_d=68`. Even fixing START_PC at zero admits a jump from word 64: new target 0x4a,
+  old target 0x0a. These are D83 behavior differences, not new Ethernet defects.
+- **After:** retain the historical `engine` as an explicit expected failing property. State the
+  page-zero/no-PAGE compatibility domain explicitly for the additional `engine_page0`; do not claim the broader
+  historical property was proved. Add a separate `modern` miter against D88 159650f with
+  full 8-bit PC/PAGE, arbitrary live configuration and old encodings, excluding only newly
+  assigned non-bsync LINECTL actions. Report all bounded depths and actual outcomes.
+- **Regression:** the unrestricted property must still produce an assertion counterexample;
+  the restricted and modern comparisons are separate checks. Preserve pilot timeout receipts.
+
+## BUG-151 — Manchester recovery does not meet the full tested ±13.5 ns edge envelope (RTL, fixed by D101)
+
+- **Before:** the D90 recovery loop accepts edges using `m_tau >= m_thr`, with threshold
+  `6*period_m1` eighth clocks, early correction four eighths and loop gain one quarter.
+  Earlier uniform-jitter evidence reached ±0.8 clock (13.3344 ns), below 13.5 ns.
+- **Failure:** public-pin Scapy frames with independently computed binascii FCS, 256 data
+  bytes, ±100 ppm source frequency and exactly ±13500 ps per crossing: six of twelve
+  required seed/pattern combinations lose bytes or split frames. All four tested uniform
+  combinations pass; both data-dependent-spacing patterns fail, as do alternating extremes
+  for the fast source. Received records have bad CRC rather than silently accepting payloads.
+- IEEE 802.3-2012 14.3.1.3.1 specifies the limit relative to each ideal zero crossing.
+  The generator perturbs actual transitions only; opposite extremes permit intervals to vary
+  by 27 ns. Its spacing-dependent pattern is a digital ISI proxy, not an analog cable model.
+- **After:** RTL recovery is deliberately unchanged. A gain/threshold retune is not a small,
+  self-evidently correct repair. Retain failing stimuli, actual received bytes, seed, phase,
+  clock offset, tool/source hashes and a minimized reproducer. A minimum 60-byte Ethernet frame reproduces it in both
+  Icarus and Verilator (30 delivered bytes, status 0). The stress target returns
+  nonzero for required-envelope failures. Do not call this Ethernet compliance or a pass.
+- **Regression:** `make stress-ethernet` (`receive_jitter`); ordinary no-jitter vectors and
+  the model differential can pass while this independent timing requirement fails.
+- **Cause (D101):** D90 decides each edge alone against a threshold 3/4 bit after the
+  reference. On paper, alternating extremes put a mid-bit transition at 80.4 ns, and isi puts
+  a boundary at 81.2 ns relative to a reference that learned the early preamble. No threshold
+  separates them at 8.33 ns resolution, so no retune could fix it.
+- **Fix (RTL, D101):** each edge after a mid-bit transition waits for the next one. The sum of
+  the two times is compared with T = 16N + m_b, where m_b is the learnt mean error of
+  mid-bit transitions after a boundary. While hunting, T = 20N, and repeats that SYNC never
+  has are impossible.
+  - Code before (`src/pbe_line.sv`):
+    ```systemverilog
+    wire               m_mid  = m_edge && m_tau >= $signed(m_thr);   // m_thr = 6 period_m1
+    wire               m_lost = mcnt >= $signed(m_end);
+    wire signed [23:0] m_err  = m_tau - $signed(m_2n);
+    ...
+    else if (m_mid) mcnt <= m_err - (m_err >>> 2) + (m_early ? 24'sd4 : 24'sd0);
+    ```
+  - Code after (the final, timing-restructured form: BUG-162):
+    ```systemverilog
+    wire signed [24:0] m_d0   = {p_tau[23], p_tau} + {mcnt[23], mcnt} - {m_t[23], m_t};
+    wire               m_res  = p_v && (p_force || (m_early ? m_c4 : m_c0));  // E1 resolved
+    wire               m_junk = m_res && !p_force && p_tau < $signed(m_5n);  // lone early edge
+    wire               m_fire = m_res && !m_junk;                // E1 was mid-bit
+    wire               m_once = hunting && !(m_lastb ? m_rep1 : m_rep0);  // no repeat possible
+    wire               m_bmid = !m_res && m_edge && p_v;         // E1 was a boundary: a mid
+    wire               m_amid = !m_res && m_edge && !p_v && m_once;
+    wire               m_mid  = m_fire || m_bmid || m_amid;      // a bit is delivered
+    wire signed [23:0] m_next = m_fire ? m_np : m_early ? m_n4 : m_n0;  // reference moves err/8
+    ...
+    m_t <= hunting ? m_16p + {6'b0, period_m1, 2'b00} + 24'd4 : m_8p + m_b;  // T - 16
+    if (m_mid) mcnt <= m_next;
+    if (m_bmid) m_b <= m_early ? m_b4 : m_b0;   // gains 1/2, 1/4, 1/8, 1/16
+    ```
+- **Test, fails before and passes after:**
+  - `make stress-ethernet` (run here under Icarus: `run_wire.py --stress`; the local Verilator
+    5.020 lacks cocotb 2's `--output-groups`).
+    - Before: `receive_jitter` FAIL. Required cases: uniform 4/4, alternating 2/4 (+100 ppm
+      fails), isi 0/4; 6/12.
+    - After: 12/12 and TESTS=4 PASS=4.
+  - Beyond the limit (+100 ppm, seed 0x8023):
+
+    | Jitter | Before (uniform / alternating / isi) | After (uniform / alternating / isi) |
+    |---|---|---|
+    | 14 ns | pass / FAIL / FAIL | pass / pass / pass |
+    | 15 ns | pass / FAIL / FAIL | pass / pass / pass |
+    | 18 ns | FAIL / FAIL / FAIL | pass / FAIL / FAIL |
+    | 20 ns | FAIL / FAIL / FAIL | FAIL / FAIL / FAIL |
+
+  - ±0.1 % and ±1 % 1514-byte frames pass before and after.
+  - `test_jitter_reproducer` (60-byte frame, isi, -100 ppm): before 30 bytes, status 0; after
+    PASS.
+  - `tb_line` M7: before ±0.8 clock, after ±1.0 clock (±16.7 ns).
+  - Logic path 4.475 → 4.00 ns; area 235,563 → 277,617 µm² (D101).
+  - The golden model's Manchester receive follows D101. The 240-configuration line
+    differential (`PBE_LINE_ETHERNET=1 check_line_model.py`) passes: 192241 clocks.
+
+## BUG-152 — draft pin-vector expectations contradicted documented host records (test)
+
+- **Before:** the draft HDLC checker waited for a TX status byte although hdlc_tx explicitly
+  returns nothing; its Ethernet dribble test expected eight extra bits not to form a byte;
+  overrun recovery expected sticky STATUS[3] to clear itself at the next frame.
+- **Failures:** HDLC host-output deadline with empty status FIFO; dribble_8 returns 65 rather
+  than 64 bytes; a subsequent intact CRC-valid Ethernet frame reports 0x0a after overflow.
+- **After:** decode actual HDLC TX bits/FCS after sufficient frame time without inventing a
+  status response; expect 0xff for eight additional one bits and a failed CRC; require
+  the next good record's 0x0a, explicitly clear overflow with the public STATUS write, then
+  require 0x02 on another good frame. No DUT state or RTL change supplies expected payloads.
+- **Regression:** independent Ethernet RX and HDLC tests pass; underrun/overrun recovery
+  passes including the sticky-status observation, host clear and subsequent exact payload.
+
+## BUG-153 — mutation runner resolved away its virtual-environment executable (tool)
+
+- **Before:** `str((ROOT/'.venv/bin/python').resolve())` follows the Python symlink to the
+  base interpreter, losing its virtual environment and installed cocotb_tools.
+- **Failure:** feature-mutant pilots return ModuleNotFoundError. They are classified
+  inconclusive infrastructure failures, never killed mutants.
+- **After:** preserve the absolute `.venv/bin/python` path without resolving its symlink.
+  Re-anchor early-offset, flag-run and program-escape sites to exactly one current source
+  fragment; reject ambiguous/missing sites before execution.
+- **Regression:** rerun the actual scratch mutants; require observable assertion failures,
+  not compile errors, missing dependencies, generic nonzero returns or timeouts.
+
+## BUG-154 — old and Ethernet coverage sweeps would overwrite the same dump (tool)
+
+- **Before:** an extended campaign reused `line_sweep.dat` and its object directory for the
+  old 160-configuration campaign and new 240-configuration campaign.
+- **Failure:** this is a harness collision found before running the extended aggregation;
+  a second producer would erase the first producer's contribution.
+- **After:** use `line_sweep` and `ethernet_line_sweep` build/dump names separately; require
+  fresh nonempty data from each. Retain default instrumentation as exactly its existing
+  140-bin mode; opt-in Ethernet instrumentation adds bins and reports uncovered ones explicitly.
+- **Regression:** the extended summary lists both distinct data inputs, and the two sweeps'
+  independent assertion outcomes remain visible in their logs.
+
+## BUG-155 — end-state host readback compared a stale volatile STATUS snapshot (test)
+
+- **Before:** `expected=h.model.read(addr)` ran before an entire host SPI transaction;
+  its result was compared with a register byte prefetched after the command. A stopped
+  engine does not stop its line coder: receive overruns can set line error during that time.
+- **Failure:** the 1,000-seed Ethernet Icarus campaign reaches global index 983 / seed
+  5260828, then compares actual STATUS 20 with the earlier expected 4. At transaction end
+  both model and RTL status are 20. Diagnostic per-clock coder error pulses agree throughout.
+  A naive single-seed replay is different because index zero substitutes a coverage program.
+- **After:** capture expected bits from the independent model at each actual host sample,
+  assemble the predicted read byte, and compare that with the returned byte. Keep the
+  existing every-clock output oracle, FIFO checks, final internal-state diagnostics and
+  hardcoded directed register checks. No RTL/model state transition is changed or masked.
+  Add `--start-index` so a replay retains its original program/profile selection, and write
+  progress without changing RNG draws or existing default counters.
+- **Regression:** `run.py --ethernet --n 1 --start-index 983 --seed 0x504245 --cycles 1200`
+  fails before and passes after (30,688 clocks). Retain the failed large-campaign manifest;
+  do not claim its first 983 seeds as a complete 1,000-seed pass. The corrected full 1,000-seed campaign passes 20,951,842 checked clocks under Verilator;
+  the exact failing-seed replay also passes under Icarus.
+
+## BUG-156 — draft line limit fixtures assumed the wrong reset idle level (test)
+
+- **Before:** divider/glitch fixtures held a_in low across reset although the documented
+  coder resets its previous level high. The first release clock therefore started carrier
+  before the test's intended reference; a later frame_end was attributed to the glitch.
+- **After:** start both observed samples high, settle after reset, then create the intentional
+  falling edge (or early-only low sample). Do not adjust the carrier deadline to measured RTL.
+- **Regression:** external-port tests pass at period 65536: carrier end exactly 131072 clocks
+  after its first intentional edge; an early-only short glitch produces neither data nor end.
+  Continuous flag-delimited one runs produce an end every 30 clocks at a five-clock period.
+
+## BUG-157 — random line campaign missed the injected flag-run reset fault (test gap)
+
+- **Before:** E10 injects `rrun <= 6` at a flag-delimited frame end. The 240-configuration
+  random line campaign survives; it is not a detected fault.
+- **After:** add the public-output continuous-one-run check above. A receiver that stays in
+  flag-delimited mode must reset its run and emit another end after each six sampled ones.
+- **Regression:** baseline intervals are 30 clocks; E10 gives events [29,69,109,149], hence
+  40-clock intervals, and fails the directed assertion. Preserve the original survivor receipt.
+
+## BUG-158 — payload-only program checking missed the second-END completion barrier (test gap)
+
+- **Before:** P02 replacing the second END survives the canonical payload/FCS/IFG tests.
+  Removing the barrier can still leave enough gap for valid frames, but completion status
+  becomes available before the last FCS bit. D93 documents the second END as that barrier.
+- **After:** monitor public uo_out[4] for the first completion record, independently decode
+  the TX pins, and require status availability not to precede the last FCS bit. Replace the
+  removed instruction with NOP, preserving X and every other instruction's position.
+- **Regression:** baseline passes; pure P02 exposes completion at 1559991456 ps versus
+  last-FCS end 1560708180 ps and fails. Retain the original survivor receipt.
+- Also replace frame-start STAT/extra escape PUSH with NOP. The earlier SET X,0 substitution
+  had an incidental register effect and does not establish single-purpose sensitivity.
+  Pure P03 fails with leaked idle-timeout status 04; pure P04 fails exact escaped RX bytes.
+  Add a descriptive payload assertion so the strict mutation classifier can identify its
+  actual failure; the earlier bare-assertion nonzero remains inconclusive in pilot evidence.
+
+## BUG-159 — draft proof/receipt diagnostics referenced unsupported names (verification tooling)
+
+- **Before:** a page-zero pilot assumed `n.jump` / `n.cur_off` via hierarchical references
+  that Yosys treated as undriven implicit nets; it did not impose the intended domain.
+  A separate provenance addition tried to open the bare command name `make` as a file.
+- **Failures:** the ineffective domain pilot still yields the PAGE counterexample; the
+  mutation provenance pilot exits with FileNotFoundError before its next check. Neither
+  supplies a proof or mutant kill.
+- **After:** express the extra page-zero domain using the actual public `pc_new` output;
+  retain the historical unrestricted property separately, under its original engine name.
+  Resolve command binaries with PATH before hashing, preserving the venv invocation path.
+- **Regression:** source-aware collection accepts the historical expected counterexample
+  and the separate depth-eight page-zero pass. The final frozen 14-mutant campaign completes
+  with per-campaign input manifests, binary hashes and observable assertion detections.
+
+## BUG-160 — extended coverage and quad observer needed stricter final acceptance (verification)
+
+- **Before:** the exploratory Ethernet coverage wrapper automatically passed `--partial`
+  to the summarizer; its first run reported 217/219 bins but did not reject the gaps. The
+  generalized host parser proved the full internal read word but explicitly checked only
+  Q0, leaving the other three external output-lane relations implicit in the RTL wiring.
+- **After:** remove automatic partial acceptance: the normal extended target now requires
+  all old and new named bins. Add an explicit Q3..Q1 comparison with the independent
+  predicted word at each quad read sampling edge. Default old checks are unchanged.
+- **Regression:** the strict summarizer passes the actual 219/219 data after directed
+  closure. The Ethernet formal block passes all 13 jobs with all four read lanes asserted; retain
+  the earlier, narrower observer receipts separately. No DUT assumption or RTL repair is added.
+
+## BUG-161 — D101 restructure: a logical shift where an arithmetic one was meant (RTL, found before commit)
+
+- **Before:**
+  ```systemverilog
+  wire signed [23:0] m_np = m_e0 - (m_ep >>> 3) - {23'b0, m_ep[2]};
+  ```
+  The unsigned concatenation makes the whole expression unsigned in Verilog, so `>>>`
+  becomes a logical shift. A negative phase error then moved the reference by about 2^21
+  eighths.
+- **Failure:** `tb_line` M4/M7 decoded nothing (M7 "up to ±0.00 clock"). The 240-configuration
+  line differential failed at cycle 4830: the model ended the carrier and the RTL did not.
+- **After:** the shifts get their own signed wires:
+  ```systemverilog
+  wire signed [23:0] m_ep3 = m_ep >>> 3;
+  wire signed [23:0] m_np  = m_e0 - m_ep3 - {23'b0, m_ep[2]};
+  ```
+- **Regression:** `tb_line` (M7 ±1.0 clock) and `PBE_LINE_ETHERNET=1 check_line_model.py`
+  (240 configurations) pass.
+
+## BUG-162 — the first D101 receiver doubled the logic path (RTL timing, found before commit)
+
+- **Before:** the pin's edge selected an adder input (`m_tau = mcnt - (m_early ? 4 : 0)`),
+  and the result fed a sum, a compare, the decision, an error mux, the 1/8 correction and the
+  next-state adders in series. N = period_m1 + 1 also needed an adder before every
+  constant.
+- **Failure:** `make timing`: 9.61 ns (D90: 4.475 ns), start point `pin_base[0]`.
+- **After** (D101's timing structure):
+  - offset counters, so the constants are shifts of CLKDIV;
+  - every candidate computed from registers for both edge times, with the pins only
+    selecting;
+  - three-operand compares;
+  - rounding folded into carries;
+  - the SYNC compare done for both bits.
+  - Intermediate steps measured 5.62, 5.74, 5.49, 4.79, 4.62 and 4.79 ns; the final is
+    4.00 ns.
+- **Regression:** `make timing` ≤ the D90 figure; the line differential shows the restructure
+  is cycle-identical to the model.
+
+## BUG-163 — a lone edge after the last mid-bit transition was delivered as a bit (RTL/model contract)
+
+- **Before:** in the first D101 version, every pending edge that was not followed in time was
+  taken as a mid-bit transition.
+- **Failure:** `make test` (golden model unit tests):
+  `test_first_manchester_reference_and_carrier_deadline` expected the carrier end at
+  clock 13 and saw none. The model's lone half-bit edge became a bit, and the deadline moved
+  2 bits later.
+  - In a frame that ends in a 0, the rise into TP_IDL is such an edge. Bit mode (DALI)
+    would get an extra bit; D90 skipped it.
+- **After:** a pending edge under 5/8 bit after the reference that resolves with nothing after
+  it is dropped (no bit, no reference change):
+  ```systemverilog
+  wire m_junk = m_res && !p_force && p_tau < $signed(m_5n);
+  ```
+  The contract test was rewritten for D101 with an in-spec sequence. D90's version drove a
+  "mid-bit" edge 0.6 bit late, outside the jitter the receiver is specified for. The new
+  test checks: one bit delivered, the lone edge dropped, the carrier end at clock 18.
+- **Regression:** `make test` (model unit tests 34/34), the line differential, `tb_line` M5
+  (link pulses and a stray edge), and the stress suite.
+
+## BUG-164 — the random line differential cannot see the ISI-following threshold (test gap)
+
+- **Before:** mutants E04 and E05 were anchored on D90 source text, so the runner would have
+  refused them. Re-anchored to D101, E04 (`m_t <= ... : m_8p + m_b` changed to `... : m_16p`,
+  a threshold that ignores m_b) was checked by the 240-configuration line differential.
+- **Failure:** `ethernet_mutate.py --only E04 E05`: E05 (early offset) caught, **E04 survived**.
+  The random stimulus rarely builds up m_b and then makes a decision that depends on it.
+- **After:** E04 is checked by `test_jitter_reproducer` (the verifier's 60-byte isi frame at
+  ±13.5 ns), a new check kind `jitter` in `verify/mutation/ethernet_mutate.py`.
+- **Regression:** `ethernet_mutate.py --only E04` → caught (`('BUG-151', [(64, 0)])`: the frame
+  arrives with a bad FCS). E05 → caught by the line differential at cycle 8236.
+
+## BUG-165 — the Manchester timer-range proof no longer closes by induction under D101 (formal, open)
+
+- **Before:** `ethernet.sby` task `manchester_timer` (`ETH_TIMER`) asserted D90's
+  `mcnt` range [-524288, 1048575] and named D90's constants `m_end`, `m_2n`, `m_thr`.
+- **Failure:** under D101 the names no longer exist. With CLKDIV near 0xE000 and an edge just
+  after the reference, the base case also finds `mcnt` = -752666 below D90's bound, a real
+  D101 value. Each mid-bit transition keeps 7/8 of a negative error, so the fixed point is
+  about -56 x CLKDIV.
+- **After:** the property names D101's constants (`m_8p`, `m_16p`, `m_end`, `m_5n`). It bounds
+  `mcnt`, `p_tau` and `m_b` to [-3.8M, 6.4M]: -56 x 65535 and about 96 x 65535 with a pending
+  edge, both inside the 24-bit signed range.
+  - The 8-step base case passes (yosys-smtbmc with z3; SymbiYosys is not installed here).
+  - **Induction fails:** unconstrained induction states with `mcnt` and `m_b` at opposite
+    ends make `mcnt - m_b` overflow. Closing it needs a tighter joint invariant (m_b within
+    a few N of the reachable `mcnt` range). Left open for the verifier; the range argument
+    is on paper in D101.
+- **Regression:** `yosys-smtbmc -t 8` on the `ETH_TIMER` model: PASSED; `-i -t 8`: FAILED
+  (open).

@@ -7,6 +7,8 @@ module default_equiv(input wire clk);
   always @(posedge clk) f_past <= 1;
   (* anyseq *) reg rst_n, clear, tx_put, tx_end, rx_take, a_in, b_in, omsb, imsb;
   (* anyseq *) reg [7:0] cfg, sync, tx_data;
+  // D90/D94: default equivalence excludes newly assigned reserved encodings.
+  always @* begin assume(cfg[1:0] != 2'd3); assume(!cfg[6]); end
 `ifdef F_ENGINE
   (* anyseq *) reg run, restart, pm_wr, tx_empty, rx_full, hci, htc, hoc, hlc;
   (* anyseq *) reg [15:0] instr, clkdiv, crc_poly, timeout, crc_good;
@@ -20,21 +22,29 @@ module default_equiv(input wire clk);
   always @* begin
     assume(!(op == 3'd5 && !arg[8] && arg[7:6] != 2'd0));
     assume(!(op == 3'd7 && arg[8:6] == 3'd1 && arg[2]));
+    assume(!(op == 3'd7 && arg[8:6] == 3'd7 && arg[4])); // new LINECTL action
+    // D83's page-relative JMP differs from pre-CAN outside the default page.
+`ifndef F_LEGACY_UNRESTRICTED
+    assume(start_pc == 8'd0);
+    // The old 64-word program domain excludes executing jumps from a later page.
+    assume(pc_new <= 8'd64);
+`endif
+    assume(!(op == 3'd7 && arg[8:6] == 3'd7 && arg[5])); // no PAGE prefix
     assume(clkdiv < 16'd4 && timeout < 16'd4);   // keeps the bounded search interesting
   end
   wire [7:0] st_new; wire [4:0] st_old;
-  wire [15:0] crc_new, crc_old;
+  wire [31:0] crc_new; wire [15:0] crc_old;
   wire [7:0] pc_new, pcd_new;
   wire [6:0] pc_old, pcd_old;
   wire [7:0] po_new, po_old, poe_new, poe_old, rxd_new, rxd_old;
   wire [3:0] fs_new, fs_old, fc_new, fc_old;
   wire pop_new, pop_old, push_new, push_old, irq_new, irq_old;
   pbe_engine n(.clk, .rst_n, .run, .restart, .clkdiv, .pin_base, .jmp_pin, .out_msb_first(omsb),
-    .in_msb_first(imsb), .start_pc, .crc_poly, .crc_cfg, .timeout, .line_cfg, .coder_cfg(cfg),
-    .coder_cfg2(8'd0), .sync, .crc_good, .host_crc_init(hci), .host_tmo_clr(htc), .host_ovf_clr(hoc),
+    .in_msb_first(imsb), .start_pc, .crc_poly({16'd0, crc_poly}), .crc_wide(1'b0), .crc_cfg, .timeout, .line_cfg, .coder_cfg(cfg),
+    .coder_cfg2(8'd0), .sync, .crc_good({16'd0, crc_good}), .host_crc_init(hci), .host_tmo_clr(htc), .host_ovf_clr(hoc),
     .host_lerr_clr(hlc), .host_arb_clr(1'b0), .host_berr_clr(1'b0), .host_sent_clr(1'b0),
     .status(st_new), .crc_now(crc_new), .can_tec(), .can_rec(), .can_state(), .pc(pc_new), .pc_copy(),
-    .pc_d(pcd_new), .instr, .pm_wr, .pins_in(pins), .pins_out(po_new), .pins_oe(poe_new),
+    .pc_d(pcd_new), .instr, .pm_wr, .pins_in(pins), .pins_in_n(pins), .pins_out(po_new), .pins_oe(poe_new),
     .tx_data(txd), .tx_empty, .tx_pop(pop_new), .tx_mark(), .tx_rewind(), .rx_data(rxd_new), .rx_full,
     .rx_push(push_new), .flags, .flag_set(fs_new), .flag_clr(fc_new), .irq(irq_new));
   pbe_engine_old o(.clk, .rst_n, .run, .restart, .clkdiv, .pin_base, .jmp_pin, .out_msb_first(omsb),
@@ -61,7 +71,7 @@ module default_equiv(input wire clk);
   wire dn, an, bn, rn, rvn, fen, en; wire [7:0] rdn;
   wire d0, a0, b0, r0, rv0, fe0, e0; wire [7:0] rd0;
   pbe_line n(.clk, .rst_n, .clear, .cfg, .cfg2(8'd0), .sync, .period_m1, .out_msb_first(omsb),
-    .in_msb_first(imsb), .a_in, .b_in, .drive(dn), .a_out(an), .b_out(bn), .tx_put, .tx_end,
+    .in_msb_first(imsb), .a_in, .a_early(a_in), .b_in, .ctl(1'b0), .ctl_param(5'd0), .drive(dn), .a_out(an), .b_out(bn), .tx_put, .tx_end,
     .tx_data, .tx_ready(rn), .rx_valid(rvn), .rx_data(rdn), .rx_take, .frame_end(fen), .err(en));
   pbe_line_old o(.clk, .rst_n, .clear, .cfg, .sync, .period_m1, .out_msb_first(omsb),
     .in_msb_first(imsb), .a_in, .b_in, .drive(d0), .a_out(a0), .b_out(b0), .tx_put, .tx_end,

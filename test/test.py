@@ -15,7 +15,7 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, FallingEdge
 
-CLK_PS = 20834     # 48 MHz (cocotb needs an even period)
+CLK_PS = 16668     # 60 MHz (cocotb needs an even period; a hair slow, as 20834 was at 48 MHz, D92)
 HOST_HALF = 8      # host SCK half period in clocks (SCK = clk / 16)
 UART_BIT = 100     # clocks per UART bit
 IMAGE = Path(__file__).resolve().parent.parent / "pbe_v1" / "test" / "uart_image.hex"

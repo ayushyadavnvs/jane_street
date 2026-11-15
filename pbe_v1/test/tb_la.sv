@@ -11,10 +11,10 @@
 // timestamped: every edge must fall on its sample grid and the levels must be the bytes sent.
 // The host port runs at SCK = clk / 8, the fastest the chip allows, for the streaming tests.
 module tb_la;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 4;      // host SCK = clk / 8
 
-  localparam real CLK_SIM = 20.834;  // the simulated period: the half period rounds to 10.417 ns
+  localparam real CLK_SIM = 16.668;  // the simulated period: the half period rounds to 8.334 ns
   logic clk = 0, rst_n = 0;
   always #(CLK_NS / 2) clk = ~clk;
 
@@ -300,16 +300,16 @@ module tb_la;
     load_program("la_image.hex");
 
     // capture: a 16-byte burst at the fastest rate, then sustained captures with the host reading
-    la_free(16'd1, 16, 3.4, "burst, CLKDIV 1 (4 MS/s)");
-    la_free(16'd7, 160, 3.3, "sustained, CLKDIV 7 (1 MS/s), host reading");
-    la_free(16'd3, 16, 5.2, "burst, CLKDIV 3 (2 MS/s)");
+    la_free(16'd1, 16, 3.4, "burst, CLKDIV 1 (5 MS/s)");
+    la_free(16'd7, 160, 3.3, "sustained, CLKDIV 7 (1.25 MS/s), host reading");
+    la_free(16'd3, 16, 5.2, "burst, CLKDIV 3 (2.5 MS/s)");
     la_trigger(8'd3, "rising edge");
     la_trigger(8'd4, "falling edge");
     la_trigger(8'd1, "high level");
     la_overflow;
     // generator
-    gen_play(16'd1, 15, 0, "15 bytes queued, CLKDIV 1 (6 MS/s)");
-    gen_play(16'd4, 64, 1, "64 bytes streamed, CLKDIV 4 (2.4 MS/s)");
+    gen_play(16'd1, 15, 0, "15 bytes queued, CLKDIV 1 (7.5 MS/s)");
+    gen_play(16'd4, 64, 1, "64 bytes streamed, CLKDIV 4 (3 MS/s)");
     gen_play(16'd20, 4, 0, "4 bytes, CLKDIV 20");
 
     if (errors == 0 && pass == 10) begin

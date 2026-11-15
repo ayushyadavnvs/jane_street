@@ -1,0 +1,81 @@
+; 10BASE-T transmitter (IEEE 802.3 clause 14), engine 0 (D93). The host streams each frame
+; into the TX FIFO as it goes out (1.25 MB/s: use the quad host port, D89); the engine sends
+; the preamble and SFD, the frame, the FCS (CRC-32 from the CRC unit, D91), TP_IDL (the line
+; coder's Manchester tail, D90), and normal link pulses (NLP) every 16 ms while idle, each
+; followed by the same 10 us gap as a frame.
+;
+; Pins: TD+ = pin base (the coder's pin a), TD- = pin base + 1 (its complement, pair mode); the
+; pin unit holds both low between frames (0 V differential) and makes the link pulses.
+; Engine settings (60 MHz):
+;   CLKDIV 5 (6 clocks a bit), LINE 0x33 (Manchester, pair, bytes), SYNC 0, SHIFT 0 (LSB first),
+;   CRC_POLY 0x04C11DB7 (+9/+A and second page +8/+9), CRC_CFG 0x7F (32 bits with CRC_CFG2 = 1,
+;   init all ones, reversed, fed by OUT), TIMEOUT 60000 (1 ms), LINE_CFG 0x41 (TIMEOUT_PC = 1,
+;   no parity).
+;   FLAG 0 is the program's own ("in a frame"): the host must not change it.
+;
+; Host protocol, TX FIFO: a frame is chunks [n][n bytes] (n = 1..255), then [0]. The bytes are
+; destination, source, type/length and payload, padded by the host to at least 60; the engine
+; adds the preamble, SFD and FCS. The first [n] starts the frame (the 8 preamble bytes, 6.4 us,
+; give the host time to queue more). Within a frame the FIFO must not run dry (a byte every
+; 0.8 us; with a 16-byte FIFO the host may stop for at most ~12 us at a time).
+; Host protocol, RX FIFO: one status byte per frame (STAT): bit 4 = the coder ran out of data
+; (an underrun: the frame on the wire is corrupted), bit 2 = the FIFO stayed empty for 1 ms
+; inside the frame (the engine ended it), bit 3 = an earlier status byte was lost (RX full).
+; 0x00 (or 0x02, the CRC unit's "ok" bit, meaningless here) is a good frame.
+.equ tdp 0
+.equ tdm 1
+
+        JMP  init
+tmo:    JMP  FLAG0, abort    ; word 1, the timeout vector: 1 ms without a byte. In a frame: abort
+        JMP  X--, idle       ; idle: count 16 timeouts (16 ms), then a link pulse
+        PIN  tdp, DRV1 [5]   ; NLP: TD+ high for 6 clocks (100 ns, one bit time), TD- low
+        PIN  tdp, DRV0
+        JMP  gap             ; then the inter-frame gap, as after a frame
+idle:   PULL                 ; a frame's first chunk length (times out every 1 ms)
+        MOV  X, OSR
+        JMP  X--, start      ; X = n - 1
+        JMP  idle            ; [0] alone: no frame
+init:   PIN  tdp, DRV0       ; idle: 0 V between TD+ and TD-
+        PIN  tdm, DRV0
+        JMP  gap             ; the first link pulse 16 ms after the start
+
+start:  FLAG 0, SET          ; in a frame (for the timeout vector)
+        STAT                 ; clears "timeout happened" (the idle loop's 1 ms timeouts)
+        SET  OSR, 0x55       ; preamble: 7 x 0x55, then the SFD 0xD5, not in the FCS
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, OUT, NOCRC
+        SET  OSR, 0xD5
+        PIN  tdp, OUT, NOCRC
+        CRCRST               ; the FCS covers destination .. payload; clears the line error
+data:   PULL                 ; the next byte (an empty FIFO here is an underrun)
+        PIN  tdp, OUT        ; to the coder; the CRC takes its 8 bits
+        JMP  X--, data
+        PULL                 ; the next chunk's length; 0 ends the frame
+        MOV  X, OSR
+        JMP  X--, data
+        OSRCRC B0, INV       ; the FCS: the CRC inverted, x^31 first (bytes 0..3, LSB first)
+        PIN  tdp, OUT, NOCRC
+        OSRCRC B1, INV
+        PIN  tdp, OUT, NOCRC
+        OSRCRC B2, INV
+        PIN  tdp, OUT, NOCRC
+        OSRCRC B3, INV
+        PIN  tdp, OUT, NOCRC
+        PIN  tdp, END        ; TP_IDL (the coder: 3 bit times high), then idle
+fin:    PIN  tdp, END        ; returns when the first END is taken: the end of the last bit
+        FLAG 0, CLR
+        STAT                 ; the frame's status for the host
+        PUSH
+        CRCRST
+gap:    SET  X, 35           ; inter-frame gap: 36 x 17 clocks (10.2 us); the coder's 2-bit gap
+ifg:    JMP  X--, ifg [15]   ;   before the next frame adds 0.2 us (802.3: at least 9.6 us)
+        SET  X, 15           ; the next link pulse after 16 idle milliseconds
+        JMP  idle
+
+abort:  PIN  tdp, END        ; the host left the FIFO empty for 1 ms: end the frame (its FCS
+        JMP  fin             ; is wrong), report it (STAT bit 2, "timeout happened")

@@ -571,3 +571,295 @@ STATUS bits 5–7, which `can_node`'s `CRCRST` makes unnecessary in every bench 
 active flag, REC > 127 → 119 on a success, and the 14/8-dominant-bit rule. No RTL bug turned up
 there. The run found one RTL bug, BUG-104: the first sample after reset. It surfaced through the
 reset-release audit, not through a coverage gap.
+
+# Round 3 — D89–D94 Ethernet verification
+
+**RTL findings:** BUG-145 is repaired: Manchester now ignores LINE2[6] idle qualification,
+with a minimal fail-before/pass-after test and one mode guard. BUG-151 remains open:
+valid per-crossing ±13.5 ns jitter can corrupt/split received Ethernet frames. A minimum
+60-byte frame reproduces it in Icarus and Verilator. This campaign does **not** establish
+10BASE-T compliance. No recovery-loop retuning, program changes, GDS, gate-level workflow,
+merge or intermediate push is included.
+
+The branch starts at feature/ethernet `3cca934`. Historical sections/evidence above remain
+unchanged. D95–D100 document the approach; BUG-138 onward distinguish RTL, model, harness,
+fixture and tool findings. The owner superseded stage pushes: complete the work locally
+and defer pushing until the end.
+
+## Default compatibility and integration
+
+| Target | Round-3 result | Comparison / qualification |
+|---|---|---|
+| `make test` | PASS | Full Icarus 12 gate, including the existing protocol benches and new minimal idle-wait, timeout and parity regressions |
+| `make test-verilator` | PASS, all six selected benches | Icarus/Verilator normalized logs identical; the earlier five-bench count predates the current recipe |
+| Both exact CI lint commands | PASS | SRAM black-box and FF fallback, all warnings enabled |
+| Default differential, N=2 / CYCLES=600 / seed 0x504245 | PASS, **50,663 clocks**, every counter identical | Exact JSON equality with untouched `3cca934`; the older 49,010-clock record predates PAGE/SRAM/current stimulus and cannot honestly be claimed for this checkout |
+| `make test-crc-vectors` | PASS: 22 native configurations, 220 payloads, 22 corrupt codewords rejected, 3 unsupported, **31,102 clocks** | Existing narrow result/cycle count retained; this primitive's legacy clock metadata remains unchanged |
+| `make test-buses` | PASS: six endpoints × three cases at 60 MHz | 18-case result retained; I2C controller additionally rerun after deriving 21/42/85 divisors from the actual seven-phase bit schedule |
+| `make test-protocol-vectors` | PASS: USB and seven Modbus cases | Independent package checks retained; SRAM inputs supplied and receipt-path export repaired |
+| `make sigrok` | **22 PASS + 2 documented USB XFAIL**, exit zero | Same external decoder disagreements; UART decoder corrected from the old 480 kbaud setting to actual 600 kbaud, using the same fresh capture |
+| `make stress` | **22/22 PASS** | Every required observation identical to round 2; saved comparison is `{}` |
+| Default `make coverage` | **140/140 old functional bins** | Old-bin closure retained; structural point totals reflect the wider/new hardware and are reported below |
+| Original 24 mutants | Initial 23/24 combined; final **24/24 caught** after focused regressions | Initial M19 timeout is not a kill. Separate default one-seed differential catches 17/24; seven survivors remain disclosed |
+| Existing formal matrix | 112 non-default jobs source-validated against original RTL; old pre-CAN engine equivalence exposes PAGE counterexample | No claim that the historical overbroad engine property still holds; see formal domains below |
+| Model / coverage-tool guards | **34 model tests + 7 coverage-tool guards PASS** | Fresh/empty/stale coverage-file failures remain checked; no exit-zero-only coverage acceptance |
+
+Default harness changes explicitly tie off new ports, zero-extend narrow CRC inputs,
+retain complete wider output comparisons, and include the FUNCTIONAL IHP SRAM models.
+The assembler adapter supplies separate 256-word engine memories. No old expected payload,
+mutation fault, protocol assertion or historical evidence was edited to manufacture equality.
+The sole RTL change is `idle_wait = cfg2[6] && !manch`. Legacy default differential/CRC
+primitive tests retain their original 20832-ps reference period for cycle comparisons; the
+new Ethernet campaign and external protocol checks use 16668 ps or independent partner
+clocks. These digital results make no physical-frequency timing claim.
+
+## Golden reference and random differential
+
+The Python model was extended from D89–D94/public interface specifications: quad framing,
+HOSTCFG and idle-SCK recovery; queued-bit Manchester halves and receive reference age;
+CRC widths to 32, high registers and OSRCRC byte selection; per-unit stuffing tags and
+flag-delimited receive. Model predictions never consume RTL state. Diagnostic state reads
+only explain disagreements. Initial phase/overshoot clarifications after a mismatch are
+explicitly implementation-informed cycle contracts (D96, BUG-142), not independent proofs.
+
+- Original line differential remains independently runnable: 160 configurations / 80,160 clocks.
+- New D90/D94 line differential: **240 configurations / 192,241 clocks PASS**, both polarities,
+  orders, bit/byte and single/pair forms; periods 4/5/6/7/20 clocks, SYNC absent/D5, ignored
+  Manchester LINE fields, stuffing control and flag framing.
+- Directed host/engine tests: six widths × sixteen OSRCRC parameters × two engines; high
+  CRC/value/good registers; retained state on live shrink; captured/uncaptured short CS,
+  partial nibble abort, seven/eight recovery clocks, counter reset, mux and mode latch;
+  simultaneous STUFFOFF/ON and Manchester idle-wait exception. **Three tests PASS in both simulators.**
+- Full-divider/line corners: **three PASS**. At period 65536 the carrier ends exactly 131072
+  clocks after its intentional first edge; a half-sample-only glitch produces no data/end;
+  flag-delimited continuous-one runs emit ends every six sampled bits.
+- Large campaign: **PASS: 1,000 seeds, 1,200 random iterations per seed, **20,951,842 checked clocks**, seed 0x504245; Verilator 5.051**. Verilator's two-state treatment is limited to model-marked
+  unspecified empty-FIFO output lanes; all known output bits and every clock are compared.
+  Icarus supplies four-state default, directed and failing-seed replay evidence.
+
+The first 1,000-seed Icarus attempt stopped at global index 983 / seed 5260828 because the
+checker compared a STATUS snapshot taken before a host transaction with a later prefetched
+byte. The autonomous coder can update status while engines are stopped. BUG-155 fixes the
+read expectation at actual sampling time; the per-clock pin oracle, final status/FIFO checks
+and explicit directed values remain. The exact global-index replay now passes 30,688 clocks.
+That failed campaign is retained and is not counted as a 1,000-seed pass. Replay preserves
+the global index because index zero intentionally uses the coverage prelude.
+
+## Formal results and assumptions
+
+There are two source lineages: the unchanged baseline before the one-line repair and the
+repaired RTL. The 112 existing FIFO/host/line/engine/bsync jobs were collected only after
+expanded configurations and **every copied input hash** matched the original `3cca934`
+worktree. Their results are 3 unbounded proofs, 81 bounded passes, 16 covers and 12 explicit
+assertion counterexamples. The repair-only unbounded equivalence below transfers the old
+line-mode behavior; it does not relabel those old receipts as new-source solver runs.
+
+| Check | Result | Domain / depth |
+|---|---|---|
+| Existing FIFO and single-lane host induction | 3 unbounded PASS | FIFO induction depths 32/32, cover 64; host induction depth 24, cover 224; `!quad` is proved, not assumed as hidden DUT state |
+| Existing line checks | 76 BMC PASS, 12 cover PASS, 10 expected assertion counterexamples | Round-trip depth 164, stuff/cover depth 48 where specified; longer wall-time budget, no reduced depth |
+| Existing engine / bsync | 5 BMC PASS, 2 cover PASS, 2 expected PC/window counterexamples | Engine safety/fetch/SRAM depths 40, timeout 50, activity cover 20, window counterexamples 70; bsync BMC 70 / cover 90 |
+| Pre-CAN line default | BMC PASS | Depth 18; old modes, LINE2=0, new controls off |
+| Pre-CAN engine historical goal | Expected assertion counterexample | Depth 8; PAGE-relative jump semantics invalidate the old arbitrary-PC/start-address claim |
+| Additional page-zero engine compatibility | BMC PASS | Depth 8, START_PC=0, no PAGE prefix, public fetch PC <=64; explicitly additional restricted goal |
+| D88 engine vs D94 engine | BMC PASS | Depth 8; full 8-bit PC/PAGE and arbitrary live configuration; new mode/flag/control encodings disabled, dividers/timeouts <4 |
+| Quad/single host framing and latch | Unbounded induction PASS | Depth 32; legal synchronized mode-0 timing, four-clock SCK phases; request can change during selection |
+| Pre-D89 single-lane host equivalence | Unbounded induction PASS | Depth 4; arbitrary pin timing and extra MOSI lanes, quad request disabled, full common state/output comparison |
+| CRC coefficient reference, widths 17–32 | Unbounded induction PASS | Depth 8; symbolic fixed width, dynamic polynomial/good/input/init/reflection, repeated asynchronous reset |
+| Pre-D91 narrow CRC equivalence | Unbounded induction PASS | Depth 8; live width changes, full raw state, value and good comparator; high poly/good halves zero |
+| Manchester timer range | Unbounded induction PASS | Depth 8; symbolic divider 3..FFFF; signed timer stays within proven representable range |
+| Manchester polarity 0 / 1 | Two BMC PASS | Depth 260 each: independent IEEE TX halves, preamble/SFD, arbitrary payload, tail, recovered byte and deadline at six clocks/bit |
+| Stuff tags / flag framing | Two BMC PASS | Depth 80 each; queued/shifter tags, on precedence, reset/clear, pending stuff bit, low-level frame end, continued receive and run reset |
+| New host / Manchester / stuff / flag covers | Four cover PASS | Depth 224 / 260 / 80 / 80; nonvacuity only, not safety proofs |
+| Pre-D90 legacy line equivalence | Unbounded equivalence PASS, 402 cells (common reset) | Every LINE2 value and 16-bit period, modes 0–2, LINE[6]=0 and ctl=0; old always-on stuffing exposed as constant observation state |
+| One-line repair preservation | Unbounded equivalence PASS, 575 cells (common reset) | Original `3cca934` vs repair, modes 0–2; **all LINE2, LINE[6], ctl, early samples and other external inputs free** |
+
+The successful new Ethernet SBY block has **13/13 matched: 5 induction, 4 BMC, 4 covers**.
+Together the separately source-validated SBY groups account for **129 results: 8 induction,
+88 bounded passes, 20 covers and 13 expected counterexamples**. The two Yosys equivalence
+runs above are additional. Expected counterexamples remain false properties, not proofs.
+
+The historical engine check remains a failing check; it was not silently replaced by the
+page-zero domain. The modern D88 miter preserves PAGE semantics for the Ethernet comparison.
+A broad structural engine-equivalence pilot left 35 cells unproved and supplies **no**
+unbounded engine proof. Initial host observer UNKNOWN, CRC-reference reset counterexample,
+wall-time cutoffs and this incomplete pilot are retained separately from successful results.
+Manchester formal round trip is synchronous and bounded; it proves no analog/jitter margin.
+Wide CRC live-width transitions are directed tests, not an arbitrary-changing-wide-width proof.
+
+## External CRC and wire vectors
+
+The primary RevEng 17plus catalogue and crccheck 1.3.1 agree for **24 configurations,
+240 payloads and 24 corrupted codewords rejected**, without skipping a wide catalogue entry.
+Twenty use native zero/all-ones initialization. Four 24-bit seeds use explicit software
+prefeed prefixes: BLE e58efb, FLEXRAY-A 1624bb, FLEXRAY-B 67d13f, OPENPGP b111c9. These are
+prefeed-assisted checks, not an arbitrary seed-load register. All widths 17..32 additionally
+receive synthetic external-library checks in coverage mode. ISO-HDLC's 123456789 check is
+0xCBF43926 and reflected residue 0xDEBB20E3; raw PBE CRC_GOOD is the reversed 0xC704DD7B.
+
+Scapy 2.8.0 supplies actual Ethernet bytes; binascii supplies FCS. A separate stateless
+IEEE-half-cell decoder checks captured public TX pins, seven 55 bytes + D5, every data/FCS
+bit, raw residue, bit period, three-bit TP_IDL and IFG measured from the last FCS bit.
+Eight frames of 60,61,255,256,512,1514,1600,32640 bytes pass; the jumbo contains each chunk
+length 1..255. The measured tail is 300024 ps. Empty [0] produces no frame. Actual decoded
+packets are saved as pcap without FCS, with FCS/timing sidecars; no real-NIC provenance is claimed.
+
+External receive checks pass exact escaped payload/FCS/status for good and corrupted frames,
+runts of 0..3 bytes after SFD, 1..7 ignored dribble bits, an eighth bit producing an extra ff
+byte and bad CRC, link pulses and short noise. Independent CRC-16/IBM-SDLC and NRZI/flag/
+zero-deletion codecs validate HDLC transmit and receive for 4- and 256-byte frames. Existing
+HDLC benches add NRZ/NRZI rates, shared flags, bad CRC and abort cases. No golden-model code
+is imported by these wire codecs or expected payload calculations.
+
+## Coverage
+
+Default instrumentation remains 140 bins. Extended instrumentation adds 79 new events:
+**219/219 hit**. All 18 selected SV benches, the old differential/line sweep, 240-config new
+line sweep, directed register/host programs, wide CRC vectors/width sweep and independent
+wire vectors pass and produce fresh nonempty Verilator dumps. The two final missing bins
+were closed by directed simultaneous STUFFOFF/ON and Manchester LINE2[6] transfers.
+
+| Original RTL source points | Default run | Extended run |
+|---|---|---|
+| Toggle | 7954 / 13030 | **8849 / 13030** |
+| Expression | 1924 / 2320 | **1942 / 2323** |
+| Line points | 553 / 641 | **564 / 641** |
+| Branch | 920 / 1120 | **949 / 1120** |
+| Distinct source line locations | See baseline receipt | **291 / 295** |
+
+Counters coalesce identical source points across bench roots/instances and exclude appended
+instrumentation/testbench source from RTL percentages. The new guard adds expression points.
+These are actual simulator data, not a claim of every operand/configuration/path. Complete
+point counts are in the summary; 4,810 unhit logical points are enumerated in
+`evidence/round3/coverage/structural-gaps.json.gz`, without claiming they are unreachable. The
+four unhit source locations and their reachability explanations are **the reachable, unexercised CAN host-clear bodies in pbe_engine.sv (arb/bit-error/sent at lines 620/622/624), and the reachable no-op reserved second-page write default in tt_um_pbe.sv (line 320). They are disclosed gaps, not classified as unreachable**.
+
+Named bins cover each new mode/corner category; they are not exhaustive cross-products.
+Not exhaustively tested: all real-valued host/glitch phases, every RX-overrun byte position,
+all 65536 divider values, all frame lengths, arbitrary live mode changes during a frame,
+all early/late/ISI patterns, physical CDC/metastability and routed timing. The period-FFFF
+corner plus symbolic range proof covers timer representability; it is not a full-divider
+Manchester lock proof. No bin count is used to excuse the independently failing jitter cases.
+
+## Mutation sensitivity
+
+Old 24-fault results: initial make-test catches 23 and M19 times out; separate differential
+catches 17 and seven survive. A timeout is not detection. Exact timeout and parity tests
+near the front of the normal gate catch M19/M23 in seconds, yielding **24/24 combined**.
+Old raw results and separate differential blind spots remain available.
+
+| New fault | Detector | Final result |
+|---|---|---|
+| E01 quad nibble order | Public-pin directed oracle | Caught |
+| E02 mode latch while selected | Public-pin directed oracle | Caught |
+| E03 Manchester polarity | 240-config per-clock line oracle | Caught |
+| E04 Manchester lock threshold | Same | Caught |
+| E05 early-edge offset | Same | Caught |
+| E06 high CRC width decode | Independent wide catalogue | Caught |
+| E07 CRC reflection | Independent wide catalogue | Caught |
+| E08 queued stuffing tag | 240-config line oracle | Caught |
+| E09 STUFFON precedence | Same | Caught |
+| E10 flag run reset | Directed continuous-one end intervals | Caught; original random survivor retained |
+| P01 short IFG loop | Canonical external Ethernet bench | Caught, minimum gap 5.03 us |
+| P02 second END replaced with NOP | Independent pin completion barrier | Caught; completion 716724 ps before last FCS bit; initial payload-only survivor retained |
+| P03 frame-start STAT replaced with NOP | Frame after idle timeout | Caught, leaked status 04 |
+| P04 extra escape PUSH replaced with NOP | Independent dense-escape RX record | Caught |
+
+Final campaign: **14/14 caught; no inconclusive result or survivor in the final frozen campaign**. Frozen source/test manifests, source site before/after,
+commands, executable hashes, failure reasons and logs are retained. Early missing-venv,
+ambiguous-site and bare-assertion diagnostic outcomes are inconclusive pilots, not kills.
+The initial STAT replacement also clobbered X and is superseded by the single-effect NOP.
+No compile error, timeout or unexplained nonzero exit earns a kill.
+
+## Digital stress and margins
+
+IEEE 802.3-2012 clause 14.3.1.3.1 requires ±13.5 ns relative to **each ideal zero crossing**;
+adjacent intervals can vary by 27 ns. The previously measured ±0.8-clock value is 13.3344 ns,
+slightly below that limit. Primary IEEE text was inspected at the my-wire.de PDF mirror
+cited in D99; no copyrighted PDF is redistributed. This digital spacing-dependent stimulus
+is an ISI proxy, not an analog cable/equalizer/squelch model.
+
+| Stress | Observed delivery / status outcome |
+|---|---|
+| Quad host, 16 phases across a 16668-ps clock, clk/8 minimum phases | PASS; alternating cases add uniform 0..2000-ps half-phase delay; minimum 66672 ps, maximum 68672 ps |
+| Normal 256-byte full duplex at those host phases | PASS, exact RX bytes + FCS/status 02, TX status clear |
+| Required ±13500-ps crossings, two seeds × uniform/alternating/spacing-dependent × ±100 ppm | **6/12 delivery FAIL**: uniform 4/4 PASS; alternating slow 2/2 PASS, fast 0/2; spacing-dependent 0/4 |
+| Minimum legal 60-byte frame, spacing-dependent ±13500 ps, -100 ppm | **FAIL in both simulators**: 30 bytes, bad CRC/status 00; complete stimulus and actual bytes retained |
+| Uniform beyond-limit 14/15/18/20 ns and adversarial patterns | **uniform passes at 14 and 15 ns, fails at 18 and 20 ns for the sampled seed; alternating and spacing-dependent fail at all four levels**; finite sampled margins, not compliance bounds |
+| ±1000 / ±10000 ppm without added jitter, 1514-byte frames | PASS for all four sampled offsets |
+| Back-to-back RX, exactly 9.6 us after last FCS bit | PASS, two exact frames/status 02 |
+| Worst-case escaped full duplex, 1514 bytes | **Delivery FAIL**: TX status 00; RX 954 bytes/status 18. Asymptotic escaped-RX + TX payload demand approaches the 3.75-MB/s host raw limit before command/count/chunk overhead |
+| TX 30-us starvation | Corrupt delivery, correct status 10; no timeout bit |
+| TX >1-ms starvation | Correct abort status 14; [0][0] resynchronization then complete frame/status 00 |
+| Host absent during RX | 17 retained prefix bytes/status 18; next intact frame status 0a reflects sticky overflow; explicit host clear then next frame/status 02 |
+
+The local six-clock bit is 100008 ps (about -80 ppm relative to ideal 10 MHz). Source offsets
+are recorded both relative to ideal and to this simulated local clock; source ±100 ppm gives
+approximately -20/+180 ppm relative offsets. Jitter applies only to actual transitions and
+nonmonotonic stimuli are rejected. Host jitter never shortens a half-phase below four clocks;
+this is not a claim for faster-than-specified SCK or arbitrary duty cycle.
+
+The final stress target returns **nonzero: three tests PASS, one required-jitter test FAIL**.
+Correct error flags are reported separately from successful delivery. The 1514-byte stress
+frame has finite header/FCS overhead, so its raw data demand is slightly below the asymptotic
+3.75-MB/s figure; required command/count/CS/chunk traffic still exceeds usable capacity. Normal link pulse
+16±8-ms interval/100-ns pulse and no-pulse-during-frame behavior remain checked by the
+canonical Ethernet bench in the integration/coverage campaigns. Analog voltage/template,
+link-integrity features, auto-negotiation, CSMA/CD and routed 60-MHz setup/hold are unverified
+or unsupported as documented by D93; prohibited physical/gate-level flows were not run.
+
+## Reproduction and evidence
+
+Use OSS CAD Suite **2026-07-27**, Verilator **5.051 devel**, Yosys **0.67+94**, bundled SBY/Yices,
+Icarus/vvp **12.0**, Python **3.12.4**, cocotb **2.0.1**, stock sigrok-cli **0.7.2** and
+libsigrokdecode **0.5.3**. Put Icarus 12 ahead of the suite's Icarus 14. Only add the suite's
+bin directory for targets requiring Verilator/formal. Disable compiler output grouping to
+fit the two-CPU/eight-GiB runner; no assertion/instrumentation/stimulus is dropped.
+Install the existing per-target pinned requirements and `verify/ethernet/requirements.txt`.
+
+From `pbe_v1/`:
+
+```sh
+make test
+make test-verilator
+# Run both exact lint commands in .github/workflows/regression.yaml.
+make formal FORMAL_JOBS=1 FORMAL_ARGS='--timeout 1800'
+make coverage
+make coverage-ethernet
+make stress
+make mutate JOBS=1
+make mutate-ethernet
+make sigrok
+make test-buses
+make test-crc-vectors
+make test-crc-vectors WIDE=1
+make test-protocol-vectors
+make test-ethernet-corners
+make test-wire-vectors
+make diff ETHERNET=1 N=1000 CYCLES=1200
+make stress-ethernet   # currently NONZERO: BUG-151 remains open
+```
+
+Additional scripts from repository root:
+
+```sh
+.venv/bin/python verify/formal/legacy_equiv.py
+.venv/bin/python verify/formal/legacy_equiv.py --repair-only
+.venv/bin/python verify/ethernet/run_line_corners.py
+.venv/bin/python verify/ethernet/run_wire.py --sim verilator --test-module test_program_corners
+.venv/bin/python verify/ethernet/run_wire.py --test-module test_jitter_reproducer
+.venv/bin/python verify/golden-model/differential/run.py --ethernet --n 1 \
+  --seed 0x504245 --start-index 983 --cycles 1200
+```
+
+The minimum-jitter reproducer is also intentionally nonzero. The recorded large campaign
+uses `differential/run.py --ethernet --sim verilator --n 1000 --cycles 1200 --seed 0x504245`;
+the ordinary `make diff` command above uses Icarus unless explicitly invoking the runner.
+
+Selected raw logs, hashes, initial failures, counterexamples, actual frame bytes/edge times,
+pcap, coverage counts and mutation receipts are under **evidence/round3/**. Generated binaries,
+VCDs, annotated source and full build trees stay in ignored `pbe_v1/build/`; historical evidence
+is preserved. Read `evidence/round3/README.md` for source lineage and intentionally failing
+results. The saved receipts, not planned commands or mere completion banners, determine
+which checks passed. No claim here extends digital simulation/formal bounds to physical
+silicon or full standards compliance.

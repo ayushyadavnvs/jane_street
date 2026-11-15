@@ -1,0 +1,20 @@
+{
+  "command": [
+    "make",
+    "diff-line",
+    "PYTHON=/workspace/work/jane_street/.venv/bin/python"
+  ],
+  "returncode": 2,
+  "seconds": 45.907,
+  "status": "caught",
+  "first_failure": "AssertionError: {'cycle': 129132, 'inputs': {'clear': False, 'cfg': 73, 'cfg2': 0, 'sync': 0, 'period_m1': 4, 'out_msb_first': 0, 'in_msb_first': 0, 'a_in': 1, 'a_early': 1, 'b_in': 0, 'tx_put': False, 'tx_end': False, 'tx_data': 248, 'rx_take': False, 'ctl': False, 'ctl_param': 19}, 'actual': {'drive': 1, 'a_out': 1, 'b_out': 0, 'tx_ready': 1, 'rx_valid': 0, 'rx_data': 0, 'frame_end': 0, 'err': 1}, 'expected': {'drive': 1, 'a_out': 0, 'b_out': 1, 'tx_ready': 1, 'rx_valid': 0, 'rx_data': 0, 'frame_end': 0, 'err': 0}}",
+  "first_failing_check": null,
+  "log": "E09.log.gz",
+  "id": "E09",
+  "category": "STUFFON precedence",
+  "file": "src/pbe_line.sv",
+  "before": "if (ctl_param[1]) ns_mode <= 1'b0;\n        else if (ctl_param[0]) ns_mode <= 1'b1;",
+  "after": "if (ctl_param[0]) ns_mode <= 1'b1;\n        else if (ctl_param[1]) ns_mode <= 1'b0;",
+  "baseline_sha256": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+  "mutant_sha256": "eeda5a4e3ad641c227f254b65df3fcaca36053a0987a33c3b0d70ab074807b14"
+}

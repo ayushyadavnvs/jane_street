@@ -28,7 +28,7 @@
 //      more drive), recovery after 128 x 11 recessive bits, then the frame goes out.
 //   7. Engines 0 and 1 as two nodes: frames both ways and arbitration between them.
 module tb_can;
-  localparam real CLK_NS = 20.8333;   // 48 MHz
+  localparam real CLK_NS = 16.6672;   // 60 MHz
   localparam int HOST_HALF = 3;
   localparam real TXD_NS = 80.0, RXD_NS = 120.0;
 

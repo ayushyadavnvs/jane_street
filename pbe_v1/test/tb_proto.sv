@@ -8,7 +8,7 @@
 //
 // Every pin has a pull-up and lines are wired-AND, like a real open-drain bus.
 module tb_proto;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 8;      // host SCK = clk / 16
 
   logic clk = 0, rst_n = 0;
@@ -293,7 +293,7 @@ module tb_proto;
 `endif
     $display("Test 8: WS2812 LED driver (engine 0, pin 0) at 800 kbit/s");
     load_program("ws2812_image.hex");
-    reg_write(7'h10, 1);                 // tick = 2 clocks (41.7 ns)
+    reg_write(7'h10, 1);                 // tick = 2 clocks (33.3 ns at 60 MHz)
     reg_write(7'h11, 0);
     reg_write(7'h12, 0);
     reg_write(7'h14, 2'b01);             // OUT MSB first

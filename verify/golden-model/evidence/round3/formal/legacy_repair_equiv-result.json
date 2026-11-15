@@ -1,0 +1,12 @@
+{
+  "command": [
+    "yosys",
+    "-ql",
+    "logfile.txt",
+    "run.ys"
+  ],
+  "returncode": 0,
+  "old_revision": "3cca934",
+  "new_sha256": "cd0454ec22ae2358c10795ca471f2c9aa7020a1a276f6d74e24137cc612bd664",
+  "scope": "all external inputs and LINE2 values; mode 0..2; LINE[6] and ctl free; induction"
+}

@@ -32,9 +32,14 @@ def main():
     sources = [ROOT/'src'/name for name in (
         'pbe_fifo.sv', 'pbe_host_spi.sv', 'pbe_crc.sv', 'pbe_line.sv', 'pbe_bsync.sv',
         'pbe_engine.sv', 'tt_um_pbe.sv')]
+    # D82: use the same FUNCTIONAL SRAM model as the default design regression.
+    sram = ROOT/'macros/RM_IHPSG13_1P_256x16_c2_bm_bist'
+    sources += [ROOT/'src/pbe_pmem_sram.sv',
+                sram/'RM_IHPSG13_1P_256x16_c2_bm_bist.v',
+                sram/'RM_IHPSG13_1P_core_behavioral_bm_bist.v']
     build = HERE/'sim_build'
     runner.build(sources=sources+[HERE/'bus_top.sv'], hdl_toplevel='bus_top',
-                 build_dir=build, build_args=['-g2012'], timescale=('1ns','1ps'))
+                 build_dir=build, build_args=['-g2012'], defines={'FUNCTIONAL': 1}, timescale=('1ns','1ps'))
     (build/'results.xml').unlink(missing_ok=True)
     runner.test(hdl_toplevel='bus_top', test_module='test_buses',
                 test_dir=HERE, build_dir=build, testcase=args.test,

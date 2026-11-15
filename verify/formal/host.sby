@@ -14,9 +14,11 @@ smtbmc yices
 [script]
 prove: read -formal -sv host_formal.sv
 cover: read -formal -D FORMAL_COVER -sv host_formal.sv
-prep -top pbe_host_spi
+read -formal -sv host_default.sv
+prep -top host_default
 async2sync
 dffunmap
 
 [files]
+host_default.sv
 ../../pbe_v1/build/formal/generated/host_formal.sv

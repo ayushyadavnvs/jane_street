@@ -1,0 +1,39 @@
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Removing directory '/workspace/work/jane_street/pbe_v1/build/formal/default_engine'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Copy '/workspace/work/jane_street/verify/formal/default_equiv.sv' to '/workspace/work/jane_street/pbe_v1/build/formal/default_engine/src/default_equiv.sv'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Copy '/workspace/work/jane_street/verify/formal/../../pbe_v1/build/formal/generated/default_old.sv' to '/workspace/work/jane_street/pbe_v1/build/formal/default_engine/src/default_old.sv'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Copy '/workspace/work/jane_street/verify/formal/../../src/pbe_line.sv' to '/workspace/work/jane_street/pbe_v1/build/formal/default_engine/src/pbe_line.sv'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Copy '/workspace/work/jane_street/verify/formal/../../src/pbe_bsync.sv' to '/workspace/work/jane_street/pbe_v1/build/formal/default_engine/src/pbe_bsync.sv'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Copy '/workspace/work/jane_street/verify/formal/../../src/pbe_crc.sv' to '/workspace/work/jane_street/pbe_v1/build/formal/default_engine/src/pbe_crc.sv'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] Copy '/workspace/work/jane_street/verify/formal/../../src/pbe_engine.sv' to '/workspace/work/jane_street/pbe_v1/build/formal/default_engine/src/pbe_engine.sv'.
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: smtbmc yices
+SBY 13:09:50 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] base: starting process "cd /workspace/work/jane_street/pbe_v1/build/formal/default_engine/src; yosys -ql ../model/design.log ../model/design.ys"
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] base: finished (returncode=0)
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] prep: starting process "cd /workspace/work/jane_street/pbe_v1/build/formal/default_engine/model; yosys -ql design_prep.log design_prep.ys"
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] prep: finished (returncode=0)
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] smt2: starting process "cd /workspace/work/jane_street/pbe_v1/build/formal/default_engine/model; yosys -ql design_smt2.log design_smt2.ys"
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] smt2: finished (returncode=0)
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: starting process "cd /workspace/work/jane_street/pbe_v1/build/formal/default_engine; yosys-smtbmc -s yices --presat --unroll --noprogress -t 8  --append 0 --dump-vcd engine_0/trace.vcd --dump-yw engine_0/trace.yw --dump-vlogtb engine_0/trace_tb.v --dump-smtc engine_0/trace.smtc model/design_smt2.smt2"
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Solver: yices
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assumptions in step 0..
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assertions in step 0..
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assumptions in step 1..
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assertions in step 1..
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assumptions in step 2..
+SBY 13:09:51 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assertions in step 2..
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assumptions in step 3..
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Checking assertions in step 3..
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  BMC failed!
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Assert failed in default_equiv: default_equiv.sv:56.7-56.85 (_witness_.assert_assert_default_equiv_sv_56_75)
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Writing trace to VCD file: engine_0/trace.vcd
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Writing trace to Verilog testbench: engine_0/trace_tb.v
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Writing trace to constraints file: engine_0/trace.smtc
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Writing trace to Yosys witness file: engine_0/trace.yw
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: ##   0:00:00  Status: failed
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: finished (returncode=1)
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] engine_0: Status returned by engine: FAIL
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] summary: Elapsed clock time [H:MM:SS (secs)]: 0:00:01 (1)
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] summary: Elapsed process time [H:MM:SS (secs)]: 0:00:01 (1)
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] summary: engine_0 (smtbmc yices) returned FAIL
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] summary: counterexample trace: /workspace/work/jane_street/pbe_v1/build/formal/default_engine/engine_0/trace.vcd
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] summary:   failed assertion default_equiv._witness_.assert_assert_default_equiv_sv_56_75 at default_equiv.sv:56.7-56.85 step 3
+SBY 13:09:52 [/workspace/work/jane_street/pbe_v1/build/formal/default_engine] DONE (FAIL, rc=2)

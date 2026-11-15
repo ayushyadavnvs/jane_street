@@ -23,7 +23,7 @@
 //    (h) after a reset (the memories keep their contents) an engine run without a restart
 //        starts at word 0: the reset refetch (pm_wr_q's reset value, BUG-074).
 module tb_fetch;
-  localparam real CLK_NS = 20.8333;  // 48 MHz
+  localparam real CLK_NS = 16.6672;  // 60 MHz
   localparam int HOST_HALF = 8;      // host SCK = clk / 16
 
   logic clk = 0, rst_n = 0;

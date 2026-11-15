@@ -1,0 +1,63 @@
+{
+  "results": [
+    {
+      "block": "host",
+      "task": "prove",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "host",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "prove",
+      "depth": 24,
+      "unbounded_k_induction": true,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "verify/formal/host_default.sv": "34039ea16a11a1c24db9e14e2c965f2846cc4c30c5312c7f44bdf4856c2a2d03",
+        "pbe_v1/build/formal/generated/host_formal.sv": "66069f436ca37f7c1178be008c5f0f39dbab65d360d1a913a86ae3ccf0b00b08"
+      },
+      "seconds": 10.475,
+      "failed_assertions": [],
+      "covers": [],
+      "workdir": "build/formal/host"
+    },
+    {
+      "block": "host",
+      "task": "cover",
+      "tags": [],
+      "expected_status": "PASS",
+      "folder": "host_cover",
+      "status": "PASS",
+      "matched_expectation": true,
+      "mode": "cover",
+      "depth": 224,
+      "unbounded_k_induction": false,
+      "collected": false,
+      "returncode": 0,
+      "timeout": false,
+      "error": null,
+      "input_sha256": {
+        "verify/formal/host_default.sv": "34039ea16a11a1c24db9e14e2c965f2846cc4c30c5312c7f44bdf4856c2a2d03",
+        "pbe_v1/build/formal/generated/host_formal.sv": "66069f436ca37f7c1178be008c5f0f39dbab65d360d1a913a86ae3ccf0b00b08"
+      },
+      "seconds": 117.011,
+      "failed_assertions": [],
+      "covers": [
+        "host_default.dut: host_formal.sv:258.5-258.33 (_witness_.cover_cover_host_formal_sv_258_153)",
+        "host_default.dut: host_formal.sv:259.5-259.35 (_witness_.cover_cover_host_formal_sv_259_155)",
+        "host_default.dut: host_formal.sv:257.5-257.44 (_witness_.cover_cover_host_formal_sv_257_150)",
+        "host_default.dut: host_formal.sv:256.5-256.42 (_witness_.cover_cover_host_formal_sv_256_147)"
+      ],
+      "workdir": "build/formal/host_cover"
+    }
+  ],
+  "total": 2,
+  "matched": 2,
+  "proven": 1,
+  "bounded_pass": 0,
+  "expected_counterexamples": 0,
+  "note": "Expected counterexamples remain failed properties; matched does not mean all properties proven."
+}

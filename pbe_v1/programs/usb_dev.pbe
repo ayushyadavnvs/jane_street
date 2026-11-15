@@ -4,7 +4,7 @@
 ;
 ; Pins: dm = pin base = D- (the coder's line; J = D- high at low speed), D+ = pin base + 1.
 ;   A 1.5 kohm pull-up on D- is outside the chip.
-; Engine settings (48 MHz): CLKDIV = 31 (32 clocks per bit), OUT and IN LSB first,
+; Engine settings (60 MHz): CLKDIV = 39 (40 clocks per bit; 31 at 48 MHz), OUT and IN LSB first,
 ;   LINE = 0x36 (bytes, pair, stuff after 6 ones, NRZI), SYNC = 0x80,
 ;   CRC_POLY = 0x8005, CRC_CFG = 0xFF, CRC_GOOD = 0x800D, LINE_CFG = 0x40 (no parity), TIMEOUT 0.
 ; Device address: words 6 and 9 are `SET OSR` with the token's 2nd and 3rd byte for this

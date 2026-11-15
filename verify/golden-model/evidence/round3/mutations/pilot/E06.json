@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-jrfa5bq3/E06/verify/vectors/crc/run.py",
+    "--wide",
+    "--random-cases",
+    "1"
+  ],
+  "returncode": 1,
+  "seconds": 0.722,
+  "status": "caught",
+  "first_failure": "AssertionError: CRC-17/CAN-FD byte raw mismatch",
+  "first_failing_check": null,
+  "log": "E06.log.gz",
+  "id": "E06",
+  "category": "wide CRC top decode",
+  "file": "src/pbe_crc.sv",
+  "before": "32'h0000_0001 << width_m1",
+  "after": "32'h0000_0001 << width_m1[3:0]",
+  "baseline_sha256": "a44d2ad09074a82a2590939bd3e3f091514b8fa043d183a0e1aef1dc8ae300f1",
+  "mutant_sha256": "6fd0e3b4e5b8a1a70b2c7a0311621bdcbd8255775627e1b61f148e52768d59d6"
+}

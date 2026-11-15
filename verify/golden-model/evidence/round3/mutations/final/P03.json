@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-83hwj11b/P03/verify/ethernet/run_wire.py",
+    "--sim",
+    "verilator",
+    "--test-module",
+    "test_program_corners"
+  ],
+  "returncode": 1,
+  "seconds": 21.453,
+  "status": "caught",
+  "first_failure": "AssertionError: ('idle TIMEOUT leaked into a complete frame', [4])",
+  "first_failing_check": null,
+  "log": "P03.log.gz",
+  "executable_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "P03",
+  "category": "Ethernet frame STAT",
+  "file": "pbe_v1/programs/eth_tx.pbe",
+  "before": "        STAT                 ; clears",
+  "after": "        NOP                  ; clears",
+  "baseline_sha256": "43b9ee222a8159e1d27e8347cbf0e59a20d31dedc23b96cbeba8776c82b79114",
+  "mutant_sha256": "6e39f09c78dd94d270a6de31e6a896b3aad0a7fcf462ec00f5e01438051eb096"
+}

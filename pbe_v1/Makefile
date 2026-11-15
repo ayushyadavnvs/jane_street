@@ -76,15 +76,18 @@ test/qspi_image.hex: programs/qspi_flash.pbe tools/pbe_asm.py
 test/hdlc_image.hex: programs/hdlc_tx.pbe programs/hdlc_rx.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/hdlc_tx.pbe@0:0 programs/hdlc_rx.pbe@1:0
 
+test/eth_image.hex: programs/eth_tx.pbe programs/eth_rx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/eth_tx.pbe@0:0 programs/eth_rx.pbe@1:0
+
 test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
-IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc
+IMAGES := conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc eth
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc; do \
-	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
+LINT = cd test && for tb in tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth; do \
+	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) eth_model.sv $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
 
@@ -104,8 +107,9 @@ test/page_loop_image.hex: test/page_loop.pbe tools/pbe_asm.py
 test/fetch_image.hex: test/fetch_timing.pbe test/fetch_stream.pbe test/fetch_host.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ test/fetch_timing.pbe@0:0 test/fetch_stream.pbe@0:128 test/fetch_host.pbe@1:200
 
-test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
+test: test-manchester-idle $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex test/fetch_image.hex
 	$(LINT)
+	$(MAKE) test-timeout-boundary test-parity-boundary
 	cd test && iverilog -g2012 -o fifo_robustness.vvp tb_fifo_robustness.sv ../src/pbe_fifo.sv && vvp -n fifo_robustness.vvp
 	cd test && iverilog -g2012 -o known_reset.vvp tb_engine_known_reset.sv $(ENG) && vvp -n known_reset.vvp
 	cd test && iverilog -g2012 -o restart.vvp tb_engine_restart.sv $(ENG) && vvp -n restart.vvp
@@ -113,12 +117,15 @@ test: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_image.hex tes
 	cd test && iverilog -g2012 -o fetch.vvp tb_fetch.sv $(TOP) && vvp -n fetch.vvp
 	cd test && iverilog -g2012 -o page.vvp tb_page.sv $(TOP) && vvp -n page.vvp
 	cd test && iverilog -g2012 -o line.vvp tb_line.sv $(ENG) && vvp -n line.vvp
+	cd test && iverilog -g2012 -o crc.vvp tb_crc.sv ref_pbe_crc16.sv ../src/pbe_crc.sv && vvp -n crc.vvp
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
 	cd test && iverilog -g2012 -o proto.vvp tb_proto.sv $(TOP) && vvp -n proto.vvp
 	cd test && iverilog -g2012 -o sim.vvp tb_pbe.sv $(TOP) && vvp -n sim.vvp
 	cd test && iverilog -g2012 -o can.vvp tb_can.sv can_ref_node.sv $(TOP) && vvp -n can.vvp
 	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp
 	$(MAKE) test-proto2
+	$(MAKE) test-quad-unit
+	$(MAKE) test-eth
 	$(MAKE) test-ff
 	$(PYTHON) $(V)/spec_boundaries/check_spec_boundaries.py
 	$(MAKE) test-model
@@ -164,6 +171,22 @@ test-verilator: $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/can_ops_ima
 	    || { echo "$$tb: Icarus and Verilator logs differ (a race?)"; exit 1; }; \
 	  tail -1 $(VL_BUILD)/$$tb-icarus.cmp; \
 	done
+
+# 10BASE-T (D93): eth_tx.pbe and eth_rx.pbe against eth_model.sv, a link partner from IEEE 802.3
+.PHONY: test-eth
+test-eth: test/eth_image.hex
+	cd test && iverilog -g2012 -o eth.vvp tb_eth.sv eth_model.sv $(TOP) && vvp -n eth.vvp
+
+# The quad host port (D89): tb_quad (modes, pins, recovery, a program load and a UART loopback),
+# and the logic analyser bench with its whole host side in quad mode (+QUAD, tb_host.svh).
+.PHONY: test-quad-unit test-quad
+test-quad-unit: test/uart_image.hex test/la_image.hex
+	cd test && iverilog -g2012 -o quad.vvp tb_quad.sv $(TOP) && vvp -n quad.vvp
+	cd test && iverilog -g2012 -o la_quad.vvp tb_la.sv $(TOP) && vvp -n la_quad.vvp +QUAD
+
+# Longer: tb_pbe (UART, SPI, I2C, 1-Wire, Modbus, SMBus) with its host in quad mode.
+test-quad: test-quad-unit $(IMAGES:%=test/%_image.hex)
+	cd test && iverilog -g2012 -o sim_quad.vvp tb_pbe.sv $(TOP) && vvp -n sim_quad.vvp +QUAD
 
 # only USB (tb_usb), a quicker loop while working on it
 test-usb: $(IMAGES:%=test/%_image.hex)
@@ -264,7 +287,7 @@ CYCLES ?= 1200
 .PHONY: diff test-model
 
 diff:
-	$(PYTHON) $(GM)/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES)
+	$(PYTHON) $(GM)/differential/run.py --n $(N) --seed $(SEED) --cycles $(CYCLES) $(if $(filter 1,$(ETHERNET)),--ethernet,)
 
 test-model:
 	cd $(GM) && $(PYTHON) -m unittest discover -s model -p 'test_*.py' -v
@@ -333,7 +356,7 @@ formal:
 # Independent library/catalogue packet checks; install their pinned requirements explicitly.
 .PHONY: test-crc-vectors test-protocol-vectors
 test-crc-vectors:
-	$(PYTHON) $(V)/vectors/crc/run.py
+	$(PYTHON) $(V)/vectors/crc/run.py $(if $(filter 1,$(WIDE)),--wide,)
 
 test-protocol-vectors:
 	$(PYTHON) $(V)/vectors/protocols/run.py
@@ -358,3 +381,33 @@ stress-characterize:
 
 stress-strict:
 	$(PYTHON) $(V)/stress/run.py --seed $(STRESS_SEED)
+
+# Exact timeout deadline: catches the retained M19 >= to > fault.
+.PHONY: test-timeout-boundary
+test-timeout-boundary:
+	mkdir -p build
+	iverilog -g2012 -s tb_timeout_boundary -o build/timeout-boundary.vvp ../verify/ethernet/tb_timeout_boundary.sv $(ENG_SRC)
+	vvp -n build/timeout-boundary.vvp
+
+.PHONY: test-parity-boundary
+test-parity-boundary:
+	mkdir -p build
+	iverilog -g2012 -s tb_parity_boundary -o build/parity-boundary.vvp ../verify/ethernet/tb_parity_boundary.sv $(ENG_SRC)
+	vvp -n build/parity-boundary.vvp
+
+# Round 3: independent Ethernet/HDLC verification (long targets remain opt-in).
+.PHONY: test-manchester-idle test-ethernet-corners test-wire-vectors stress-ethernet coverage-ethernet mutate-ethernet
+test-manchester-idle:
+	mkdir -p build
+	iverilog -g2012 -s tb_manchester_idle_wait -o build/mc_idle.vvp ../verify/ethernet/tb_manchester_idle_wait.sv src/pbe_line.sv
+	vvp build/mc_idle.vvp
+test-ethernet-corners:
+	$(PYTHON) ../verify/ethernet/run_directed.py
+test-wire-vectors:
+	$(PYTHON) ../verify/ethernet/run_wire.py --sim verilator
+stress-ethernet:
+	$(PYTHON) ../verify/ethernet/run_wire.py --sim verilator --stress
+coverage-ethernet:
+	$(PYTHON) ../verify/coverage/run.py --jobs 1 --ethernet
+mutate-ethernet:
+	$(PYTHON) ../verify/mutation/ethernet_mutate.py

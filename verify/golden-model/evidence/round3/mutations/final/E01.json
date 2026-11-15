@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/workspace/work/jane_street/.venv/bin/python",
+    "/tmp/ethernet-mutants-83hwj11b/E01/verify/ethernet/run_directed.py"
+  ],
+  "returncode": 1,
+  "seconds": 0.681,
+  "status": "caught",
+  "first_failure": "\"reason\": \"outputs actual=(0, 0, 5), expected=(0, 0, 0)\",",
+  "first_failing_check": null,
+  "log": "E01.log.gz",
+  "executable_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "baseline_archive": "baseline-source-all.tar.gz",
+  "input_manifest": "snapshot-all.json",
+  "input_manifest_sha256": "c1aab173f59e392d1071dc28da27f63ca527ba684a9a1ee4e273894184d01107",
+  "id": "E01",
+  "category": "quad nibble order",
+  "file": "src/pbe_host_spi.sv",
+  "before": "{rx_sh[3:0], mosi_hi, mosi}",
+  "after": "{mosi_hi, mosi, rx_sh[3:0]}",
+  "baseline_sha256": "17137c3bfce0c1f84e6d4650c300c2f9a37e2ba32a2dbba30bf34db990991d08",
+  "mutant_sha256": "b83ff23f330676e614ac89ffb2254a7c8744e1ea488a90223acc718f614a7e33"
+}

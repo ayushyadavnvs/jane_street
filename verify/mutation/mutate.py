@@ -34,7 +34,7 @@ MUTATIONS = [
  ('M04','delay','pbe_engine.sv','dly_cnt <= dly;', "dly_cnt <= dly + 1'b1;"),
  ('M05','tick','pbe_engine.sv','(div_cnt >= clkdiv)', '(div_cnt > clkdiv)'),
  ('M06','FIFO-empty','pbe_fifo.sv','assign empty = (wptr == rptr);','assign empty = (wptr != rptr);'),
- ('M07','FIFO-full','pbe_fifo.sv','(wptr[ADDR_BITS] != rptr[ADDR_BITS]);','(wptr[ADDR_BITS] == rptr[ADDR_BITS]);'),
+ ('M07','FIFO-full','pbe_fifo.sv','(wptr[ADDR_BITS] != mptr[ADDR_BITS]);','(wptr[ADDR_BITS] == mptr[ADDR_BITS]);'),
  ('M08','FIFO-count','pbe_fifo.sv','assign count = wptr - rptr;',"assign count = wptr - rptr + 1'b1;"),
  ('M09','flag-clear','tt_um_pbe.sv','p_clr[7:0] | p_clr[15:8] | host_clr','p_clr[7:0] | p_clr[15:8] | 8\'h00'),
  ('M10','flag-clear','tt_um_pbe.sv','p_clr[7:0] | p_clr[15:8] | host_clr',"8'h00 | 8'h00 | host_clr"),
@@ -45,13 +45,13 @@ MUTATIONS = [
  ('M15','D50-pm-write','pbe_engine.sv',"if (pm_wr) iv <= 1'b0;", "if (1'b0) iv <= 1'b0;"),
  ('M16','D50-pm-write','pbe_engine.sv',"(iv && !exec) ? pc - 1'b1 : pc",'(iv && !exec) ? pc : pc'),
  ('M17','stuff-5-vs-6','pbe_line.sv',"(st == 2'd1) ? 3'd6 : 3'd5", "(st == 2'd1) ? 3'd5 : 3'd6"),
- ('M18','stuff-TX','pbe_line.sv',"wire n_stuff = !tstuff && st != 2'd0 && n_run == run_n;", "wire n_stuff = 1'b0;"),
+ ('M18','stuff-TX','pbe_line.sv',"wire n_stuff = !tstuff && st != 2'd0 && !n_ns && n_run == run_n;", "wire n_stuff = 1'b0;"),
  ('M19','timeout','pbe_engine.sv','tmo_cnt >= timeout','tmo_cnt > timeout'),
  ('M20','pin-ownership','tt_um_pbe.sv','(e_out[15:8] & pin_own) | (e_out[7:0] & ~pin_own)','(e_out[15:8] & ~pin_own) | (e_out[7:0] & pin_own)'),
- ('M21','FIFO-accept','pbe_fifo.sv',"if (pop && !empty) rptr <= rptr + 1'b1;", "if (pop) rptr <= rptr + 1'b1;"),
- ('M22','restart-side-effect','pbe_engine.sv','wire exec = issue && ready && !restart;','wire exec = issue && ready;'),
+ ('M21','FIFO-accept','pbe_fifo.sv',"else if (pop && !empty) begin", "else if (pop) begin"),
+ ('M22','restart-side-effect','pbe_engine.sv','wire exec = issue && ready && !restart && !lv_hit;','wire exec = issue && ready && !lv_hit;'),
  ('M23','parity','pbe_engine.sv','no_par || (par_out ^ odd)','no_par || !(par_out ^ odd)'),
- ('M24','FIFO-ready','pbe_engine.sv','OP_FIFO: ready = arg_hi ? !rx_full : !tx_empty;','OP_FIFO: ready = arg_hi ? rx_full : tx_empty;'),
+ ('M24','FIFO-ready','pbe_engine.sv',"OP_FIFO: ready = arg_hi ? !rx_full : (arg[7:6] != 2'd0 || !tx_empty);","OP_FIFO: ready = arg_hi ? rx_full : (arg[7:6] != 2'd0 || tx_empty);"),
 ]
 
 def digest(path):
@@ -114,7 +114,7 @@ def main():
     ap.add_argument('--cycles', type=int, default=600)
     ap.add_argument('--seed', default='0x504245')
     ap.add_argument('--only', nargs='*', help='IDs, for reproducible selected reruns')
-    ap.add_argument('--out', type=Path, default=ROOT/'verify/golden-model/evidence/round2/mutations')
+    ap.add_argument('--out', type=Path, default=PBE/'build/mutations')
     ap.add_argument('--keep-scratch', action='store_true')
     ap.add_argument('--allow-comment-changes', action='store_true', help='Allow concurrent comment-only RTL edits; HDL token hash must stay identical')
     args = ap.parse_args()

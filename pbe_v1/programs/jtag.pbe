@@ -6,8 +6,8 @@
 ; Timing (1149.1): TMS and TDI change only while TCK is low, one tick after its falling edge;
 ;   TDO is sampled while TCK is high, from the rising edge on (the target changes TDO on the
 ;   falling edge). One TCK period is 5 ticks: high 2, low 3. CLKDIV = 0 adds the taken jump's
-;   fetch clock to the low phase: 6 clocks, TCK = 8 MHz at 48 MHz. CLKDIV >= 1:
-;   TCK = 48 MHz / (5 * (CLKDIV + 1)), e.g. 4.8 MHz at CLKDIV = 1, 1 MHz at CLKDIV = 9.
+;   fetch clock to the low phase: 6 clocks, TCK = 10 MHz at 60 MHz. CLKDIV >= 1:
+;   TCK = 60 MHz / (5 * (CLKDIV + 1)), e.g. 6 MHz at CLKDIV = 1, 1 MHz at CLKDIV = 11.
 ;   TCK may stop low between records (between bytes), which 1149.1 allows.
 ;
 ; Host protocol: records in the TX FIFO, each [command] [n - 1] [bits], n = 1..8 bits, LSB first.

@@ -17,7 +17,7 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `src/pbe_host_spi.sv` | Host register port (SPI peripheral, mode 0) |
 | `src/pbe_fifo.sv` | 16 × 8-bit FIFO |
 | `tools/pbe_asm.py` | Assembler: `.pbe` text → 512-word hex image (engine 0's 256 words, then engine 1's), `prog.pbe@engine:word`; labels relative to each program's start |
-| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`) |
+| `programs/*.pbe` | UART TX, UART RX, SPI controller and peripheral, I2C controller (with SMBus PEC) and target, 1-Wire controller, Modbus RTU master, WS2812 LEDs, USB low-speed device, CAN 2.0A node (`can_node.pbe`), JTAG controller (`jtag.pbe`), SWD host (`swd.pbe`), PS/2 host (`ps2_host.pbe`), 24-bit GPIO expander (`gpio_expander.pbe`), logic analyser (`la_capture.pbe`) and waveform generator (`wavegen.pbe`), quad SPI controller (`qspi_flash.pbe`), HDLC transmitter and receiver (`hdlc_tx.pbe`, `hdlc_rx.pbe`), 10BASE-T Ethernet transmitter and receiver (`eth_tx.pbe`, `eth_rx.pbe`) |
 | `test/tb_pbe.sv` | End-to-end testbench, drives only the chip's pins (waveforms: `vvp sim.vvp +vcd`) |
 | `test/tb_proto.sv` | Second end-to-end testbench: WS2812, SPI peripheral, I2C target |
 | `test/tb_usb.sv` | USB: a host model enumerates the device; a firmware model on the host port |
@@ -26,11 +26,14 @@ and read 8 bidirectional pins. UART, SPI, I2C and others are programs loaded at 
 | `test/tb_gpio.sv` | 24-bit GPIO expander against `hc_chain.sv` (74HC595 and 74HC165 models, 3 deep) (D85) |
 | `test/tb_la.sv` | Logic analyser and waveform generator against an independent stimulus and timestamps (D86) |
 | `test/tb_qspi.sv` | Quad SPI controller against `qspi_flash_model.sv` (a NOR flash: 9F, 03, 0B, 6B, EB, 06, 05, 32) (D87) |
-| `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ) (D88) |
+| `test/tb_hdlc.sv` | HDLC transmitter and receiver against `hdlc_model.sv` (ISO/IEC 13239, NRZ and NRZI) (D88, D94) |
+| `test/tb_eth.sv` | 10BASE-T: `eth_tx`/`eth_rx` against `eth_model.sv` (an IEEE 802.3 link partner): frames of 64-1518 bytes both ways, clock offsets, loopback, link pulses, underrun and overrun (D93) |
+| `test/tb_quad.sv` | The quad host port: modes, pins, recovery, burst rates, a program load and a UART loopback in quad mode (D89) |
 | `test/tb_host.svh` | Host-port helpers both testbenches include |
 | `test/tb_engine_restart.sv` | Unit test: restart cancels the instruction in flight |
 | `test/tb_engine_ops.sv` | Unit test: `JEQ`/`JNE`/`MOV`, inverted CRC, CRC good value (USB CRC16) |
-| `test/tb_line.sv` | Unit test: the line coder in USB, CAN and HDLC styles against reference models |
+| `test/tb_crc.sv` | Unit test: the CRC unit at 32 bits (reveng check values, Ethernet FCS and residue) and bit-identity with the 16-bit unit (`ref_pbe_crc16.sv`) (D91) |
+| `test/tb_line.sv` | Unit test: the line coder in USB, CAN, HDLC and Manchester (10BASE-T) styles against reference models |
 | `test/tb_page.sv` | `PAGE` (D83): a 202-word program over four pages, the timeout vector, stop and restart, host writes, cross-page timing |
 | `test/tb_fetch.sv` | Instruction fetch: instruction timing at CLKDIV 0, 1, 3; host writes to program memory picked up; separate memories, pointer carries, `START_PC` 252 wrapping, the refetch cost, the reset refetch (D82) |
 | `synth/synth.ys.in` | Yosys script for an area estimate with IHP standard cells |
@@ -43,6 +46,8 @@ make test-proto                            # only tb_proto (WS2812, SPI peripher
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-proto2                           # only the D84-D88 protocols (PS/2, GPIO expander, logic analyser, QSPI, HDLC)
+make test-eth                               # 10BASE-T (tb_eth, D93)
+make test-quad                              # the quad host port (tb_quad, tb_la +QUAD) and tb_pbe with its host in quad mode (D89)
 make test-ff                               # tb_usb and tb_proto on the flip-flop fallback (PBE_PMEM_FF, also in make test)
 make test-verilator                        # tb_line and 5 more under Verilator and Icarus: both pass, identical logs (D80)
 make synth                                 # area of the standard cells, IHP library in ../ihp_lib; the SRAM macros
@@ -56,9 +61,15 @@ make timing                                # critical path, slow corner
 | Pin | Use |
 |---|---|
 | `ui_in[0..2]` | host SCK, CS_n, MOSI (host SCK at most clk / 8) |
-| `uo_out[0]` | host MISO |
-| `uo_out[1]` | IRQ |
-| `uo_out[7:2]` | status: running, RX has data, TX full (per engine) |
+| `ui_in[3..5]` | host D1..D3 in quad mode (D89; MOSI is D0) |
+| `uo_out[0]` | host MISO (Q0 in quad mode) |
+| `uo_out[1]` | IRQ (Q1 in quad mode while CS_n is low) |
+| `uo_out[3:2]` | running (Q3, Q2 in quad mode while CS_n is low) |
+| `uo_out[7:4]` | status: RX has data, TX full (per engine), in both modes |
+
+**Quad host mode (D89):** `HOSTCFG` (0x50) bit 0 = 1 switches the port to 4 bits per SCK in both
+directions from the next CS_n high (a byte is 2 SCK cycles, high nibble first): 16 clocks per
+byte instead of 64. Back to single lane: write 0, or 8 SCK pulses with CS_n high, or reset.
 | `uio[7:0]` | protocol pins |
 
 The full register map is in the header comment of `src/tt_um_pbe.sv`.
@@ -110,7 +121,7 @@ runs from an instruction register and must fetch the jump's target first (D50).
 | 100 | `SET X/OSR, n` | Load the loop counter or the OSR |
 | 101 | `PULL [NOWAIT]` / `PUSH` / `MARK` / `REWIND` | TX FIFO → OSR, or ISR → RX FIFO (block when empty/full); `NOWAIT`: an empty TX FIFO gives 0xFF; `MARK`/`REWIND` hold the TX FIFO read position and read again from it, for retransmission (D70) |
 | 110 | `FLAG n, SET/CLR/IRQ`, `MOV dst, src` | Shared flags between engines, or interrupt the host. Action 3 is `MOV` between X, OSR and ISR (source `0` = zero); with no destination it does nothing: the assembler's `NOP` (`0xD800`) |
-| 111 | `CRCRST`, `OSRCRC LO/HI [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); `PAGE p` (param[5] = 1, p = param[1:0], D83): the next instruction's jump target is in page p |
+| 111 | `CRCRST`, `OSRCRC LO/HI/B2/B3 [, INV] [, LEFT]`, `STAT`, `JCRCBAD label`, `JEQ label`, `JNE label`, `JLINE label` | Restart the CRC (and clear the line error); load a CRC byte (inverted with `INV`) into the OSR; ISR ← {line error, RX overflow, timeout happened, CRC ok, parity error}; jump if the packet is bad (CRC not ok, or a line error since the last `CRCRST`); jump if ISR == / != OSR; jump if the line coder saw the end of a frame (and clear it). `STAT` also gives [5] arbitration lost, [6] bit error, [7] frame sent; `LEFT` left-justifies the CRC to 16 bits (D71). Sub-op 7: `LINECTL W1..W8 [, ARB]` / `LINECTL STUFFOFF|STUFFON|ERROR` for the bit-synchronous coder (param[5] = 0, D67); `PAGE p` (param[5] = 1, p = param[1:0], D83): the next instruction's jump target is in page p |
 
 **Timeout:** if `WAIT`, `PULL` or `PUSH` stays blocked for `TIMEOUT` ticks (engine register
 +C/+D, 0 = never), the engine abandons it and jumps to `TIMEOUT_PC` (`LINE_CFG[5:0]`, +E).
@@ -120,6 +131,12 @@ reversed output, fed by `OUT` bits, fed by `IN` bits. "CRC ok" means the registe
 `CRC_GOOD` (second page, default 0; USB: 0x800d, the residual of its inverted CRC16). The
 host can restart it and read the status through `STATUS` (+F), and **reading +9/+A returns the
 CRC's current value**, which is how the host checks CRCs that are sent inverted.
+**CRCs of 17-32 bits (D91):** second page +8/+9 `CRC_POLY_2/3` (polynomial bits 23..16, 31..24;
+reads give the CRC value's bits 23..16, 31..24), +A/+B `CRC_GOOD_2/3`, +C `CRC_CFG2` [0] = width
+bit 4 (width − 1 = {`CRC_CFG2[0]`, `CRC_CFG[3:0]`}). All reset to 0, so the CRCs of up to 16
+bits are unchanged. `OSRCRC B2`/`B3` load the upper bytes (`LO`/`HI` are `B0`/`B1`). CRC-32
+(Ethernet FCS, zip, PNG): poly 0x04C11DB7, `CRC_CFG2` 1, `CRC_CFG` 0x3F | feed bits (init all
+ones, reversed), sent inverted, `CRC_GOOD` 0xC704DD7B (the residue; 0xDEBB20E3 reflected).
 
 **Parity:** `LINE_CFG[7]` selects odd parity; `LINE_CFG[6]` means no parity: `OUTPAR` then sends 1
 (a second stop bit, for 8N2) and no receive parity error is reported.
@@ -129,9 +146,19 @@ that does not keep up finds out. Write `STATUS[2]` = 1 to clear it.
 
 **Line coder** (second register page, 0x30 for engine 0, 0x40 for engine 1: +0 `LINE`, +1 `SYNC`,
 +2/+3 `CRC_GOOD`):
-- **`LINE` fields:** [1:0] mode (0 off, 1 NRZ, 2 NRZI); [3:2] stuffing (0 none, 1 after 6 ones,
-  2 after 5 ones, 3 after 5 equal bits); [4] pair (pin base + 1 is the complement, both low =
-  SE0 ends a frame); [5] byte transfers.
+- **`LINE` fields:** [1:0] mode (0 off, 1 NRZ, 2 NRZI, 3 Manchester); [3:2] stuffing (0 none,
+  1 after 6 ones, 2 after 5 ones, 3 after 5 equal bits; none in Manchester); [4] pair (pin
+  base + 1 is the complement, both low = SE0 ends a frame, except in Manchester); [5] byte
+  transfers; [6] flag-delimited frames (D94: a stuffing violation ends a frame at either level
+  and reception goes on, for HDLC); [7] Manchester polarity (0: IEEE 802.3, a 1 is low then high).
+  `LINECTL STUFFOFF`/`STUFFON` switch stuffing off and on for the units queued after them (D94).
+- **Manchester (D90):** half a bit of the complement, then half a bit of the value. After `END`
+  the line is held high for 3 bit times, then released (10BASE-T's TP_IDL, DALI's stop). The
+  receiver recovers the clock from the mid-bit transitions (sampling the pin on both clock
+  edges), starts a frame at the first transition after idle, hunts for `SYNC` (Ethernet:
+  0xD5, the SFD), and ends it when there has been no mid-bit transition for 2 bit times
+  (frame end only for a frame whose `SYNC` was found, so link pulses are ignored). At least
+  4 clocks per bit (6 for 10 Mbit/s at 60 MHz).
 - **Timing:** when it is on, `CLKDIV` is the bit time − 1, and instructions run every clock.
 - **Instructions:**
   - `OUT`/`OUTOD` hand it a byte (or a bit) and wait while it is busy; `PIN p, END` ends the
@@ -181,8 +208,8 @@ Each I2C byte is two TX FIFO bytes, `[data] [ack]`, and returns two RX FIFO byte
 Set `FLAG0` for a START or repeated START (it happens when the next byte is queued) and `FLAG1`
 for a STOP (it happens right away; the engine clears the flag when done). Only set either while
 the TX FIFO is empty. Clock stretching is handled by `WAIT scl, HIGH`. SCL = tick / 7, low for
-4 ticks and high for 3. At 48 MHz: `CLKDIV` = 17 for fast mode (381 kHz), 68 for standard mode
-(99 kHz).
+4 ticks and high for 3. At 60 MHz: `CLKDIV` = 21 for fast mode (390 kHz), 85 for standard mode
+(100 kHz) (17 and 68 at 48 MHz, D92).
 
 **SMBus PEC:** set the engine's CRC unit to CRC-8: `CRC_POLY` = 0x07, `CRC_CFG` = 0x87 (8 bits,
 init 0, fed by `IN` bits, which see every byte on the bus; ACK bits are `NOCRC`). Restart the
@@ -214,13 +241,13 @@ Mode 0, MSB first. Pins: sclk = pin base, mosi = +1, miso = +2, cs = +3 (active 
 `CLKDIV` 0, `JMP_PIN` = 3, `LINE_CFG` = 0x01 (timeout routine at word 1), `TIMEOUT` a little
 longer than the longest SCLK high phase (64 clocks in the test). Queue reply bytes before they
 are due (before the previous byte's last rising edge); with nothing queued the reply is 0xFF.
-Every byte the controller sends arrives in the RX FIFO. SCLK up to 2 MHz at 48 MHz. The first
+Every byte the controller sends arrives in the RX FIFO. SCLK up to 2.5 MHz at 60 MHz. The first
 SCLK edge must come ≥ 250 ns after CS falls. CS must stay high ≥ `TIMEOUT` ticks between
 transactions: that is how the engine sees the end, and when it releases MISO.
 
 ## WS2812 host protocol (`programs/ws2812.pbe`)
 
-`CLKDIV` = 1 at 48 MHz (tick 41.7 ns), OUT MSB first, data = pin base. Queue 3 bytes per LED in
+`CLKDIV` = 1 at 60 MHz (tick 33.3 ns; the delays were retuned for it, D92), OUT MSB first, data = pin base. Queue 3 bytes per LED in
 the order the LEDs expect (G, R, B), keeping the FIFO from running dry: burst-write the FIFO
 register and pause while the TX-full pin (`uo_out[6]` for engine 0) is high. When the host
 stops, the line stays low and the LEDs latch after 50 µs.
@@ -230,11 +257,11 @@ stops, the line stays low and the LEDs latch after 50 µs.
 Endpoint 0 (control transfers), one engine. Pins: D− = pin base (with an external 1.5 kΩ
 pull-up), D+ = pin base + 1.
 
-**Settings at 48 MHz:**
+**Settings at 60 MHz:**
 
 | Register | Value |
 |---|---|
-| `CLKDIV` | 31 |
+| `CLKDIV` | 39 (40 clocks per bit; 31 at 48 MHz) |
 | `SHIFT` | 0 (LSB first) |
 | `CRC_POLY` | 0x8005 |
 | `CRC_CFG` | 0xFF |
@@ -285,8 +312,8 @@ IEEE 1149.1 controller in 42 words. TCK = pin base, TMS = + 1, TDI = + 2, TDO = 
 (`SHIFT` = 0). Records `[cmd] [n − 1] [bits]`, n = 1..8: `0` clocks TMS = bits (TDI kept), `1`
 shifts n TDI bits with TMS = 0, `2` the same with TMS = 1 on the last bit. Each shift record
 returns a byte with the n TDO bits in its top bits (RX >> (8 − n)); longer scans are several
-records. TDI/TMS change one tick after TCK falls; TDO is read while TCK is high. TCK = 8 MHz at
-CLKDIV = 0, else 48 MHz / (5 (CLKDIV + 1)). Board: pull-up on TDO, pull-down on TCK (D75).
+records. TDI/TMS change one tick after TCK falls; TDO is read while TCK is high. TCK = 10 MHz at
+CLKDIV = 0, else 60 MHz / (5 (CLKDIV + 1)). Board: pull-up on TDO, pull-down on TCK (D75).
 
 ## SWD host protocol (`programs/swd.pbe`)
 
@@ -296,8 +323,8 @@ on SWCLK); LSB first, `LINE_CFG` = 0 (even parity). Records: `[0x00] [b]` 8 host
 `[0x01] [req]` read; `[0x02] [req] [d0..d3] [p]` write (`req` = the 8-bit request with its
 parity, `p` bit 0 = the data parity). RX: `[ack]` (0x20 OK, 0x40 WAIT, 0x80 FAULT, 0xE0 no
 response), and for an OK read `[d0..d3] [status]` (bit 0 = parity error, checked by the
-engine). WAIT/FAULT: no data phase, a write's data bytes are dropped. SWCLK = 8 MHz at
-CLKDIV = 0, else 48 MHz / (5 (CLKDIV + 1)) (D76).
+engine). WAIT/FAULT: no data phase, a write's data bytes are dropped. SWCLK = 10 MHz at
+CLKDIV = 0, else 60 MHz / (5 (CLKDIV + 1)) (D76).
 
 Both are tested by `tb_debug` against target models written from the standards, at CLKDIV 0
 and 0xFFFF and both at once, and by sigrok's `jtag` and `swd` decoders (`make sigrok-debug`,
@@ -365,7 +392,7 @@ Tested by `tb_ps2` against a keyboard model (`ps2_dev.sv`) and by sigrok's `ps2`
 
 24 outputs (three 74HC595) and 24 inputs (three 74HC165) in 33 words (D85). Pins: SCK = pin
 base (595 SRCLK and 165 CLK), SDO = + 1 (595 SER), SDI = + 2 (165 QH), RCLK = + 3, LD# = + 4
-(165 SH/LD#). `SHIFT` = 0x03, `CLKDIV` 0 (SCK 6.86 MHz) or n ≥ 1 (SCK = 48 MHz / (6 (n + 1))).
+(165 SH/LD#). `SHIFT` = 0x03, `CLKDIV` 0 (SCK 8.57 MHz) or n ≥ 1 (SCK = 60 MHz / (6 (n + 1))).
 
 - One exchange per record: TX `[o0] [o1] [o2]`, RX `[i0] [i1] [i2]`. o0 ends in the last 595
   of the chain, o2 in the first; i0 is the first 165 (whose QH is SDI), i2 the last; bit 7 is
@@ -404,30 +431,47 @@ pin base, CS# = + 1, IO0..IO3 = + 2..5 (pull-ups on IO0-IO3). `SHIFT` = 0x03, `C
   RX: the bytes read.
 - 0x6B (1-1-4): `[01][03][6B][A2][A1][A0] [05][07] [04][n-1] [00]`;
   0xEB (1-4-4): `[01][00][EB] [03][03][A2][A1][A0][00] [05][03] [04][n-1] [00]`.
-- SCK at `CLKDIV` 0: 16 MHz single write, 9.6 MHz single read, 8 MHz quad write, 6 MHz quad
-  read (2.8 MB/s with the loop); long reads pause SCK while the RX FIFO is full.
+- SCK at `CLKDIV` 0 (60 MHz): 20 MHz single write, 12 MHz single read, 10 MHz quad write,
+  7.5 MHz quad read (3.5 MB/s with the loop); long reads pause SCK while the RX FIFO is full.
 
 Tested by `tb_qspi` against a flash model, and by sigrok's `spi` decoder on the single-line
 phase (`make sigrok-proto2 PROTO2=qspi`).
 
 ## HDLC host protocol (`programs/hdlc_tx.pbe`, `programs/hdlc_rx.pbe`)
 
-HDLC/SDLC framing in NRZ (D88): flags, zero-bit insertion and deletion (the line coder's
-"after 5 ones" stuffing), CRC-16/X.25, aborts. Transmit on one engine, receive on the other.
-Both: `CLKDIV` = bit time − 1, `LINE` = 0x09, `SYNC` = 0, LSB first, `CRC_POLY` = 0x1021,
-`LINE_CFG` = 0x40.
+HDLC/SDLC framing in NRZ or NRZI (D88, D94): flags, zero-bit insertion and deletion (the line
+coder's "after 5 ones" stuffing), CRC-16/X.25, aborts. Transmit on one engine, receive on the
+other. Both: `CLKDIV` = bit time − 1, `SYNC` = 0, LSB first, `CRC_POLY` = 0x1021, `LINE_CFG` = 0x40.
 
-- **Transmit** (`CRC_CFG` 0x7F; TXD = pin base): TX `[n-1][n bytes]` per frame; the engine adds
-  the FCS and the flags (shared between back-to-back frames; mark idle after). Up to 4 Mbit/s.
-- **Receive** (`CRC_CFG` 0x9F, `CRC_GOOD` 0xD0F9, `JMP_PIN` 0; RXD = pin base): first write one
-  byte d = ceil((bit time in clocks / 2 + 4) / 10) to this engine's TX FIFO (the abort check).
-  RX: each frame's bytes (FCS included; 0x7E doubled), then `[0x7E][status]`: 0x02 good, other
-  values ≤ 0x1F CRC error / overflow / line error, 0x40 abort, 0x80 not whole bytes. Up to
-  2 Mbit/s.
-- NRZI is not possible without hardware (D88: a pbe_line `LINECTL STUFFOFF/STUFFON` and a
-  "violation ends the frame at either level" option).
+- **Transmit** (`LINE` 0x09 NRZ or 0x0A NRZI; `CRC_CFG` 0x7F; TXD = pin base): TX `[n-1][n bytes]`
+  per frame; the engine adds the FCS and the flags, sent unstuffed with `LINECTL STUFFOFF` (shared
+  between back-to-back frames; flags fill the time between frames). Up to 5 Mbit/s at 60 MHz.
+- **Receive** (`LINE` 0x49 NRZ or 0x4A NRZI: `LINE[6]` flag-delimited; `CRC_CFG` 0x9F, `CRC_GOOD`
+  0xD0F9; RXD = pin base): RX: each frame's bytes (FCS included; 0x7E doubled), then
+  `[0x7E][status]`: 0x02 good, other values ≤ 0x1F CRC error / overflow / line error, 0x40
+  abort, 0x80 not whole bytes. Up to 2.5 Mbit/s at 60 MHz.
 
 Tested by `tb_hdlc` against an HDLC model (no stock sigrok decoder exists).
+
+## 10BASE-T Ethernet host protocol (`programs/eth_tx.pbe`, `programs/eth_rx.pbe`)
+
+IEEE 802.3 clause 14 at 10 Mbit/s, 60 MHz clock (D93): engine 0 transmits (52 words), engine 1
+receives (17 words), full duplex. The host must stream at 1.25 MB/s: use the quad host port
+(`HOSTCFG` = 1, D89).
+- **Engine 0:** TD+ = pin base, TD- = + 1 (to the line driver). `CLKDIV` 5, `LINE` 0x33
+  (Manchester, pair, bytes), `SYNC` 0, `CRC_POLY` 0x04C11DB7 (+9/+A and second page +8/+9),
+  `CRC_CFG2` 1, `CRC_CFG` 0x7F, `TIMEOUT` 60000 (1 ms), `LINE_CFG` 0x41. TX FIFO: per frame
+  `[n][n bytes]...` (n = 1..255) then `[0]`: destination, source, type/length, payload, padded to
+  at least 60 bytes by the host; the engine adds preamble, SFD and FCS. RX FIFO: one status byte
+  per frame (bit 4 underrun, bit 2 aborted after 1 ms without data). Link pulses every 16 ms
+  while idle.
+- **Engine 1:** RD = pin base (the receive comparator). `CLKDIV` 5, `LINE` 0x23 (Manchester,
+  bytes), `SYNC` 0xD5, the same CRC with `CRC_CFG` 0xBF, `CRC_GOOD` 0xC704DD7B (second page
+  +2/+3/+A/+B), `LINE_CFG` 0x40. RX FIFO: the frame's bytes with the FCS (a data 0x7E twice),
+  then `[0x7E][status]`: 0x02 = FCS ok; bit 4 = a byte lost (overrun), bit 3 = the FIFO was full.
+- **Limits:** full duplex only (no CSMA/CD: set the switch port to 10 Mbit/s full duplex), no
+  auto-negotiation, no receive polarity correction. Tested by `tb_eth` against `eth_model.sv`, a
+  link partner written from 802.3 (`make test-eth`).
 
 ## Status
 
@@ -480,7 +524,7 @@ Tested by `tb_hdlc` against an HDLC model (no stock sigrok decoder exists).
      The host model checks the device's CRCs and stuffing itself. Every reply starts 2–7.5 bit
      times after the host's EOP (measured 2.97–3.05), and host and device never drive the bus
      together.
-  - The testbenches run at 48 MHz, the planned clock.
+  - The testbenches run at 60 MHz, the planned clock (48 MHz until D92).
   - Unit tests:
     - a restart in the same cycle as an instruction cancels its side effects;
     - `JEQ`/`JNE`/`MOV`, the inverted CRC and the CRC good value (USB CRC16 `dd 94`, residual
