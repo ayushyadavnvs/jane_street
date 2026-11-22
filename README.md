@@ -24,10 +24,10 @@ words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-
 
 | # | Protocol | Program (words) | What is tested |
 |---|---|---|---|
-| 1 | UART TX and RX | `uart_tx` (8), `uart_rx` (8) | Loopback between the two engines; also on the routed netlist (cocotb) |
-| 2 | SPI controller | `spi_ctrl` (16) | Against a mode-0 peripheral model |
-| 3 | SPI peripheral | `spi_periph` (21) | Driven by a controller model at 2 MHz |
-| 4 | I2C controller | `i2c_ctrl` (34) | Write, read with repeated START, NACK, clock stretching |
+| 1 | UART TX and RX | `uart_tx` (8), `uart_rx` (8) | Loopback between the two engines; 9600 and 115200 baud against an exact-rate model, ±2 % senders (D115); also on the routed netlist (cocotb) |
+| 2 | SPI controller, modes 0-3 | `spi_ctrl` (16), `spi_ctrl_m1`-`m3` (16 each) | Against a peripheral model per mode, which also checks the clock's idle level (D114) |
+| 3 | SPI peripheral, modes 0-3 | `spi_periph` (21), `spi_periph_m1`-`m3` (20-21) | Driven by a controller model per mode at 2 MHz (D114) |
+| 4 | I2C controller | `i2c_ctrl` (34) | Write, read with repeated START, NACK, clock stretching; 100 and 400 kHz with UM10204 timing checked (D115) |
 | 5 | SMBus PEC | `i2c_ctrl` + CRC unit as CRC-8 | Write Word and Read Word with PEC checked both ways |
 | 6 | I2C target | `i2c_target` (58) + `i2c_watch` (8) | A fast-mode controller reading and writing the target |
 | 7 | 1-Wire controller | `onewire_ctrl` (36) | Two DS18B20-style devices: Search ROM, CRC-8, CONVERT T with strong pull-up |
@@ -68,7 +68,7 @@ The design is checked by several independent layers; details in [`verify/README.
 
 | Layer | What it shows |
 |---|---|
-| Directed testbenches (`pbe_v1/test`, 22 benches) | Every protocol end to end against a model of the device on the other side of the wire |
+| Directed testbenches (`pbe_v1/test`, 32 benches) | Every protocol end to end against a model of the device on the other side of the wire |
 | Gate level | The full testbenches on the routed netlist from the Tiny Tapeout flow (`gl_regression`), and the cocotb test in `gl_test` |
 | Golden model + random differential testing | A Python model written from the specification, compared every clock with the RTL on random programs and host traffic (the Ethernet round: 1,000 seeds, about 21 million clocks) |
 | Independent decoders and bus models | sigrok's stock decoders (UART, SPI, I2C, 1-Wire, Modbus, WS2812, USB, CAN, JTAG, SWD, PS/2) and third-party cocotb bus models agree with the testbenches |
@@ -80,8 +80,8 @@ The design is checked by several independent layers; details in [`verify/README.
 | Lint and CI | Verilator `-Wall` lint, the unit benches under Verilator and Icarus with identical logs (a race check, D80), and `make test` on every push |
 
 Every design decision is recorded with its alternatives in
-[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (104 so far), and every bug with the code
-before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (174 so far).
+[`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) (115 so far), and every bug with the code
+before and after and the test that caught it in [`docs/BUG_LOG.md`](docs/BUG_LOG.md) (187 so far).
 A one-clock difference between Icarus and Verilator in one CAN unit test turned out to be a
 testbench race (BUG-102); fixing it also exposed a real reset bug in the line coders (BUG-104).
 

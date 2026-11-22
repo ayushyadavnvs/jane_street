@@ -14,7 +14,7 @@ and `verify/golden-model/REPORT.md` (the verification record). Last updated 2026
 - **Deadline:** 18 January 2027. Planned RTL freeze: about 3 January.
 - **Clock:** **60 MHz** on `main` (D92), met in layout at every corner (GDS run 43648964222).
 
-## What `main` contains (after merging `feature/ethernet`)
+## What `main` contains
 
 - Two engines, each with its own **256-word IHP SRAM** program memory (D82) and the `PAGE` prefix
   for programs over 64 words (D83); CRC unit (up to 32 bits, D91), parity, timeouts, 16-byte
@@ -26,10 +26,16 @@ and `verify/golden-model/REPORT.md` (the verification record). Last updated 2026
 - **Engine-to-engine FIFO link** (D102, off by default): engine e's RX FIFO feeds the other
   engine's TX FIFO, so one engine can hand bytes to the other; the **UART ↔ I2C bridge** on it
   (D103, `tb_bridge`); coverage follow-ups (D104); BUG-166–174.
-- **19 protocols as programs** (see the table in `README.md`): UART, SPI controller and
-  peripheral, I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812, USB low-speed
-  device, CAN 2.0A (2.0B tolerant), JTAG, SWD, PS/2 host, 24-bit GPIO expander, logic analyser /
-  waveform generator, quad SPI, HDLC (NRZ and NRZI), 10BASE-T Ethernet.
+- **27 protocols as programs** (see the table in `README.md`): UART, SPI controller and
+  peripheral (modes 0-3), I2C controller and target, SMBus PEC, 1-Wire, Modbus RTU, WS2812, USB
+  low-speed device, CAN 2.0A (2.0B tolerant), JTAG, SWD, PS/2 host, 24-bit GPIO expander, logic
+  analyser / waveform generator, quad SPI, HDLC (NRZ and NRZI), 10BASE-T Ethernet, and the blind
+  benchmark's DMX512, MIDI, LIN, IR NEC, Wiegand, I2S, DShot600 and MDIO.
+- **Blind generality benchmark** (`docs/GENERALITY.md`, D106-D115, BUG-175-187): 8 protocols
+  listed and committed before any attempt (856050e); all 8 run as programs with no RTL change,
+  4 with a stated limit. The limits point to four general ISA upgrades (below). Of all 27
+  protocols, 20 are programs written after their hardware existed; only CAN needs
+  protocol-specific hardware.
 - **Last GDS run on main's hardware** (run 43698688003, commit d5e4461, 8x4, 60 MHz): gds,
   precheck, gl_test and gl_regression passed; LVS, antenna and routing DRC clean; setup slack
   slow / typ / fast +1.19 / +2.53 / +3.36 ns, hold +0.60 / +0.29 / +0.11 ns; utilization 36.9 %
@@ -67,12 +73,15 @@ Nothing is waiting to be merged.
 ## Plan, in order (one background session at a time)
 
 1. Verification of the FIFO link and the bridge (`docs/BRIDGE_VERIFICATION_TODO.md`).
-2. **Owner to decide:** build the CAN-to-CAN gateway (designed in that file, §7; programs and a
-   testbench only, no new hardware).
-3. **Blind generality benchmark: done on `feature/blind`** (`docs/GENERALITY.md`, D106-D115): DMX512, MIDI, LIN, IR NEC, Wiegand, I2S, DShot600 and MDIO all run as programs with no RTL change (four with a stated limit), plus SPI modes 1-3, and UART at 9600/115200 baud and I2C at 100/400 kHz (CLKDIV only). Original item: about 10 protocols never targeted (e.g. DMX512, MIDI, LIN, IR
-   NEC/RC5, DALI, I2S, SDI-12, Wiegand, DShot, SSI/BiSS, MDIO, Microwire), programs only, no RTL
-   change; record which work and why the others don't.
-4. General ISA upgrades guided by the benchmark: multi-pin IN/OUT, side-set, an up-counter/compare.
+2. CAN-to-CAN gateway: not planned (owner, 15 November); its design stays in
+   `docs/BRIDGE_VERIFICATION_TODO.md` §7.
+3. **Owner to decide: ISA upgrades from the benchmark's limits** (`docs/GENERALITY.md`), as
+   one batch with one GDS run, by about mid-December, or none: a jump on a data bit (IR NEC
+   transmit's scratch pin), an add-with-carry or up-counter (LIN's checksum and parity on the
+   host), a wait on either of two pins (Wiegand on both engines), side-set (hand-balanced timing
+   in I2S and DShot). Room: 36.9 % utilization, +1.19 ns slow-corner setup slack.
+4. Check the 49 max-slew and 11 max-cap warnings of the last GDS run (which nets, and whether
+   they cost timing margin).
 5. Demos: live protocol monitor and fault injection (programs).
 6. FPGA prototype on the KV260 (Kria-PYNQ, Python host library, real devices), including an
    Ethernet demo (RJ45 jack with magnetics, a fast comparator, Wireshark on a PC).
@@ -81,11 +90,10 @@ Nothing is waiting to be merged.
 
 ## Waiting on the owner
 
-- Whether to build the CAN-to-CAN gateway now.
+- Whether to make the ISA upgrades (item 3 of the plan).
 - The UltraScale+ board model, and whether Kria-PYNQ on the KV260 is OK.
 - Ethernet demo parts: RJ45 jack with integrated magnetics (e.g. HR911105A), a fast comparator
   (e.g. TLV3501).
-- Whether to delete `verify/ethernet-download`.
 - Reply from Jane Street on how supporting material (docs, verification reports, videos) is
   submitted.
 - Paper: which paper and venue (methodology, architecture or open-silicon), if any.

@@ -35,12 +35,16 @@ FALLBACK = {
 #   b: a program on the general hardware (the first protocols shaped that hardware)
 #   c: a program that uses hardware added later, but general and shared by other protocols
 #   d: a program that needs protocol-specific hardware
-GROUP = {1: "b", 2: "b", 3: "b", 4: "b", 5: "b", 6: "b", 7: "b", 8: "b", 9: "b",
-         10: "c", 11: "d", 12: "a", 13: "a", 14: "a", 15: "a", 16: "a", 17: "a", 18: "a", 19: "c"}
+GROUP = {1: "b", 2: "b", 3: "a", 4: "b", 5: "a", 6: "a", 7: "a", 8: "c", 9: "a",
+         10: "c", 11: "d", 12: "a", 13: "a", 14: "a", 15: "a", 16: "a", 17: "a", 18: "a", 19: "c",
+         20: "a", 21: "a", 22: "a", 23: "a", 24: "a", 25: "a", 26: "a", 27: "a"}
+# Groups as in docs/GENERALITY.md (from each protocol's decision entry); 20-27 are the blind
+# benchmark, listed before any attempt.
+BLIND = set(range(20, 28))
 GROUP_LABEL = {
-    "a": ("Program only", "Added after the engine existed, with no RTL change"),
-    "b": ("General hardware", "A program on the shared CRC, parity, timeout and FIFO hardware"),
-    "c": ("New, general hardware", "Uses hardware added later that other protocols share (line coding, CRC-32)"),
+    "a": ("Program only", "Written after the hardware it runs on existed, with no RTL change"),
+    "b": ("General hardware", "One of the first programs, which shaped the general hardware"),
+    "c": ("New, general hardware", "Needed new hardware, built to be general and shared by other protocols"),
     "d": ("Protocol hardware", "Needs protocol-specific hardware (CAN's bit-synchronous block)"),
 }
 
@@ -130,7 +134,8 @@ def main():
         size = " + ".join(str(s) for s in sizes) + " words" if sizes else md_inline(prog)
         cards.append(
             f'<article class="proto g{g}" data-group="{g}">'
-            f'<div class="ptop"><span class="pnum">{n:02d}</span><span class="badge b{g}">{GROUP_LABEL[g][0]}</span></div>'
+            f'<div class="ptop"><span class="pnum">{n:02d}{" · blind" if n in BLIND else ""}</span>'
+            f'<span class="badge b{g}">{GROUP_LABEL[g][0]}</span></div>'
             f"<h3>{md_inline(name)}</h3>"
             f'<p class="psize">{size}</p>'
             f'<p class="ptest">{md_inline(tested)}</p></article>')
@@ -170,7 +175,7 @@ def main():
         "N_PROTOS": str(len(protos)), "N_DECISIONS": str(decisions), "N_BUGS": str(bugs),
         "N_BENCHES": str(benches), "MIN_WORDS": str(min(words)), "MAX_WORDS": str(max(words)),
         "N_A": str(counts["a"]), "N_B": str(counts["b"]), "N_C": str(counts["c"]), "N_D": str(counts["d"]),
-        "N_AB": str(counts["a"] + counts["b"]),
+        "N_AB": str(counts["a"] + counts["b"]), "N_BLIND": str(len(BLIND & {int(r[0]) for r in protos})),
         "SETUP_SLOW": ns(m["setup_slow"]), "SETUP_TYP": ns(m["setup_typ"]), "SETUP_FAST": ns(m["setup_fast"]),
         "HOLD_SLOW": ns(m["hold_slow"]), "HOLD_TYP": ns(m["hold_typ"]), "HOLD_FAST": ns(m["hold_fast"]),
         "UTIL": f'{m["util"]:.1f}', "STDCELL": f'{m["stdcell"]:,}', "MACROS": f'{m["macros"]:,}',

@@ -229,11 +229,11 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: 
 <div class="wrap">
   <div class="stats">
     <div class="stat"><b>{{N_PROTOS}}</b><span>protocols, all as programs</span></div>
-    <div class="stat"><b>2</b><span>engines, running two protocols at once</span></div>
+    <div class="stat"><b>{{N_BLIND}}/{{N_BLIND}}</b><span>blind-benchmark protocols run, no RTL change</span></div>
     <div class="stat"><b>60<small>MHz</small></b><span>clock, 6 clocks per Ethernet bit</span></div>
     <div class="stat"><b>256<small>× 16 b</small></b><span>SRAM program memory per engine</span></div>
     <div class="stat"><b>{{SETUP_SLOW}}</b><span>setup slack, slow corner, routed</span></div>
-    <div class="stat"><b>{{N_BENCHES}}</b><span>end-to-end testbenches, also at gate level</span></div>
+    <div class="stat"><b>{{N_BENCHES}}</b><span>end-to-end testbenches, run on every push</span></div>
     <div class="stat"><b>{{N_DECISIONS}}</b><span>design decisions, with alternatives</span></div>
     <div class="stat"><b>{{N_BUGS}}</b><span>bugs logged, each with its failing test</span></div>
   </div>
@@ -267,7 +267,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: 
 
 <section id="protocols"><div class="wrap">
   <div class="sh"><div class="eyebrow">Protocols</div><h2>{{N_PROTOS}} protocols, tested end to end</h2>
-    <p>{{N_AB}} of {{N_PROTOS}} run on the general hardware alone, and {{N_A}} of those were added after the engine was built, with no RTL change. Every one has a testbench against a model of the device on the other side of the wire.</p></div>
+    <p>{{N_A}} of {{N_PROTOS}} are programs written after the hardware they run on existed, with no RTL change. That includes the {{N_BLIND}} protocols of a <a href="{{REPO}}/blob/main/docs/GENERALITY.md">blind benchmark</a>, listed and committed before any attempt: all {{N_BLIND}} run. Only CAN needs protocol-specific hardware. Every protocol has a testbench against a model of the device on the other side of the wire.</p></div>
   <div class="filters" role="group" aria-label="Filter by how the protocol uses the hardware">
     <button aria-pressed="true" data-f="all">All · {{N_PROTOS}}</button>
     <button aria-pressed="false" data-f="a"><i class="dot-a"></i>Program only · {{N_A}}</button>
@@ -278,7 +278,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: 
   <div class="grid">
 {{PROTOS}}
   </div>
-  <p class="note"><b style="color:var(--data)">Program only</b>: written after the engine existed, no RTL change. <b style="color:var(--ctrl)">General hardware</b>: the first protocols, which shaped the shared hardware. <b style="color:var(--new)">New, general hardware</b>: uses blocks added later that other protocols share. <b style="color:var(--pin)">Protocol hardware</b>: CAN's bit-synchronous block, the one protocol-specific unit.</p>
+  <p class="note"><b style="color:var(--data)">Program only</b>: written after the hardware it runs on existed, no RTL change; “blind” marks the benchmark. <b style="color:var(--ctrl)">General hardware</b>: the first programs, which shaped the shared hardware. <b style="color:var(--new)">New, general hardware</b>: needed new blocks, built to be general and shared by other protocols. <b style="color:var(--pin)">Protocol hardware</b>: CAN's bit-synchronous block, the one protocol-specific unit.</p>
 </div></section>
 
 <section id="verification"><div class="wrap">
