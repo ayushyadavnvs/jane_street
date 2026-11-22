@@ -1,0 +1,31 @@
+; SPI peripheral (device), mode 3 (CPOL 1, CPHA 1), MSB first. Blind generality benchmark,
+; step 3: spi_periph.pbe (mode 0) with the edges reordered; settings and host protocol are the
+; same: CLKDIV = 0, OUT and IN MSB first, JMP_PIN = cs (3), LINE_CFG = 1, TIMEOUT e.g. 600.
+; Pins: sclk = pin base, mosi = +1, miso = +2, cs = +3 (active low).
+; Queue reply bytes before the controller clocks them out; with nothing queued the reply is
+; 0xFF. Every byte the controller sends arrives in the RX FIFO. MISO is released while CS is high.
+.equ sclk 0
+.equ mosi 1
+.equ miso 2
+.equ cs   3
+
+        JMP  idle
+tmo:    JMP  PIN_HI, idle    ; word 1: no clock for a while. CS high: the transaction is over
+        JMP  bit             ; still selected: keep waiting for the clock
+idle:   PIN  miso, REL       ; not selected: let go of MISO
+        WAIT cs, LOW
+        SET  OSR, 0xFF       ; reply 0xFF if the host queued nothing
+        JMP  TX_EMPTY, first
+        PULL
+first:  SET  X, 7
+bit:    WAIT sclk, FALL      ; shift out on the leading edge
+        PIN  miso, OUT
+        WAIT sclk, RISE      ; both sides sample on the trailing edge
+        IN   mosi
+        JMP  X--, bit
+        PUSH                 ; 8 bits from the controller
+        SET  OSR, 0xFF       ; next reply ready before the next leading edge
+        JMP  TX_EMPTY, last
+        PULL
+last:   SET  X, 7
+        JMP  bit

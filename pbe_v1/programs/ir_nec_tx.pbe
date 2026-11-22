@@ -1,0 +1,119 @@
+; IR NEC remote transmitter: 38 kHz carrier, leader, 8-bit bytes LSB first as pulse-distance
+; bits, final burst, and the repeat code. Blind generality benchmark, protocol 4
+; (docs/GENERALITY.md).
+; Pins (relative to pin base): IR = 0 (to the LED driver, high = LED on), SCRATCH = 1: a pin
+;   this engine owns and nothing is connected to. JMP_PIN = 1.
+;   Why a scratch pin: the space after each burst depends on the data bit, and no instruction
+;   tests a bit of OSR. The program shifts the bit out onto the scratch pin (OUT) and tests the
+;   pin one tick later (JMP PIN_HI). It costs a pin; the data never goes through the host.
+; Engine settings: CLKDIV = 394 (a tick is 395 clocks = 6.583 us at 60 MHz: a quarter of the
+;   carrier period, 37.97 kHz), SHIFT = 0x00 (LSB first), CRC off, TIMEOUT 0, LINE_CFG 0x40.
+; Host protocol:
+;   TX FIFO: the bytes of one frame, queued together: NEC is [address] [~address] [command]
+;            [~command] (extended NEC: a 16-bit address in the first two). The frame ends when
+;            the FIFO is empty at a byte boundary, so any number of bytes can be sent.
+;   FLAG0:   set it (with the TX FIFO empty) to send one repeat code; the engine clears it.
+;   The host spaces frames and repeat codes (NEC: one every 110 ms). Nothing is returned.
+; Timing (ticks of 6.583 us): carrier = toggle every 2 ticks; leader 684 toggles (9.0 ms) and
+;   683 ticks of space (4.5 ms; repeat code: 341 ticks, 2.25 ms); each bit a burst of 42
+;   toggles (21 cycles, 553 us) and a space to the next burst of 85 ticks (0: 560 us) or 256
+;   ticks (1: 1.685 ms); 3 ticks more between bytes; a final burst.
+.equ ir 0
+.equ sc 1
+
+        PIN  ir, DRV0
+        PIN  sc, DRV0
+idle:   JMP  FLAG0, ldr         ; a repeat code
+        JMP  TX_READY, ldr      ; a frame
+        JMP  idle
+ldr:    SET  X, 170             ; leader burst: 171 x 4 toggles, every one 2 ticks apart
+l1:     PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG
+        JMP  X--, l1
+        JMP  FLAG0, rsp
+        SET  X, 41              ; frame: 4.5 ms of space
+d1:     JMP  X--, d1 [15]
+        NOP  [3]
+byte:   PULL
+        SET  X, 7
+bit:
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        PIN  ir, TOG [1]
+        JMP  FLAG1, fin         ; that was the final burst
+        PIN  sc, OUT            ; the data bit, onto the scratch pin
+        JMP  PIN_HI, one
+        NOP  [15]               ; 0: the short space
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [14]
+tail:   JMP  X--, bit
+        JMP  TX_READY, byte
+        FLAG 1, SET             ; the frame's last bit is out: the final burst
+        JMP  bit
+one:    NOP  [15]               ; 1: the long space
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        NOP  [7]
+        JMP  tail
+rsp:    SET  X, 20              ; repeat code: 2.25 ms of space, then one burst
+d2:     JMP  X--, d2 [15]
+        FLAG 1, SET
+        JMP  bit
+fin:    FLAG 1, CLR
+        FLAG 0, CLR
+        JMP  idle

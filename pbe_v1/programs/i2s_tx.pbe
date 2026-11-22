@@ -1,0 +1,145 @@
+; I2S transmitter (controller): BCLK, LRCLK, SD; 16-bit stereo, Philips I2S format.
+; Blind generality benchmark, protocol 6 (docs/GENERALITY.md).
+; Pins (relative to pin base): BCLK = 0, LRCLK = 1 (low = left), SD = 2.
+; Engine settings: CLKDIV = 0, SHIFT = 0x01 (OUT MSB first), CRC off, TIMEOUT 0, LINE_CFG 0x40.
+; Timing: every bit is exactly 39 clocks on every path through the program (BCLK low 19, high
+;   20), so BCLK = 60 MHz / 39 = 1.538 MHz and the sample rate is BCLK / 32 = 48.08 kHz
+;   (48 kHz + 0.16 %). SD and LRCLK change 4 clocks after BCLK falls and are stable 15 clocks
+;   (250 ns) before it rises; LRCLK changes one bit before each word's MSB.
+;   At CLKDIV 0 each instruction takes DLY + 1 clocks and a taken jump one more; the delays
+;   below are chosen so that the loop, the byte boundaries and both sides of the FIFO test
+;   add up to the same 39. Another rate needs other delays (a different program): the rate is
+;   60 MHz / (32 N) for a whole N (N = 42: 44.64 kHz, 1.2 % from 44.1 kHz).
+; Host protocol: TX FIFO: 4 bytes per stereo sample: left high, left low, right high, right
+;   low. Write whole samples without a pause inside one (the engine takes a byte every 5.2 us),
+;   and at least one sample per 20.8 us on average (the FIFO holds 4).
+;   When the FIFO is empty at the start of a sample the engine sends one sample of silence
+;   (0, 0) from a second copy of the frame code, and the clocks keep running. Nothing is
+;   returned.
+.equ bclk 0
+.equ lr   1
+.equ sd   2
+
+        PIN  bclk, DRV0
+        PIN  lr, DRV0
+        PIN  sd, DRV0
+        SET  OSR, 0
+        SET  X, 6
+        JMP  bz0
+; ---- data, byte 0: left, high ----
+bd0:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bd0
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0 [3]     ; bit 0
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        PULL NOWAIT [3]         ; the sample's next byte (it is there: see the header)
+        SET  X, 6
+        JMP  bd1
+; ---- data, byte 1: left, low ----
+bd1:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bd1
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0         ; bit 0, the word's last: LRCLK changes here, one bit
+        PIN  lr, TOG [2]        ;   before the next word's MSB
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        PULL NOWAIT [3]         ; the sample's next byte (it is there: see the header)
+        SET  X, 6
+        JMP  bd2
+; ---- data, byte 2: right, high ----
+bd2:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bd2
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0 [3]     ; bit 0
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        PULL NOWAIT [3]         ; the sample's next byte (it is there: see the header)
+        SET  X, 6
+        JMP  bd3
+; ---- data, byte 3: right, low ----
+bd3:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bd3
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0         ; bit 0, the word's last: LRCLK changes here, one bit
+        PIN  lr, TOG [2]        ;   before the next word's MSB
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        JMP  TX_EMPTY, zd3      ; a sample starts next: silence if the host has nothing
+        PULL [2]                ; (7 clocks to the next bit on both sides: the silence copy is
+        SET  X, 6               ;   in page 1, and the PAGE prefix the assembler inserts before
+        JMP  bd0                ;   `JMP bz0` is one of them)
+zd3:    SET  OSR, 0
+        SET  X, 6
+        JMP  bz0
+        .org 64                 ; the silence copy starts page 1: no loop crosses a page
+; ---- silence, byte 0: left, high ----
+bz0:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bz0
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0 [3]     ; bit 0
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        SET  OSR, 0 [3]
+        SET  X, 6
+        JMP  bz1
+; ---- silence, byte 1: left, low ----
+bz1:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bz1
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0         ; bit 0, the word's last: LRCLK changes here, one bit
+        PIN  lr, TOG [2]        ;   before the next word's MSB
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        SET  OSR, 0 [3]
+        SET  X, 6
+        JMP  bz2
+; ---- silence, byte 2: right, high ----
+bz2:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bz2
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0 [3]     ; bit 0
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [12]
+        SET  OSR, 0 [3]
+        SET  X, 6
+        JMP  bz3
+; ---- silence, byte 3: right, low ----
+bz3:    PIN  bclk, DRV0 [3]     ; bits 7..1: 39 clocks each (low 19, high 20)
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [9]
+        NOP  [7]
+        JMP  X--, bz3
+        NOP                     ; (the jump not taken is one clock shorter)
+        PIN  bclk, DRV0         ; bit 0, the word's last: LRCLK changes here, one bit
+        PIN  lr, TOG [2]        ;   before the next word's MSB
+        PIN  sd, OUT [14]
+        PIN  bclk, DRV1 [13]
+        JMP  TX_EMPTY, zz3      ; a sample starts next: silence if the host has nothing
+        PULL                    ; (6 clocks on both sides; here the PAGE prefix is on this one)
+        SET  X, 6
+        JMP  bd0
+zz3:    SET  OSR, 0
+        SET  X, 6
+        JMP  bz0

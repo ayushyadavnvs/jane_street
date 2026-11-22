@@ -1,0 +1,36 @@
+; DMX512 transmitter (ANSI E1.11): 250 kbaud 8N2, break, mark after break, start code and slots.
+; Blind generality benchmark, protocol 1 (docs/GENERALITY.md).
+; Pin (relative to pin base): TX = 0, to an RS-485 driver (driver enable tied on).
+; Engine settings: CLKDIV = 119 (a tick is 2 us at 60 MHz: half a bit), SHIFT = 0x00 (LSB
+;   first), CRC off, TIMEOUT 0, LINE_CFG 0x40.
+; Host protocol:
+;   set FLAG0          start a packet: the engine sends a break (100 us) and a mark after break
+;                      (12 us) and clears FLAG0. Set it when the TX FIFO is empty (the engine
+;                      looks at it between slots).
+;   TX FIFO            each byte is one slot: first the start code (0x00 for dimmer data), then
+;                      up to 512 data slots. Slots go out as fast as the host supplies them
+;                      (44 us each with 2 stop bits); while the FIFO is empty the line idles
+;                      high (mark between slots, which DMX512 allows for up to 1 s).
+;   Nothing is returned.
+; Timing: bit 4 us (2 ticks); break 50 ticks = 100 us (>= 92 us); mark after break 6 ticks =
+;   12 us (>= 12 us); at least 2.5 stop bits (5 ticks) between slots.
+.equ tx 0
+
+        PIN  tx, DRV1           ; mark
+idle:   JMP  FLAG0, brk
+        JMP  TX_READY, slot
+        JMP  idle
+brk:    PIN  tx, DRV0 [15]      ; break: 16 + 16 + 16 + 2 = 50 ticks
+        NOP  [15]
+        NOP  [15]
+        NOP  [1]
+        PIN  tx, DRV1 [3]       ; mark after break: 4 + 1 + 1 = 6 ticks to the next start bit
+        FLAG 0, CLR             ;   at the earliest (CLR, then the poll)
+        JMP  idle
+slot:   PULL
+        PIN  tx, DRV0           ; start bit (2 ticks)
+        SET  X, 7
+bit:    PIN  tx, OUT            ; 8 data bits, LSB first (2 ticks each)
+        JMP  X--, bit
+        PIN  tx, DRV1           ; stop bits: this, the jump, two polls and the PULL: 5 ticks
+        JMP  idle

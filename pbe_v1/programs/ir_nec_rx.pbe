@@ -1,0 +1,68 @@
+; IR NEC remote receiver, from a demodulated input (an IR receiver module such as a TSOP: idle
+; high, low while the 38 kHz carrier is present). Blind generality benchmark, protocol 4.
+; Pin (relative to pin base): IR = 0. JMP_PIN = 0.
+; Engine settings: CLKDIV = 4217 (a tick is 70.3 us at 60 MHz: an eighth of the 562.5 us
+;   unit), SHIFT = 0x00 (LSB first), CRC off, LINE_CFG = 0x41 (timeout vector at word 1),
+;   TIMEOUT = 240 ticks (16.9 ms: longer than the leader, shorter than the 40 ms gap).
+; How a bit is read: after each burst the line goes high; 10 ticks (703 us) later it is still
+;   high for a 1 (space 1.69 ms) and low again for a 0 (space 0.56 ms: the next burst has
+;   started). IN at that moment shifts the bit in. After a 0 the program must be back at
+;   WAIT LOW before that burst ends (1.125 ms after the rise): at a byte boundary, with the
+;   PUSH and the counter, it is there at 984 us.
+; Host protocol: RX FIFO:
+;   [0x4E] [b0] [b1] [b2] [b3]   a frame ('N'): address, ~address, command, ~command, as
+;                                received (the host checks the complements)
+;   [0x52]                       a repeat code ('R')
+;   FLAG1 set: a frame stopped part-way (timeout): flush the RX FIFO and clear FLAG1.
+; A leader shorter than 4.5 ms is ignored (noise).
+.equ ir 0
+
+        JMP  idle
+; timeout vector (word 1): the frame stopped
+tmo:    FLAG 1, SET
+idle:   JMP  PIN_HI, idle       ; (a poll: a blocked WAIT would run into the timeout)
+        NOP  [15]               ; 4.5 ms later the leader burst must still be there
+        NOP  [15]
+        NOP  [15]
+        NOP  [15]
+        JMP  PIN_HI, idle
+        WAIT ir, HIGH           ; the end of the leader burst (9 ms)
+        NOP  [15]               ; 2.5 ms later: high = a frame (4.5 ms space), low = a repeat
+        NOP  [15]               ;   code (its burst runs from 2.25 ms to 2.81 ms)
+        NOP  [3]
+        JMP  PIN_LO, rep
+        SET  OSR, 0x4E
+        MOV  ISR, OSR
+        PUSH                    ; 'N'
+        SET  X, 7
+b0:     WAIT ir, LOW            ; the bit's burst
+        WAIT ir, HIGH [9]       ; its end; 10 ticks later:
+        IN   ir
+        JMP  X--, b0
+        PUSH
+        SET  X, 7
+b1:     WAIT ir, LOW
+        WAIT ir, HIGH [9]
+        IN   ir
+        JMP  X--, b1
+        PUSH
+        SET  X, 7
+b2:     WAIT ir, LOW
+        WAIT ir, HIGH [9]
+        IN   ir
+        JMP  X--, b2
+        PUSH
+        SET  X, 7
+b3:     WAIT ir, LOW
+        WAIT ir, HIGH [9]
+        IN   ir
+        JMP  X--, b3
+        PUSH
+        WAIT ir, LOW            ; the final burst
+        WAIT ir, HIGH
+        JMP  idle
+rep:    SET  OSR, 0x52
+        MOV  ISR, OSR
+        PUSH                    ; 'R'
+        WAIT ir, HIGH           ; the end of its burst
+        JMP  idle

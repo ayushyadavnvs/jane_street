@@ -1,0 +1,26 @@
+; SPI controller, mode 3 (CPOL 1, CPHA 1), full duplex. Blind generality benchmark, step 3:
+; spi_ctrl.pbe (mode 0) with the clock edges reordered; the host protocol is the same.
+; Config: tick = 1/4 SCLK period or slower, OUT and IN MSB first.
+; Every byte the host queues is sent; the byte read back goes to the RX FIFO.
+; CS_n stays low while the host keeps the TX FIFO fed.
+.equ sclk 0
+.equ mosi 1
+.equ miso 2
+.equ cs   3
+
+        PIN  cs, DRV1
+        PIN  sclk, DRV1      ; the clock idles high
+idle:   PULL                 ; wait for the first byte
+        PIN  cs, DRV0        ; select the peripheral
+next:   SET  X, 7
+bit:    PIN  sclk, DRV0      ; leading (falling) edge: both sides shift
+        PIN  mosi, OUT
+        PIN  sclk, DRV1      ; trailing (rising) edge: both sides sample
+        IN   miso
+        JMP  X--, bit
+        PUSH
+        JMP  TX_EMPTY, done
+        PULL
+        JMP  next
+done:   PIN  cs, DRV1 [1]    ; deselect
+        JMP  idle

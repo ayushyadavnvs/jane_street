@@ -16,7 +16,7 @@ Entry for the Jane Street protocol emulator ASIC competition (Tiny Tapeout, IHP 
 | `docs/STATUS.md` | Where the project stands: what `main` contains, open branches and issues, the plan |
 | `ihp_lib/` | IHP sg13g2 standard-cell timing libraries, used by `make synth` and `make timing` |
 
-## Protocols: 19 implemented and tested
+## Protocols: 27 implemented and tested
 
 Every protocol is a program loaded at run time into the engines' program memory (up to 256
 words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-end testbench in
@@ -43,6 +43,18 @@ words per engine, D82, D83); none is a fixed hardware block. Each has an end-to-
 | 17 | Quad SPI controller (flash) | `qspi_flash` (125) | Against a quad SPI NOR flash model: JEDEC ID, 0x03, 0x0B, 0x6B (1-1-4), 0xEB (1-4-4), quad page program, at 16/6 MHz SCK (single/quad) |
 | 18 | HDLC / SDLC (NRZ and NRZI) | `hdlc_tx` (41), `hdlc_rx` (43) | Against an ISO 13239 model: flags, zero-bit insertion/deletion, CRC-16/X.25, back-to-back frames, CRC error, aborts, NRZI line coding (D94); 1-2 Mbit/s both ways, 4 Mbit/s transmit |
 | 19 | 10BASE-T Ethernet | `eth_tx` (52), `eth_rx` (17) | Against an IEEE 802.3 link-partner model: frames of 64-1518 bytes both ways with the FCS (CRC-32) in hardware, Manchester at 10 Mbit/s, clock offset and edge jitter, link pulses, loopback, TX underrun and RX overrun reported (D93, D101) |
+| 20 | DMX512 transmitter | `dmx512_tx` (18) | Blind benchmark: against an E1.11 receiver: break, mark after break, 513 slots |
+| 21 | MIDI in and out | `midi_in` (85), `uart_tx` | Blind benchmark: running status expanded in the engine, checked against a MIDI 1.0 reference parser |
+| 22 | LIN 2.x commander | `lin_commander` (49) | Blind benchmark: against a LIN 2.2A responder; the host computes ID parity and checksum (no adder) |
+| 23 | IR NEC remote, TX and RX | `ir_nec_tx` (103), `ir_nec_rx` (48) | Blind benchmark: 38 kHz carrier, frames, repeat code, ±5 % timing; TX uses a scratch pin |
+| 24 | Wiegand 26 / 34 reader | `wiegand` (92) + `wiegand_watch` (12) | Blind benchmark: both parity checks, 20-100 µs pulses; uses both engines |
+| 25 | I2S transmitter | `i2s_tx` (119) | Blind benchmark: 16-bit stereo at 48.08 kHz, every BCLK period equal, against a Philips-format receiver |
+| 26 | DShot600 transmitter | `dshot600` (64) | Blind benchmark: exact 1.667 µs bits, the checksum from the CRC unit, against an ESC-side decoder |
+| 27 | MDIO controller (clause 22) | `mdio` (73) | Blind benchmark: against a PHY with a 300 ns output delay, 2 MHz |
+
+Protocols 20-27 are the **blind generality benchmark** ([`docs/GENERALITY.md`](docs/GENERALITY.md)):
+eight protocols listed and committed before any attempt, written as programs with no RTL
+change. All eight run (four with a stated limit); SPI modes 1-3 were added the same way.
 
 Two protocols can run at once, one per engine (e.g. JTAG and SWD, or I2C and 1-Wire), and
 both engines can be CAN nodes. An engine-to-engine FIFO link (D102, off by default) lets one
