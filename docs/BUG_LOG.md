@@ -4132,3 +4132,180 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
 - **After:** `tb_link` and `tb_bridge` are not in `VL_BENCHES` (as `tb_engine_ops` and `tb_proto`,
   BUG-103); they run under Icarus in `make test` (`test-link`). To retry with Verilator >= 5.05x.
 - **Test:** the default `make test-verilator` list passes (identical logs).
+
+## BUG-175 — lin_commander.pbe's header documented the record in the wrong order (design)
+
+- **Where:** `pbe_v1/programs/lin_commander.pbe` (D108), the host protocol in its header, and
+  `tb_lin`, written from that header.
+- **Cause:** the program pulls the receive count `r` after the last transmitted byte; the
+  header said `[t] [r] [PID] ...`. The host's `r` went out as the protected ID.
+- **Before:** `;   TX FIFO: [t] [r] [PID] [t - 1 bytes]`
+- **After:** `;   TX FIFO: [t] [PID] [t - 1 bytes] [r]` (and the bench's host in that order).
+- **Test:** `tb_lin`: before, the responder model reported `sync=55 pid=00` for ID 0x11 and
+  every scenario failed (`the node saw 3 bad headers`); after, the headers are right.
+
+## BUG-176 — tb_lin read a stale "frame done" flag (test)
+
+- **Where:** `pbe_v1/test/tb_lin.sv`, the host task `frame`.
+- **Cause:** the engine clears FLAG0 three ticks into a record (2,343 clocks at 19200 baud);
+  the bench first looked at the flag 2,000 clocks after queuing the record, saw the previous
+  frame's flag and read the RX FIFO before the frame had run: 6 headers for 12 frames.
+- **Before:** the record was queued with FLAG0 as the last frame left it.
+- **After:** `flag_clear(0, 0);` before the record (and the header says so).
+- **Test:** `tb_lin`: before, 7 of 12 scenarios failed; after, `PASS: LIN` (12/12).
+
+## BUG-177 — The IR leader burst had two long carrier periods (design)
+
+- **Where:** `pbe_v1/programs/ir_nec_tx.pbe` (D109), the 9 ms leader.
+- **Cause:** 684 toggles do not fit one X loop, so three loops of 228 were chained; the
+  `SET X` between two loops added a tick: two of the leader's 342 carrier periods were 5
+  ticks (32.9 µs) with a 40 % duty instead of 4 (26.3 µs).
+- **Before:**
+  ```
+  ldr:    SET  X, 227             ; leader burst: 3 x 228 toggles
+  l1:     PIN  ir, TOG
+          JMP  X--, l1
+          SET  X, 227
+  l2:     PIN  ir, TOG
+          JMP  X--, l2
+          ...
+  ```
+- **After:** one loop of four toggles, every toggle 2 ticks apart:
+  ```
+  ldr:    SET  X, 170             ; leader burst: 171 x 4 toggles, every one 2 ticks apart
+  l1:     PIN  ir, TOG [1]
+          PIN  ir, TOG [1]
+          PIN  ir, TOG [1]
+          PIN  ir, TOG
+          JMP  X--, l1
+  ```
+- **Test:** `tb_ir`: before, `carrier period 26.34-32.92 us ... duty 40-50 %` and `FAIL:
+  carrier more than 2 % off 38 kHz`; after, `26.34-26.34 us, duty 50-50 %`.
+
+## BUG-178 — The IR receiver lost a bit at a byte boundary after a 0 (design)
+
+- **Where:** `pbe_v1/programs/ir_nec_rx.pbe` (D109).
+- **Cause:** with a 140.6 µs tick the bit was sampled 844 µs after the burst's end, and at a
+  byte boundary the `PUSH` and `SET X` put the next `WAIT ir, LOW` at 1.41 ms. After a 0 the
+  next burst runs from 0.56 to 1.125 ms: it was over, the wait took the burst after it, and
+  the frame came out one bit short (4 bytes in the FIFO instead of 5).
+- **Before:** `CLKDIV` 8436 and `WAIT ir, HIGH [5]` (sample at 6 ticks of 140.6 µs).
+- **After:** `CLKDIV` 4217 (70.3 µs) and `WAIT ir, HIGH [9]`: the sample is at 703 µs and the
+  wait at a byte boundary at 984 µs, inside the burst.
+- **Test:** `tb_ir`: before, `4 bytes in the RX FIFO` and `FAIL: RX: frame, remote 5 % slow`
+  (and fast); after, both pass.
+
+## BUG-179 — The IR receiver took a repeat code for a frame (design)
+
+- **Where:** `pbe_v1/programs/ir_nec_rx.pbe` (D109), the test after the leader.
+- **Cause:** the program looked at the line 3.4 ms after the leader burst: high meant a frame
+  (4.5 ms space). A repeat code's burst is from 2.25 to 2.81 ms: at 3.4 ms the line is high
+  again, so a repeat code was read as a frame that then timed out.
+- **Before:** `NOP [15]` / `NOP [15]` / `NOP [15]` (48 ticks of 70.3 µs: 3.4 ms).
+- **After:** `NOP [15]` / `NOP [15]` / `NOP [3]` (36 ticks: 2.5 ms, inside the repeat's burst).
+- **Test:** `tb_ir`: before, `FAIL: RX: repeat code ('R')`; after, `PASS`.
+
+## BUG-180 — tb_wiegand stopped waiting before a slow card had finished (test)
+
+- **Where:** `pbe_v1/test/tb_wiegand.sv`, `read_rec`.
+- **Cause:** the host task gave up after about 35 ms; a 26-bit card with 5 ms between pulses
+  takes 130 ms. Its record arrived during the next scenario and shifted every later record.
+- **Before:** `while (r.size() < n && t < 3000) begin`
+- **After:** `while (r.size() < n && t < 40000) begin` (and the slow card is 2 ms per bit, to
+  keep the simulation short).
+- **Test:** `tb_wiegand`: before, `FAIL: 26 bits, the slowest` and the 5 scenarios after it;
+  after, `PASS: Wiegand` (10/10). The programs were not changed.
+
+## BUG-181 — I2S silence was 00 FF FF FF, not zeros (design)
+
+- **Where:** `pbe_v1/programs/i2s_tx.pbe` (D111), first version.
+- **Cause:** with the FIFO empty at a sample boundary only the first byte was replaced by 0;
+  the other three were `PULL NOWAIT`, which gives 0xFF from an empty FIFO (and would have
+  taken bytes of a sample the host started writing in the meantime).
+- **Before:** one copy of the frame code; byte 3 ended with
+  ```
+          JMP  TX_EMPTY, z3
+          PULL
+          JMP  c3
+  z3:     SET  OSR, 0
+          NOP
+  c3:     SET  X, 6
+          JMP  b0
+  ```
+- **After:** a second copy of the frame for silence (`bz0`..`bz3`, `SET OSR, 0 [3]` where the
+  data copy has `PULL NOWAIT [3]`); the FIFO test at the end of either copy picks the next.
+- **Test:** `tb_i2s`: before, `sample 0: 00ff ffff, sent 8001 7ffe`; after, the samples match.
+
+## BUG-182 — tb_i2s overflowed the TX FIFO and paired the channels one frame apart (test)
+
+- **Where:** `pbe_v1/test/tb_i2s.sv`.
+- **Cause:** (1) the host checked "TX full" once per 4-byte sample, so bytes written to a full
+  FIFO were dropped (56 samples arrived of 200); (2) the receiver model paired left word i
+  with right word i although the first word after the first LRCLK edge is a right one.
+- **Before:** one `while (uo_out[6])` per sample; every word stored from the first WS edge.
+- **After:** the full flag is checked before every byte; words are stored from the first left
+  word on (`armed`), and only whole frames are compared.
+- **Test:** `tb_i2s`: before, `56 samples received, 200 sent`, then `sample 1: d609 7ffe, sent
+  d609 5663`; after, `PASS`.
+
+## BUG-183 — A PAGE prefix inside the I2S bit loop made one BCLK period a clock longer (design)
+
+- **Where:** `pbe_v1/programs/i2s_tx.pbe` (D111), after BUG-181 doubled the program past 64
+  words.
+- **Cause:** the silence copy's first loop straddled word 64, so the assembler put a `PAGE`
+  prefix (one more clock) before its `JMP X--`; two more prefixes landed on the jumps between
+  the copies. BCLK periods of 40 clocks appeared among the 39s.
+- **Before:** the copies one after the other; byte 3's two paths 6 clocks each.
+- **After:** `.org 64` before the silence copy (no loop crosses a page), and the two paths
+  that now carry a `PAGE` are balanced against their partners (`PULL [2]` against
+  `PAGE` + `JMP bz0` in the data copy; `PULL` + `PAGE` against the silence path in the other).
+- **Test:** `tb_i2s`: before, `BCLK period 650.1-666.7 ns` and `FAIL: BCLK is not a uniform 39
+  clocks`; after, `650.1-650.1 ns`.
+
+## BUG-184 — DShot frames queued together ran into one another (design)
+
+- **Where:** `pbe_v1/programs/dshot600.pbe` (D112).
+- **Cause:** after the last bit the program went straight back for the next frame: about 21
+  clocks of low, less than a bit. An ESC finds a frame by the gap before it; two queued
+  frames looked like one of 32 bits.
+- **Before:**
+  ```
+          PIN  d, DRV0 [15]
+          JMP  idle
+  ```
+- **After:**
+  ```
+          PIN  d, DRV0
+          SET  X, 149             ; the gap that ends a frame: 20 us low before the next one
+  gap:    JMP  X--, gap [6]
+          JMP  idle
+  ```
+- **Test:** `tb_dshot`, "two frames queued together": before, `FAIL: 1 frames not 16 bits long`
+  and a 1600 ns bit period; after, `PASS`.
+
+## BUG-185 — tb_dshot's decoder counted an edge before reset (test)
+
+- **Where:** `pbe_v1/test/tb_dshot.sv`.
+- **Cause:** at time 8 ns, before reset, the pin goes from unknown to 0 through a half-clock
+  high: the decoder counted an 8.3 ns "0" and a 1-bit frame.
+- **Before:** `always @(posedge d) begin` / `always @(negedge d) begin`
+- **After:** `always @(posedge d) if (rst_n) begin` / `always @(negedge d) if (rst_n) begin`
+- **Test:** `tb_dshot`: before, `0 high 8.3-616.7 ns`, `FAIL: 1 frames not 16 bits long`;
+  after, `PASS: DShot600`.
+
+## BUG-186 — tb_spimodes: a wrong model for CPHA 1, a restart glitch, a gap under the timeout (test)
+
+- **Where:** `pbe_v1/test/tb_spimodes.sv` (D114). The six programs were right as first written.
+- **Cause:** (1) the peripheral model's CPHA 1 path shifted a pre-shifted copy of the reply
+  and sent wrong bits; (2) when an engine restarts, its pins are released and the bench's pin
+  mux has a zero-width low on CS#, which the model took for a CS# edge with the clock at the
+  wrong idle level; (3) the controller model started its second transaction 2 µs after the
+  first, less than the peripheral's `TIMEOUT` (10 µs), so the peripheral had not yet seen CS#
+  high (the documented way a transaction ends, D35).
+- **Before:** `p_tx` shifted in both edge handlers; `if (sclk != cpol) p_idle_err++;` at the
+  edge; `TIMEOUT` 600 and `#(8 * HALF)` between transactions.
+- **After:** MISO = bit (7 - bits sampled) of the current reply at every shifting edge; the
+  idle check 1 ns after the edge and only if CS# still has the new level; `TIMEOUT` 120
+  (2 µs, 4 SCLK periods) and `#(20 * HALF)` between transactions.
+- **Test:** `tb_spimodes`: before, `controller read ef, the model sent de`, `1 idle-level
+  errors`, `peripheral received 1b, the model sent 0d`; after, `PASS: SPI modes 1-3` (6/6).

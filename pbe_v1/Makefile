@@ -79,6 +79,40 @@ test/hdlc_image.hex: programs/hdlc_tx.pbe programs/hdlc_rx.pbe tools/pbe_asm.py
 test/eth_image.hex: programs/eth_tx.pbe programs/eth_rx.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/eth_tx.pbe@0:0 programs/eth_rx.pbe@1:0
 
+# The blind generality benchmark (docs/GENERALITY.md, D106-D114): programs only
+test/dmx_image.hex: programs/dmx512_tx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/dmx512_tx.pbe@0:0
+
+test/midi_image.hex: programs/midi_in.pbe programs/uart_tx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/midi_in.pbe@0:0 programs/uart_tx.pbe@1:0
+
+test/lin_image.hex: programs/lin_commander.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/lin_commander.pbe@0:0
+
+test/ir_image.hex: programs/ir_nec_tx.pbe programs/ir_nec_rx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/ir_nec_tx.pbe@0:0 programs/ir_nec_rx.pbe@1:0
+
+test/wiegand_image.hex: programs/wiegand.pbe programs/wiegand_watch.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/wiegand.pbe@0:0 programs/wiegand_watch.pbe@1:0
+
+test/i2s_image.hex: programs/i2s_tx.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/i2s_tx.pbe@0:0
+
+test/dshot_image.hex: programs/dshot600.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/dshot600.pbe@0:0
+
+test/mdio_image.hex: programs/mdio.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/mdio.pbe@0:0
+
+test/spim1_image.hex: programs/spi_ctrl_m1.pbe programs/spi_periph_m1.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/spi_ctrl_m1.pbe@0:0 programs/spi_periph_m1.pbe@1:0
+
+test/spim2_image.hex: programs/spi_ctrl_m2.pbe programs/spi_periph_m2.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/spi_ctrl_m2.pbe@0:0 programs/spi_periph_m2.pbe@1:0
+
+test/spim3_image.hex: programs/spi_ctrl_m3.pbe programs/spi_periph_m3.pbe tools/pbe_asm.py
+	python3 tools/pbe_asm.py -o $@ programs/spi_ctrl_m3.pbe@0:0 programs/spi_periph_m3.pbe@1:0
+
 test/conc_image.hex: programs/onewire_ctrl.pbe programs/i2c_ctrl.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/onewire_ctrl.pbe@0:130 programs/i2c_ctrl.pbe@1:0
 
@@ -90,11 +124,11 @@ test/link_image.hex: test/link_echo.pbe test/link_burst.pbe tools/pbe_asm.py
 test/bridge_image.hex: programs/bridge_uart.pbe programs/bridge_i2c.pbe tools/pbe_asm.py
 	python3 tools/pbe_asm.py -o $@ programs/bridge_uart.pbe@0:0 programs/bridge_i2c.pbe@1:0
 
-IMAGES := link bridge conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc eth
+IMAGES := link bridge conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_target usb can debug page page_loop ps2 gpio la qspi hdlc eth dmx midi lin ir wiegand i2s dshot mdio spim1 spim2 spim3
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_link tb_bridge tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth; do \
+LINT = cd test && for tb in tb_link tb_bridge tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth tb_dmx tb_midi tb_lin tb_ir tb_wiegand tb_i2s tb_dshot tb_mdio tb_spimodes; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) eth_model.sv $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
@@ -133,6 +167,7 @@ test: test-manchester-idle $(IMAGES:%=test/%_image.hex) test/ops_image.hex test/
 	cd test && iverilog -g2012 -o debug.vvp tb_debug.sv $(DEBUG_MODELS) $(TOP) && vvp -n debug.vvp
 	$(MAKE) test-link
 	$(MAKE) test-proto2
+	$(MAKE) test-blind
 	$(MAKE) test-quad-unit
 	$(MAKE) test-eth
 	$(MAKE) test-ff
@@ -210,6 +245,37 @@ test-usb: $(IMAGES:%=test/%_image.hex)
 	cd test && iverilog -g2012 -o usb.vvp tb_usb.sv $(TOP) && vvp -n usb.vvp
 
 # The protocols of D84-D88, each against its own model written from the specification.
+# The blind generality benchmark: 8 protocols chosen before any attempt, and SPI modes 1-3
+.PHONY: test-blind test-dmx test-midi test-lin test-ir test-wiegand test-i2s test-dshot test-mdio test-spimodes
+test-blind: test-dmx test-midi test-lin test-ir test-wiegand test-i2s test-dshot test-mdio test-spimodes
+
+test-dmx: test/dmx_image.hex
+	cd test && iverilog -g2012 -o dmx.vvp tb_dmx.sv $(TOP) && vvp -n dmx.vvp
+
+test-midi: test/midi_image.hex
+	cd test && iverilog -g2012 -o midi.vvp tb_midi.sv $(TOP) && vvp -n midi.vvp
+
+test-lin: test/lin_image.hex
+	cd test && iverilog -g2012 -o lin.vvp tb_lin.sv $(TOP) && vvp -n lin.vvp
+
+test-ir: test/ir_image.hex
+	cd test && iverilog -g2012 -o ir.vvp tb_ir.sv $(TOP) && vvp -n ir.vvp
+
+test-wiegand: test/wiegand_image.hex
+	cd test && iverilog -g2012 -o wiegand.vvp tb_wiegand.sv $(TOP) && vvp -n wiegand.vvp
+
+test-i2s: test/i2s_image.hex
+	cd test && iverilog -g2012 -o i2s.vvp tb_i2s.sv $(TOP) && vvp -n i2s.vvp
+
+test-dshot: test/dshot_image.hex
+	cd test && iverilog -g2012 -o dshot.vvp tb_dshot.sv $(TOP) && vvp -n dshot.vvp
+
+test-mdio: test/mdio_image.hex
+	cd test && iverilog -g2012 -o mdio.vvp tb_mdio.sv $(TOP) && vvp -n mdio.vvp
+
+test-spimodes: test/spim1_image.hex test/spim2_image.hex test/spim3_image.hex
+	cd test && iverilog -g2012 -o spimodes.vvp tb_spimodes.sv $(TOP) && vvp -n spimodes.vvp
+
 .PHONY: test-proto2 test-ps2 test-gpio test-la test-qspi test-hdlc
 test-proto2: test-ps2 test-gpio test-la test-qspi test-hdlc
 

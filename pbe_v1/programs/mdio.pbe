@@ -1,0 +1,95 @@
+; MDIO controller (station management, IEEE 802.3 clause 22): preamble, read and write
+; frames, turnaround. Blind generality benchmark, protocol 8 (docs/GENERALITY.md).
+; Pins (relative to pin base): MDC = 0, MDIO = 1 (bidirectional, pull-up 1.5 kohm).
+; Engine settings: CLKDIV = 4 or more, SHIFT = 0x03 (OUT and IN MSB first), CRC off,
+;   TIMEOUT 0, LINE_CFG 0x40.
+; Timing: a bit is 6 ticks, 6 (CLKDIV + 1) clocks: MDC = 2 MHz at CLKDIV 4 (500 ns; the limit
+;   is 400 ns), high 2 ticks, low 4. MDIO is set 1 tick (83 ns) before MDC rises and held to
+;   the next bit. A PHY may take 300 ns after the rising edge to drive a read bit; the engine
+;   samples 5 ticks (417 ns) after it. Byte boundaries add 2-3 ticks of MDC low.
+; Host protocol: TX FIFO:
+;   [0x00] [b0] [b1] [b2] [b3]   write: the 32 frame bits after the preamble, MSB first:
+;                                 01 01 PPPPP RRRRR 10 DDDDDDDDDDDDDDDD
+;   [0x01] [b0] [b1]             read: 01 10 PPPPP RRRRR xx (the first 14 bits are driven; the
+;                                 engine then releases MDIO for the turnaround and the data)
+;   RX FIFO, for a read: [ta] [data high] [data low]. ta = 0x00: the PHY pulled the second
+;   turnaround bit low (it is there); 0x01: nobody answered (the data is then 0xFFFF).
+;   The engine sends the 32-bit preamble of ones before every frame.
+.equ mdc  0
+.equ mdio 1
+
+        PIN  mdc, DRV0
+        PIN  mdio, REL
+cmd:    PULL                    ; 0 write, 1 read
+        MOV  ISR, OSR
+        PIN  mdio, DRV1         ; preamble: 32 ones
+        SET  X, 31
+pre:    PIN  mdc, DRV1 [2]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, pre
+        MOV  X, ISR
+        JMP  X--, rd
+; ---- write: 32 bits driven ----
+        PULL
+        SET  X, 7
+w0:     PIN  mdio, OUT          ; set up one tick before MDC rises
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, w0
+        PULL
+        SET  X, 7
+w1:     PIN  mdio, OUT          ; set up one tick before MDC rises
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, w1
+        PULL
+        SET  X, 7
+w2:     PIN  mdio, OUT          ; set up one tick before MDC rises
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, w2
+        PULL
+        SET  X, 7
+w3:     PIN  mdio, OUT          ; set up one tick before MDC rises
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, w3
+        PIN  mdio, REL
+        JMP  cmd
+; ---- read: 14 bits driven, turnaround, 16 bits in ----
+rd:
+        PULL
+        SET  X, 7
+r0:     PIN  mdio, OUT          ; set up one tick before MDC rises
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, r0
+        PULL
+        SET  X, 5
+r1:     PIN  mdio, OUT          ; set up one tick before MDC rises
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, r1
+        PIN  mdio, REL          ; turnaround, first bit: nobody drives
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        MOV  ISR, 0
+        IN   mdio               ; second bit: the PHY drives 0
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        PUSH                    ; [ta]
+        SET  X, 7
+d0:     IN   mdio               ; 5 ticks after the rising edge that launched the bit
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, d0
+        PUSH
+        SET  X, 7
+d1:     IN   mdio               ; 5 ticks after the rising edge that launched the bit
+        PIN  mdc, DRV1 [1]
+        PIN  mdc, DRV0 [1]
+        JMP  X--, d1
+        PUSH
+        PIN  mdc, DRV1 [1]      ; one idle clock: the PHY lets go
+        PIN  mdc, DRV0 [1]
+        JMP  cmd

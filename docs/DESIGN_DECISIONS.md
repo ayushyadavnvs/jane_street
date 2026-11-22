@@ -3621,3 +3621,134 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
     readable register compared before and after (FIFO data and PINS excluded).
 - **CAN-to-CAN gateway (asked for with D102): deferred by the owner.** The design worked out
   for it is in `docs/BRIDGE_VERIFICATION_TODO.md` so it can be picked up later.
+
+## D106. Blind benchmark 1, DMX512 transmitter: a UART with a break, started by a flag
+
+- **Context:** the blind generality benchmark (`docs/GENERALITY.md`): eight protocols listed
+  and committed (856050e) before any attempt; programs only, `src/` untouched. D106-D114 are its
+  decisions; D105 is reserved for the project website.
+- **Chosen:** `programs/dmx512_tx.pbe`, 18 words. Tick = half a bit (2 µs), as `uart_tx`: start
+  bit, 8 `OUT`s, and at least 2.5 stop bits. The host sets FLAG0 for a new packet: the engine
+  sends a 100 µs break and the mark after break, clears the flag, and then every TX byte is a
+  slot (the start code first).
+- **Why a flag and not a length:** a packet is up to 513 slots, more than one length byte, and
+  DMX512 allows marks between slots (up to 1 s), so a slow host only stretches the packet.
+- **Alternative:** the line coder in NRZ (it has no break); `uart_tx` unchanged plus a break
+  made by the host stopping the engine (not self-timed).
+- **Result:** works, passed at the first run. `tb_dmx` against an ANSI E1.11 receiver.
+
+## D107. Blind benchmark 2, MIDI: running status expanded by a decision tree on the wire
+
+- **Out** is `uart_tx.pbe` unchanged at `CLKDIV` 959 (31.25 kbaud): nothing to write.
+- **In** (`programs/midi_in.pbe`, 85 words) expands running status in the engine, so the host
+  reads complete messages. That needs the class of each byte (data; status with 2 or 1 data
+  bytes; system; real time), which depends on bits 7..3, and no instruction tests a register
+  bit. The program tests the pin instead: one tick after each `IN` of bits 3..7 a `JMP PIN_HI`
+  moves down a tree of 12 nodes, so the program counter holds the class when the byte ends.
+  Every node takes exactly one bit time on both branches (tick = 1/16 bit).
+- **State:** OSR = the running status (0 = none), FLAG1 = it takes 1 data byte, FLAG0 = one
+  more data byte expected. A status byte is not pushed when it arrives but in front of the
+  first data byte of every message, so explicit and running status share one path. Real-time
+  bytes pass at once and change nothing; F0-F7 pass and cancel running status.
+- **Alternative:** pass the raw bytes and let the host expand (a UART; no test of generality).
+- **Limit:** the stop bit is not checked; a status byte never followed by data is not reported.
+- **Result:** works, passed at the first run (`tb_midi`, with a MIDI 1.0 reference parser).
+
+## D108. Blind benchmark 3, LIN commander: framing in the engine, arithmetic in the host
+
+- **Chosen:** `programs/lin_commander.pbe`, 49 words: break (13.5 bits), delimiter, sync 0x55,
+  then the bytes the host supplies (protected ID, and for a published frame data and checksum),
+  then `r` received bytes with a 14-bit-time timeout per start bit, a trailer (0x00 or 0xFF) and
+  FLAG0. The transmit and receive bytes are unrolled (8 `OUT`s, 8 `IN`s) so X counts bytes.
+- **Limit, and why:** the checksum is an 8-bit sum with end-around carry, and the ID parity
+  bits are XORs of chosen bits. The engine has no adder, and its parity unit covers all bits
+  since the last reset of it. X only counts down, by one. So the host computes and checks
+  both. The CRC unit cannot help: a sum with carry is not a polynomial remainder.
+- **Not done:** comparing the echo with what was sent (LIN's bit-error check).
+- **Result:** works with that limit (`tb_lin`, a LIN 2.2A responder that checks the header and
+  the checksums itself; 19200 and 9600 baud).
+
+## D109. Blind benchmark 4, IR NEC: a scratch pin to branch on a data bit
+
+- **Transmit** (`programs/ir_nec_tx.pbe`, 103 words): tick = a quarter of the carrier period;
+  a burst is 42 `PIN TOG [1]` in a row (X is the bit counter, so the burst cannot be a loop),
+  the leader one loop of 4 toggles (BUG-177). The space after a burst depends on the bit. The
+  program does `PIN sc, OUT` onto a pin nothing is connected to and `JMP PIN_HI` on it one tick
+  later: the only way to branch on a bit of OSR. A frame is "bytes until the FIFO is empty",
+  so extended NEC and other lengths work; FLAG0 asks for a repeat code.
+  - *Alternative:* the host sends one byte per bit (a space length): no pin, 8 times the
+    host traffic, and the engine no longer knows the protocol.
+- **Receive** (`programs/ir_nec_rx.pbe`, 48 words): after each burst, `IN` 703 µs later reads
+  the bit directly (still high = 1; low again = 0, the next burst). The leader is checked at
+  4.5 ms, the repeat code told apart at 2.5 ms; the timeout vector flags a cut frame.
+- **Limit:** transmit uses one more pin (3 of 8 with the receiver).
+- **Result:** works with that limit (`tb_ir`: carrier 26.34 µs at 50 %, all bursts and spaces
+  within 5 %, a remote 5 % fast and slow, both directions at once).
+
+## D110. Blind benchmark 5, Wiegand: two engines, because one cannot watch two pins and count
+
+- **The problem:** a bit is a pulse on D0 or on D1. An engine can wait on one pin, test one
+  JMP pin, count with one X and time out with one timeout. The reader needs: either of two
+  pins, a bit count (for the two parity halves and the bytes), and a frame timeout.
+- **Chosen:** `programs/wiegand_watch.pbe` (12 words, engine 1) waits on D0 with a 2-tick
+  timeout whose vector tests D1; either pulse sets a shared FLAG0. `programs/wiegand.pbe`
+  (92 words, engine 0) waits on that flag, reads the bit as D0's level (low = the pulse is on
+  D0 = 0), counts with X, and has the 25 ms frame timeout. The parity unit gives both checks:
+  `STAT` after the first half (even: 0) and after the second (odd: 1), pushed as two bytes.
+  The 26- and 34-bit formats are two unrolled sequences, selected by a host flag.
+- **Alternative on one engine:** push every bit as a byte and let the host count and check
+  parity. Rejected: the engine would not be a Wiegand reader.
+- **Limit:** it takes both engines.
+- **Result:** works with that limit (`tb_wiegand`: 20-100 µs pulses, 200 µs - 2 ms apart, both
+  formats, both parity errors, a cut card).
+
+## D111. Blind benchmark 6, I2S transmitter: every path balanced to 39 clocks
+
+- **Chosen:** `programs/i2s_tx.pbe`, 119 words, `CLKDIV` 0. BCLK must be uniform, and at
+  `CLKDIV` 0 an instruction takes DLY + 1 clocks and a taken jump one more. Each bit is
+  `DRV0`, `OUT`, `DRV1` and padding; the loop, the last bit of each byte (which also loads the
+  next byte), the word ends (LRCLK toggles one bit before the MSB) and both sides of the FIFO
+  test all add up to 39 clocks: BCLK 1.538 MHz, 48.08 kHz.
+- **Silence:** with an empty FIFO at a sample boundary the engine plays one sample of zeros
+  from a second copy of the frame code (BUG-181), and the clocks never stop. The copy starts at
+  word 64 (`.org`) so that no loop crosses a page, and the two jumps that do cross are balanced
+  around the `PAGE` prefix the assembler inserts (BUG-183).
+- **Limit:** the rate is 60 MHz / (32 N), fixed by the delays: 48 kHz + 0.16 %; 44.1 kHz would
+  be 1.2 % off; another rate is another assembly of the program. Audio rates want a
+  12.288 MHz-family clock, which the chip does not have.
+- **Result:** works with that limit (`tb_i2s`: every BCLK period 650.1 ns, set-up 250 ns).
+
+## D112. Blind benchmark 7, DShot600: 100 clocks per bit, the checksum from the CRC unit
+
+- **Chosen:** `programs/dshot600.pbe`, 64 words, `CLKDIV` 0. A bit is `DRV1` (37 clocks),
+  `OUT` (the bit: a 1 stays high to 75 clocks), `DRV0` (to 100), as `ws2812.pbe` does, balanced
+  to exactly 100 clocks on every path. A 20 µs gap follows each frame (BUG-184).
+- **The checksum** is `(v ^ v >> 4 ^ v >> 8) & 0xF` over the 12 bits. Since x⁴ ≡ 1 modulo
+  x⁴ + 1, that is the 12 bits' remainder modulo x⁴ + 1: the CRC unit with width 4, polynomial
+  0x1, init 0. `OSRCRC HI, LEFT` puts it in the top 4 bits of OSR and four `OUT`s send it.
+  The host sends only the 12 bits.
+- **Result:** works (`tb_dshot`: 210 frames, bit 1666.8 ns, highs 616.7 / 1250.1 ns).
+
+## D113. Blind benchmark 8, MDIO controller: one more bit-banged serial bus
+
+- **Chosen:** `programs/mdio.pbe`, 73 words. A bit is 6 ticks (`OUT` or `IN`, MDC high 2,
+  low 4): 2 MHz at `CLKDIV` 4. Read bits are sampled 417 ns after the rising edge that launched
+  them (a PHY may take 300 ns). The preamble is a loop of 32 clocks; a write is four byte
+  loops; a read drives 14 bits, releases MDIO for the turnaround, pushes the turnaround bit
+  (0 = a PHY answered) and two data bytes. The host packs the frame bits into bytes.
+- **Result:** works, passed at the first run (`tb_mdio`: a clause-22 PHY with a 300 ns output
+  delay; 2 MHz and 1 MHz).
+
+## D114. Blind benchmark, step 3: SPI modes 1, 2 and 3 are mode 0's instructions reordered
+
+- **Controller:** mode 0 is `OUT, SCLK active, IN, SCLK idle`. Mode 2 swaps the clock levels;
+  modes 1 and 3 put the leading edge first (`SCLK active, OUT, SCLK idle, IN`). 16 words each
+  (`spi_ctrl_m1/2/3.pbe`), the same host protocol.
+- **Peripheral:** mode 2 swaps the two `WAIT` edges of mode 0; modes 1 and 3 shift on the
+  leading edge and sample on the trailing one, with no bit put out before the first edge.
+  20-21 words each (`spi_periph_m1/2/3.pbe`), 2 MHz as mode 0.
+- **One file per mode** rather than one program with a mode register: the differences are the
+  order of four instructions; a runtime mode would need a branch in every bit.
+- **Deferred by the owner:** the I2C controller at 100 and 400 kHz and UART at 9600 and
+  115200 baud as part of this benchmark (only `CLKDIV` changes).
+- **Result:** works (`tb_spimodes`, a peripheral and a controller model per mode).

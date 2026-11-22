@@ -69,7 +69,7 @@ Nothing is waiting to be merged.
 1. Verification of the FIFO link and the bridge (`docs/BRIDGE_VERIFICATION_TODO.md`).
 2. **Owner to decide:** build the CAN-to-CAN gateway (designed in that file, §7; programs and a
    testbench only, no new hardware).
-3. **Blind generality benchmark:** about 10 protocols never targeted (e.g. DMX512, MIDI, LIN, IR
+3. **Blind generality benchmark: done on `feature/blind`** (`docs/GENERALITY.md`, D106-D114): DMX512, MIDI, LIN, IR NEC, Wiegand, I2S, DShot600 and MDIO all run as programs with no RTL change (four with a stated limit), plus SPI modes 1-3; the I2C/UART rate tests are deferred. Original item: about 10 protocols never targeted (e.g. DMX512, MIDI, LIN, IR
    NEC/RC5, DALI, I2S, SDI-12, Wiegand, DShot, SSI/BiSS, MDIO, Microwire), programs only, no RTL
    change; record which work and why the others don't.
 4. General ISA upgrades guided by the benchmark: multi-pin IN/OUT, side-set, an up-counter/compare.
