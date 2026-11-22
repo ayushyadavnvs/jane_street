@@ -48,7 +48,7 @@ make test-proto                            # only tb_proto (WS2812, SPI peripher
 make test-usb                              # only tb_usb
 make test-debug                            # only tb_debug (JTAG, SWD); ONLY=jtag|swd|both|slow
 make test-proto2                           # only the D84-D88 protocols (PS/2, GPIO expander, logic analyser, QSPI, HDLC)
-make test-blind                            # the blind generality benchmark (docs/GENERALITY.md): DMX512, MIDI, LIN, IR NEC, Wiegand, I2S, DShot600, MDIO, SPI modes 1-3
+make test-blind                            # the blind generality benchmark (docs/GENERALITY.md): DMX512, MIDI, LIN, IR NEC, Wiegand, I2S, DShot600, MDIO, SPI modes 1-3, UART/I2C rates
 make test-eth                               # 10BASE-T (tb_eth, D93)
 make test-link                              # the engine-to-engine link (tb_link) and the UART <-> I2C bridge (tb_bridge)
 make test-quad                              # the quad host port (tb_quad, tb_la +QUAD) and tb_pbe with its host in quad mode (D89)

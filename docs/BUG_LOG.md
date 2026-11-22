@@ -4309,3 +4309,22 @@ fails. Unknown mismatches remain FAIL. Stock external code and RTL are unchanged
   (2 µs, 4 SCLK periods) and `#(20 * HALF)` between transactions.
 - **Test:** `tb_spimodes`: before, `controller read ef, the model sent de`, `1 idle-level
   errors`, `peripheral received 1b, the model sent 0d`; after, `PASS: SPI modes 1-3` (6/6).
+
+## BUG-187 — tb_rates' I2C target overwrote the byte it was sending with the bits it sampled (test)
+
+- **Where:** `pbe_v1/test/tb_rates.sv`, the I2C target model (D115).
+- **Cause:** one register `tsh` held both the byte being received and the byte being read out.
+  During a read, the rising-edge handler shifted SDA into `tsh` while the falling-edge handler
+  took the next output bit from it, so the read-back bytes came out as garbage.
+- **Before:**
+  ```systemverilog
+  if (tb_bits == 0) tsh = mem[ptr];
+  t_sda = tsh[7 - tb_bits];
+  ```
+- **After:** a separate register for the output byte:
+  ```systemverilog
+  if (tb_bits == 0) t_out = mem[ptr];
+  t_sda = t_out[7 - tb_bits];
+  ```
+- **Test:** `tb_rates`: before, `read 00, expected 01` and `FAIL: I2C standard mode` (and fast
+  mode); after, `PASS: UART and I2C rates`.

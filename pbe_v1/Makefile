@@ -128,7 +128,7 @@ IMAGES := link bridge conc ow modbus nop uart spi mixed ws2812 spi_periph i2c_ta
 
 # A variable declared with an initializer inside a procedural block is static: the initializer
 # runs once, at time 0, not each time the block runs (BUG-023). Icarus only warns, so fail on it.
-LINT = cd test && for tb in tb_link tb_bridge tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth tb_dmx tb_midi tb_lin tb_ir tb_wiegand tb_i2s tb_dshot tb_mdio tb_spimodes; do \
+LINT = cd test && for tb in tb_link tb_bridge tb_fetch tb_page tb_usb tb_proto tb_pbe tb_can tb_debug tb_ps2 tb_gpio tb_la tb_qspi tb_hdlc tb_quad tb_eth tb_dmx tb_midi tb_lin tb_ir tb_wiegand tb_i2s tb_dshot tb_mdio tb_spimodes tb_rates; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv can_ref_node.sv $(DEBUG_MODELS) $(PROTO2_MODELS) eth_model.sv $(TOP) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done; \
 	  for tb in tb_engine_restart tb_engine_ops tb_line; do \
 	  if iverilog -g2012 -o /dev/null $$tb.sv $(ENG) 2>&1 | grep "Static variable initialization"; then exit 1; fi; done
@@ -246,8 +246,12 @@ test-usb: $(IMAGES:%=test/%_image.hex)
 
 # The protocols of D84-D88, each against its own model written from the specification.
 # The blind generality benchmark: 8 protocols chosen before any attempt, and SPI modes 1-3
-.PHONY: test-blind test-dmx test-midi test-lin test-ir test-wiegand test-i2s test-dshot test-mdio test-spimodes
-test-blind: test-dmx test-midi test-lin test-ir test-wiegand test-i2s test-dshot test-mdio test-spimodes
+.PHONY: test-rates test-blind test-dmx test-midi test-lin test-ir test-wiegand test-i2s test-dshot test-mdio test-spimodes
+test-blind: test-dmx test-midi test-lin test-ir test-wiegand test-i2s test-dshot test-mdio test-spimodes test-rates
+
+# UART at 9600 and 115200 baud, the I2C controller at 100 and 400 kHz: the existing programs, CLKDIV only
+test-rates: test/uart_image.hex test/mixed_image.hex
+	cd test && iverilog -g2012 -o rates.vvp tb_rates.sv $(TOP) && vvp -n rates.vvp
 
 test-dmx: test/dmx_image.hex
 	cd test && iverilog -g2012 -o dmx.vvp tb_dmx.sv $(TOP) && vvp -n dmx.vvp

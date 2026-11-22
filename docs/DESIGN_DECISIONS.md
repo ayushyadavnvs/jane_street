@@ -3749,6 +3749,19 @@ NRZ and NRZI. The flags-from-the-gap trick and the RXD poll for aborts below are
   20-21 words each (`spi_periph_m1/2/3.pbe`), 2 MHz as mode 0.
 - **One file per mode** rather than one program with a mode register: the differences are the
   order of four instructions; a runtime mode would need a branch in every bit.
-- **Deferred by the owner:** the I2C controller at 100 and 400 kHz and UART at 9600 and
-  115200 baud as part of this benchmark (only `CLKDIV` changes).
+- **Rates (done after the owner's go-ahead):** see D115.
 - **Result:** works (`tb_spimodes`, a peripheral and a controller model per mode).
+
+## D115. Blind benchmark, step 3: UART and I2C at other rates are a `CLKDIV` change only
+
+- **Chosen:** no program change. UART: `uart_tx` ticks at half a bit and `uart_rx` at a quarter,
+  so `CLKDIV` = 60 MHz / (2 × baud) − 1 and 60 MHz / (4 × baud) − 1: 3124 and 1562 at 9600,
+  259 and 129 at 115200. I2C: `i2c_ctrl` ticks at a seventh of SCL (low 4 ticks, high 3), so
+  `CLKDIV` 85 gives 99.7 kHz and 21 gives 389.6 kHz, as its header already states.
+- **Rounding:** 115200 baud is 520.8 clocks per bit, not whole: `CLKDIV` 259 gives 115384 baud
+  (+0.16 %), well inside UART's ±2 % budget; the receiver tolerates a sender 2 % off.
+- **I2C phases:** low is longer than high (4 : 3) because UM10204 asks more for low (4.7 / 1.3 µs)
+  than for high (4.0 / 0.6 µs); both modes meet both minimums with margin.
+- **Test:** `tb_rates` (in `make test`), models written from the standards: a UART receiver and
+  sender at the exact rate, and an I2C target that measures every SCL period and phase and
+  counts START and STOP conditions.

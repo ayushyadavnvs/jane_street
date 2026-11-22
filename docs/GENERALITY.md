@@ -73,7 +73,8 @@ program (5 bugs, BUG-177 to 179, 181, 183, 184) or only to the test (the rest of
 |---|---|---|---|
 | SPI controller, modes 1, 2, 3 | **Works.** Mode 0's four instructions reordered | `spi_ctrl_m1`, `_m2`, `_m3` (16 each) | `tb_spimodes`: a peripheral model per mode that also checks the clock's idle level; 6 bytes both ways |
 | SPI peripheral, modes 1, 2, 3 | **Works**, at 2 MHz as mode 0 | `spi_periph_m1` (20), `_m2` (21), `_m3` (20) | `tb_spimodes`: a controller model per mode; queued replies, the 0xFF default, 2 transactions |
-| I2C controller at 100 and 400 kHz; UART at 9600 and 115200 baud | **Deferred** by the owner (to be done later) | (the existing programs; only `CLKDIV` changes) | |
+| UART at 9600 and 115200 baud | **Works**, no program change (`CLKDIV` 3124/1562 and 259/129) | `uart_tx` (8), `uart_rx` (8) | `tb_rates`: a receiver sampling at the exact rate (worst edge 0.1 % / 1.4 % of a bit off the grid); a sender at the nominal rate and 2 % fast and slow, 30 bytes each |
+| I2C controller at 100 and 400 kHz | **Works**, no program change (`CLKDIV` 85 and 21) | `i2c_ctrl` (34) | `tb_rates`: an I2C target (write 3, repeated START, read back 3, NACK) checking UM10204 timing: 99.7 kHz with SCL low 5.73 µs / high 4.30 µs (limits 4.7 / 4.0); 389.6 kHz with 1.47 / 1.10 µs (limits 1.3 / 0.6) |
 
 ### What the limits say about the instruction set
 
